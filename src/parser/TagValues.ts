@@ -1,0 +1,73 @@
+/** Pure tag value parsers. Invalid value => null ("revert to style"). */
+const NUM_RE = /^\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)/i;
+
+/** Like a `strtod` prefix: "40abc" => 40, "" / "abc" => null. */
+export const parseNum = (s: string): number | null => {
+  const m = NUM_RE.exec(s);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Splits on top-level commas (nested parentheses are kept intact). */
+export const splitArgs = (s: string): string[] => {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of s) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      out.push(cur.trim());
+      cur = '';
+    } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+};
+
+/** All-numeric argument list; null when any argument is not a number. */
+export const parseNumList = (s: string): number[] | null => {
+  const nums = splitArgs(s).map((a) => (a === '' ? null : parseNum(a)));
+  return nums.every((n) => n !== null) ? (nums as number[]) : null;
+};
+
+/** Hex value after an optional `&H` / `H` prefix; null when there are no hex digits. */
+export const parseHex = (s: string): number | null => {
+  const m = /^\s*&?H?([0-9a-f]+)/i.exec(s);
+  if (!m) return null;
+  const v = parseInt(m[1].slice(-8), 16);
+  return Number.isFinite(v) ? v >>> 0 : null;
+};
+
+/** Colour tag `&HBBGGRR&` => 0xBBGGRR (alpha byte, if any, is dropped). */
+export const parseColorTag = (s: string): number | null => {
+  const v = parseHex(s);
+  return v === null ? null : v & 0xffffff;
+};
+
+/** Alpha tag `&HAA&` => 0..255. */
+export const parseAlphaTag = (s: string): number | null => {
+  const v = parseHex(s);
+  return v === null ? null : v & 0xff;
+};
+
+/** Style colour field: `&HAABBGGRR` (hex) or a decimal integer (SSA). */
+export const parseStyleColour = (s: string): { colour: number; alpha: number } | null => {
+  const t = s.trim();
+  let v: number | null;
+  if (/^&?H/i.test(t)) v = parseHex(t);
+  else {
+    const n = parseInt(t, 10);
+    v = Number.isFinite(n) ? n >>> 0 : null;
+  }
+  return v === null ? null : { colour: v & 0xffffff, alpha: (v >>> 24) & 0xff };
+};
+
+/** Legacy SSA alignment (`\a`: 1-3 bottom, 5-7 top, 9-11 middle) => numpad. Invalid => null. */
+export const legacyToNumpad = (a: number): number | null => {
+  if (!Number.isInteger(a) || a < 1 || a > 11) return null;
+  const h = a & 3;
+  if (h === 0) return null;
+  return h + (a & 4 ? 6 : a & 8 ? 3 : 0);
+};
