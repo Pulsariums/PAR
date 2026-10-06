@@ -25,7 +25,7 @@
 }
 [hidden] { display: none !important; }
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; scroll-padding-top: 64px; -webkit-text-size-adjust: 100%; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--top-h, 56px) + 8px); -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 var(--font); }
 img, svg, canvas, video { max-width: 100%; }
 h1, h2, h3 { line-height: 1.2; margin: 0; letter-spacing: -.01em; }

@@ -1,4 +1,4 @@
-import type { FromSizeWorker, JobKind, SizeResult, ToSizeWorker } from './labProtocol';
+import type { FromSizeWorker, JobKind, SizeResult, ToSizeWorker } from './protocol';
 
 export interface Job<T> {
   promise: Promise<T>;
@@ -14,7 +14,7 @@ export class SizeClient {
   private readonly waiting = new Map<number, { ok: (m: FromSizeWorker) => void; err: (e: Error) => void; progress?: (f: number | null) => void }>();
 
   constructor() {
-    this.worker = new Worker(new URL('./labSizeWorker.ts', import.meta.url), { type: 'module' });
+    this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
     this.worker.addEventListener('message', (e: MessageEvent<FromSizeWorker>) => {
       const m = e.data;
       const w = this.waiting.get(m.id);

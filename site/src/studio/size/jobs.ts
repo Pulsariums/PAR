@@ -1,23 +1,18 @@
-import { t } from '../i18n/i18n';
+import { t } from '../../i18n/i18n';
 
-import { el } from './dom';
-import { exportName } from './labExportName';
-import { humanBytes, percent } from './labFormat';
-import type { JobKind, SizeResult } from './labProtocol';
-import { JobCancelled, type Job, type SizeClient } from './labSizeClient';
-import { SizeRow, type RowState } from './labSizeRow';
-import type { LabSession } from './labTypes';
+import { el } from '../../playground/dom';
+import { download } from '../../common/download';
+import { exportName } from '../../common/exportName';
+import { humanBytes, percent } from '../../common/format';
+import type { JobKind, SizeResult } from './protocol';
+import { JobCancelled, type Job, type SizeClient } from './client';
+import { SizeRow, type RowState } from './row';
+import type { StudioSession } from '../session';
 
 /** Files up to this size are encoded for real right away; bigger ones are estimated from samples first. */
 export const AUTO_EXACT_BYTES = 8 * 1024 * 1024;
 /** Encoding speed of the own coder on a typical machine (docs/formats/XPAR.md), bytes of source per second: only for the "about N s" hint. */
 const SPEED = 2.5 * 1024 * 1024;
-
-export const download = (blob: Blob, name: string): void => {
-  const url = URL.createObjectURL(blob);
-  Object.assign(document.createElement('a'), { href: url, download: name }).click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-};
 
 interface State {
   est: SizeResult | null;
@@ -37,11 +32,11 @@ export class SizeJobs {
   private timer = 0;
   private dead = false;
 
-  constructor(private readonly client: SizeClient, private readonly s: LabSession, private readonly fps: () => number, private readonly dlLabel?: (k: 'xpar' | 'par', fps: number) => string) {
+  constructor(private readonly client: SizeClient, private readonly s: StudioSession, private readonly fps: () => number, private readonly dlLabel?: (k: 'xpar' | 'par', fps: number) => string) {
     this.big = s.blob.size > AUTO_EXACT_BYTES;
-    const title = (key: 'lab.s.xpar' | 'lab.s.par'): HTMLElement => el('b', '', t(key));
-    this.xparRow = new SizeRow(title('lab.s.xpar'), () => this.exact('xpar'), () => this.cancel('xpar'), () => this.save('xpar'));
-    this.parRow = new SizeRow(title('lab.s.par'), () => this.exact('par'), () => this.cancel('par'), () => this.save('par'));
+    const title = (key: 'st.s.xpar' | 'st.s.par'): HTMLElement => el('b', '', t(key));
+    this.xparRow = new SizeRow(title('st.s.xpar'), () => this.exact('xpar'), () => this.cancel('xpar'), () => this.save('xpar'));
+    this.parRow = new SizeRow(title('st.s.par'), () => this.exact('par'), () => this.cancel('par'), () => this.save('par'));
     this.draw('xpar');
     this.draw('par');
   }
@@ -94,7 +89,7 @@ export class SizeJobs {
       if (isExact) st.exact = r; else st.est = r;
     } catch (e) {
       if (this.dead || st.job !== job || e instanceof JobCancelled) return;
-      st.error = t('lab.s.err', { error: e instanceof Error ? e.message : String(e) });
+      st.error = t('st.s.err', { error: e instanceof Error ? e.message : String(e) });
     }
     st.job = null;
     st.busy = null;
@@ -116,12 +111,12 @@ export class SizeJobs {
     const r = st.exact ?? st.est;
     const secs = Math.max(1, Math.round(whole / SPEED));
     const state: RowState = {
-      text: r ? (r.exact ? t('lab.s.exact', { size: humanBytes(r.bytes), s: (r.ms / 1000).toFixed(1) }) : t('lab.s.est', { size: humanBytes(r.bytes), low: humanBytes(r.low ?? r.bytes), high: humanBytes(r.high ?? r.bytes), pct: r.marginPct ?? 0 })) : t('lab.s.est1'),
-      ratio: r ? `${r.exact ? '' : '~'}${t('lab.s.ratio', { pct: percent(r.bytes, whole) })}` : undefined,
+      text: r ? (r.exact ? t('st.s.exact', { size: humanBytes(r.bytes), s: (r.ms / 1000).toFixed(1) }) : t('st.s.est', { size: humanBytes(r.bytes), low: humanBytes(r.low ?? r.bytes), high: humanBytes(r.high ?? r.bytes), pct: r.marginPct ?? 0 })) : t('st.s.est1'),
+      ratio: r ? `${r.exact ? '' : '~'}${t('st.s.ratio', { pct: percent(r.bytes, whole) })}` : undefined,
       busy: st.busy, error: st.error || undefined, estimate: !!r && !r.exact,
-      note: k === 'par' && r?.notes ? t('lab.s.bake', { m: r.notes.merged, d: r.notes.dropped, c: r.notes.collapsed }) : undefined,
-      runLabel: this.big ? t('lab.s.runLong', { s: secs }) : t('lab.s.run'), cancelLabel: t('lab.cancel'),
-      canRun: !st.exact, dlLabel: this.dlLabel?.(k, this.fps()) ?? (k === 'xpar' ? t('lab.s.dlXpar') : t('lab.s.dlPar', { fps: this.fps() })), canDownload: !!st.exact?.blob,
+      note: k === 'par' && r?.notes ? t('st.s.bake', { m: r.notes.merged, d: r.notes.dropped, c: r.notes.collapsed }) : undefined,
+      runLabel: this.big ? t('st.s.runLong', { s: secs }) : t('st.s.run'), cancelLabel: t('st.cancel'),
+      canRun: !st.exact, dlLabel: this.dlLabel?.(k, this.fps()) ?? (k === 'xpar' ? t('st.s.dlXpar') : t('st.s.dlPar', { fps: this.fps() })), canDownload: !!st.exact?.blob,
     };
     (k === 'xpar' ? this.xparRow : this.parRow).show(state);
   }

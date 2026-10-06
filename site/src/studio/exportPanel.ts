@@ -1,31 +1,34 @@
-import { t } from '../i18n/i18n';
 import type { Dict } from '../i18n/en';
+import { t } from '../i18n/i18n';
 import { el } from '../playground/dom';
 import { PAR_MARKS, fpsChips, type Chips } from '../playground/fpsMarks';
-import { SizeJobs } from '../playground/labSizeJobs';
-import { SizeClient } from '../playground/labSizeClient';
-import type { LabSession } from '../playground/labTypes';
 
 import { defaultFps, exportBlockers, type SubKind } from './exportPlan';
+import { containerNotes, playResText, sessionInfo } from './exportInfo';
+import type { StudioSession } from './session';
+import type { SizeClient } from './size/client';
+import { SizeJobs } from './size/jobs';
 
 const WHY: Record<string, keyof Dict> = { none: 'st.why.none', isXpar: 'st.why.isXpar', needAss: 'st.why.needAss', isPar: 'st.why.isPar' };
 const dlLabel = (k: 'xpar' | 'par', fps: number): string => (k === 'xpar' ? t('st.exXpar') : t('st.exPar', { fps }));
 
 /**
- * Export panel under the shelves: "Export PAR" (lossy, fps selector) and "Export XPAR" (lossless) of the selected subtitle, with progress, cancel
- * and size vs the original ASS. All of it is the Lab's SizeJobs. XPAR / PAR files cannot be re-encoded (a PAR has lost the ASS): disabled with the reason.
+ * The ONE size and export panel under the shelves: what the selected subtitle is (ASS size, events, PlayRes ...), then the XPAR size (lossless)
+ * and the PAR size at the chosen fps (exact or estimated, progress, cancel) and the two downloads. XPAR / PAR files cannot be re-encoded
+ * (a PAR has lost the ASS): their buttons are disabled with the reason.
  */
-export const initExportPanel = (host: HTMLElement) => {
-  let client: SizeClient | null = null;
-  let session: LabSession | null = null;
+export const initExportPanel = (host: HTMLElement, client: () => SizeClient, getDefault: () => { width: number; height: number }) => {
+  let session: StudioSession | null = null;
   let jobs: SizeJobs | null = null;
   let chips: Chips | null = null;
   let picked: number | null = null;
-  let detected: number | null = null;
-  const fps = (): number => defaultFps(picked, detected);
+  let video: number | null = null;
+  const fps = (): number => defaultFps(picked, video);
   const note = el('p', 'hint');
+  const playRes = el('span');
 
-  const noteText = (): string => (picked !== null ? t('st.fpsPicked', { fps: picked }) : detected !== null ? t('st.fpsVideo', { fps: detected }) : t('st.fpsDefault', { fps: fps() }));
+  const noteText = (): string => (picked !== null ? t('st.fpsPicked', { fps: picked }) : video !== null ? t('st.fpsVideo', { fps: video }) : t('st.fpsDefault', { fps: fps() }));
+  const refreshPlayRes = (): void => { if (session) playRes.textContent = playResText(session, getDefault()); };
 
   const disabled = (kind: SubKind | null): void => {
     const b = exportBlockers(kind);
@@ -37,10 +40,15 @@ export const initExportPanel = (host: HTMLElement) => {
 
   const build = (): void => {
     host.replaceChildren(el('h3', '', t('st.export')));
-    if (!session || !jobs || !chips) { disabled(session?.kind ?? null); return; }
+    if (session) { host.append(sessionInfo(session, playRes)); refreshPlayRes(); } else host.append(el('p', 'hint', t('st.s.empty')));
+    if (!session || !jobs || !chips) {
+      if (session) host.append(...containerNotes(session));
+      disabled(session?.kind ?? null);
+      return;
+    }
     note.textContent = noteText();
-    host.append(el('div', 'fld', t('lab.s.parFps')), chips.root, note, jobs.parRow.root, jobs.xparRow.root, el('p', 'hint', t('lab.s.xparNote')), el('p', 'hint', t('lab.s.parNote', { fps: fps() })));
-    if (jobs.big) host.append(el('p', 'hint', t('lab.s.big')));
+    host.append(el('div', 'fld', t('st.s.parFps')), chips.root, note, jobs.parRow.root, jobs.xparRow.root, el('p', 'hint', t('st.s.xparNote')), el('p', 'hint', t('st.s.parNote', { fps: fps() })));
+    if (jobs.big) host.append(el('p', 'hint', t('st.s.big')));
     jobs.redraw();
   };
 
@@ -48,21 +56,22 @@ export const initExportPanel = (host: HTMLElement) => {
 
   build();
   return {
-    setSession(s: LabSession | null): void {
+    setSession(s: StudioSession | null): void {
       jobs?.dispose();
       jobs = null;
       chips = null;
       session = s;
       if (s?.kind === 'ass') {
-        client ??= new SizeClient();
-        jobs = new SizeJobs(client, s, fps, dlLabel);
-        chips = fpsChips(PAR_MARKS, t('lab.s.custom'), (v) => { picked = v; refps(); }, fps());
+        jobs = new SizeJobs(client(), s, fps, dlLabel);
+        chips = fpsChips(PAR_MARKS, t('st.s.custom'), (v) => { picked = v; refps(); }, fps());
       }
       build();
       jobs?.start();
     },
-    /** The video changed: its detected frame rate (or null) becomes the default unless the user picked one. */
-    setDetected(f: number | null): void { detected = f; if (jobs) refps(); else build(); },
+    /** The video frame rate in use (picked or detected, or null): becomes the export default unless the user picked an export rate. */
+    setVideoFps(f: number | null): void { video = f; if (jobs) refps(); else build(); },
+    /** The default size of the layout panel changed (it decides the PlayRes line of a script without PlayRes). */
+    playRes: refreshPlayRes,
     rebuild: build,
   };
 };

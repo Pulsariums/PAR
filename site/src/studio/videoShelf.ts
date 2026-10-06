@@ -1,8 +1,9 @@
 import { t } from '../i18n/i18n';
-import { humanBytes } from '../playground/labFormat';
+import { humanBytes } from '../common/format';
 import type { Player } from '../playground/player';
 
 import { probeFps } from './fpsDetect';
+import { regionFor } from './mode';
 import { Shelf, newId } from './shelfState';
 import { createShelf } from './shelfView';
 
@@ -25,12 +26,12 @@ export const initVideoShelf = (host: HTMLElement, player: Player, onFps: (fps: n
     const cur = shelf.selected;
     if ((cur?.id ?? null) === applied) return;
     applied = cur?.id ?? null;
-    onFps(null);
-    if (!cur) { player.useCard(); player.par.setOptions({ region: 'container' }); return; }
+    if (!cur) { player.useCard(); player.par.setOptions({ region: regionFor(false) }); onFps(null); return; }
     const v = player.video;
     const keep = player.hasVideo ? { t: v.currentTime, play: !v.paused } : { t: 0, play: false };
     player.useVideo(cur.url);
-    player.par.setOptions({ region: 'video' });
+    player.par.setOptions({ region: regionFor(true) });
+    onFps(null);
     v.addEventListener('loadedmetadata', () => {
       cur.error = '';
       if (keep.t > 0) v.currentTime = Math.min(keep.t, Math.max(0, v.duration - 0.05));

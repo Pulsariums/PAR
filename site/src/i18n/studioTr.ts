@@ -2,7 +2,6 @@
 export const studioTr = {
   'nav.studio': 'Stüdyo',
   'st.title': 'Stüdyo: kendi videonuzu altyazınızla oynatın',
-  'st.sub': 'Videoları, altyazıları ve fontları rafa ekleyin, neyin oynayacağını seçin. Video ve altyazı birbirinden bağımsız seçilir: birini değiştirince diğeri kalır. Her şey bu cihazda kalır.',
   'st.shelves': 'Medya rafı',
   'st.videos': 'Videolar',
   'st.subs': 'Altyazılar',
@@ -18,7 +17,6 @@ export const studioTr = {
   'st.subReady': 'Altyazı hazır: {name} ({n} olay).',
   'st.used': 'kullanımda',
   'st.fontsErr': 'Eklenen font: {n}. Hatalar: {e}',
-  'st.export': 'Seçili altyazıyı dışa aktar',
   'st.exPar': 'PAR aktar (.{fps}fps.par)',
   'st.exXpar': 'XPAR aktar (.xpar)',
   'st.fpsPicked': 'Sizin seçtiğiniz PAR fps: {fps}.',

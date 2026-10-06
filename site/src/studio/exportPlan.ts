@@ -1,4 +1,4 @@
-import { exportName } from '../playground/labExportName';
+import { exportName } from '../common/exportName';
 
 export type SubKind = 'ass' | 'xpar' | 'par';
 export const DEFAULT_FPS = 24;

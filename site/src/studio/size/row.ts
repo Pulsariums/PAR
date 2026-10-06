@@ -1,4 +1,4 @@
-import { el } from './dom';
+import { el } from '../../playground/dom';
 
 export interface RowState {
   /** Headline: the size (exact or estimated). */
@@ -20,9 +20,9 @@ export interface RowState {
 
 /** One result row of the size panel: value, ratio chip, progress, "compute exactly" / cancel, download. Everything always visible. */
 export class SizeRow {
-  readonly root = el('div', 'lab-sizerow');
-  readonly head = el('div', 'lab-sizehead');
-  private readonly value = el('span', 'mono lab-sizeval');
+  readonly root = el('div', 'st-sizerow');
+  readonly head = el('div', 'st-sizehead');
+  private readonly value = el('span', 'mono st-sizeval');
   private readonly chip = el('span', 'status approx');
   private readonly bar = el('div', 'qbar');
   private readonly fill = el('i');
@@ -37,7 +37,7 @@ export class SizeRow {
     this.bar.append(this.fill);
     this.run.addEventListener('click', () => (this.busy ? onCancel() : onRun()));
     this.dl.addEventListener('click', onDownload);
-    const acts = el('div', 'row lab-sizeacts');
+    const acts = el('div', 'row st-sizeacts');
     acts.append(this.run, this.dl);
     this.head.append(title, this.chip);
     this.root.append(this.head, this.value, this.bar, this.note, acts);

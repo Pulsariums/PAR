@@ -1,8 +1,8 @@
 import type { ParHeader } from '../../../src/format';
 import type { SubtitleSource } from '../../../src/index';
 
-/** A file the Lab has opened. */
-export interface LabSession {
+/** A subtitle file the Studio has opened. */
+export interface StudioSession {
   name: string;
   blob: Blob;
   kind: 'ass' | 'xpar' | 'par';

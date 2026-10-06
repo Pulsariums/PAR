@@ -1,6 +1,6 @@
 import { convertEn } from './convertEn';
 import { libEn } from './libEn';
-import { labEn } from './labEn';
+import { studioPanelsEn } from './studioPanelsEn';
 import { studioEn } from './studioEn';
 
 export const en = {
@@ -53,7 +53,7 @@ export const en = {
   'docs.title': 'Docs', 'docs.install': 'Install', 'docs.use': 'Use', 'docs.read': 'Read more', 'docs.issues': 'Report an issue',
   'foot.note': 'Rendered with the local PAR source from this repository.',
   ...libEn,
-  ...labEn,
+  ...studioPanelsEn,
   ...convertEn,
   ...studioEn,
 };

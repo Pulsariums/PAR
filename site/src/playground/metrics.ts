@@ -1,6 +1,6 @@
 import { t } from '../i18n/i18n';
 
-import { FpsMeter } from './fpsMeter';
+import { FpsMeter, fpsText } from './fpsMeter';
 import type { Player } from './player';
 
 const r = (n: number) => String(Math.round(n * 100) / 100);
@@ -18,13 +18,13 @@ export const initMetrics = (player: Player) => {
       row(t('m.layout'), `${m.layoutSize.width}x${m.layoutSize.height} (${m.layoutSource})`) +
       row(t('m.scale'), `${r(m.scaleX)} x ${r(m.scaleY)}`) +
       row(t('m.lines'), String(m.activeLines)) +
-      row(t('m.fps'), String(meter.fps)) +
+      row(t('m.fps'), fpsText(meter.fps)) +
       row(t('m.time'), `${Number.isFinite(m.time) ? r(m.time) : '-'} s`);
   };
   return {
     /** Call every animation frame. */
     sample(): void {
-      if (meter.sample(player.par.getMetrics().time)) draw();
+      if (meter.sample(player.par.getMetrics().time, player.transport.playing)) draw();
     },
     draw,
   };

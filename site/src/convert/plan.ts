@@ -1,5 +1,5 @@
 import { parFileName, type SniffKind } from '../../../src/format';
-import { baseName } from '../playground/labExportName';
+import { baseName } from '../common/exportName';
 
 /** What a file can be turned into: ASS -> XPAR | PAR, XPAR | PAR -> ASS. Pure rules of the converter card (no DOM). */
 export type Action = 'xpar' | 'par' | 'ass';

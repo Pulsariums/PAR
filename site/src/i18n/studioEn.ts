@@ -2,7 +2,6 @@
 export const studioEn = {
   'nav.studio': 'Studio',
   'st.title': 'Studio: play your own video with your subtitles',
-  'st.sub': 'Add videos, subtitles and fonts to the shelf and pick what plays. The video and the subtitle are chosen independently: swap one and the other stays. Everything stays on this device.',
   'st.shelves': 'Media shelf',
   'st.videos': 'Videos',
   'st.subs': 'Subtitles',
@@ -18,7 +17,6 @@ export const studioEn = {
   'st.subReady': 'Subtitle ready: {name} ({n} events).',
   'st.used': 'in use',
   'st.fontsErr': 'Fonts added: {n}. Errors: {e}',
-  'st.export': 'Export the selected subtitle',
   'st.exPar': 'Export PAR (.{fps}fps.par)',
   'st.exXpar': 'Export XPAR (.xpar)',
   'st.fpsPicked': 'PAR fps chosen by you: {fps}.',

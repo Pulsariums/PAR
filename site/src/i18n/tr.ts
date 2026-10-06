@@ -1,6 +1,6 @@
 import { convertTr } from './convertTr';
 import { libTr } from './libTr';
-import { labTr } from './labTr';
+import { studioPanelsTr } from './studioPanelsTr';
 import { studioTr } from './studioTr';
 
 import type { Dict } from './en';
@@ -55,7 +55,7 @@ export const tr: Dict = {
   'docs.title': 'Belgeler', 'docs.install': 'Kurulum', 'docs.use': 'Kullanım', 'docs.read': 'Daha fazlası', 'docs.issues': 'Sorun bildir',
   'foot.note': 'Bu depodaki yerel PAR kaynağıyla çizilir.',
   ...libTr,
-  ...labTr,
+  ...studioPanelsTr,
   ...convertTr,
   ...studioTr,
 };

@@ -1,15 +1,16 @@
 import { frameIndex, frameRate, type SubtitleSource } from '../../../src/index';
+import { clock } from '../common/format';
 import { t } from '../i18n/i18n';
+import { $ } from '../playground/dom';
+import type { Player } from '../playground/player';
 
-import { $ } from './dom';
-import { clock } from './labFormat';
-import { nextStart, prevStart } from './labNeighbors';
-import type { Player } from './player';
+import { nextStart, prevStart } from './neighbors';
 
 const editable = (el: EventTarget | null): boolean => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName) && !(el instanceof HTMLInputElement && el.type === 'range'));
 
-/** `p` is the id prefix of the markup (`lab` for the Lab, `st` for the Studio; see `transportMarkup`). Timeline controls: play / pause, scrub, +-1 s / 5 s / 1 frame, previous / next line, speed, loop, keys. Polled from the Lab loop. */
-export const initLabTransport = (player: Player, videoFps: () => number, onSeek: (t: number) => void, source: () => SubtitleSource | null, p = 'lab') => {
+/** Timeline controls (ids `st*` of `transportMarkup`): play / pause, scrub, +-1 s / 5 s / 1 frame, previous / next line, speed, loop, keys. Polled from the Studio loop. */
+export const initTransport = (player: Player, videoFps: () => number, onSeek: (t: number) => void, source: () => SubtitleSource | null) => {
+  const p = 'st';
   const play = $<HTMLButtonElement>(`${p}Play`);
   const seek = $<HTMLInputElement>(`${p}Seek`);
   let dragging = false;
@@ -32,7 +33,7 @@ export const initLabTransport = (player: Player, videoFps: () => number, onSeek:
     if (to !== null) go(to);
   };
   const toggle = (): void => { if (tr().playing) tr().pause(); else { if (tr().time >= dur() - 1e-3) tr().seek(0); tr().play(); } label(); };
-  const label = (): void => { play.textContent = t(tr().playing ? 'lab.pause' : 'lab.play'); };
+  const label = (): void => { play.textContent = t(tr().playing ? 'st.pause' : 'st.play'); };
 
   play.addEventListener('click', toggle);
   const step = (id: string, fn: () => void): void => $(`${p}${id}`).addEventListener('click', fn);
@@ -50,7 +51,7 @@ export const initLabTransport = (player: Player, videoFps: () => number, onSeek:
     const k = e.key.toLowerCase();
     const s = e.shiftKey ? 1 : 0;
     const act: Record<string, () => void> = {
-      ' ': toggle, k: toggle, j: () => go(tr().time - 5), l: () => go(tr().time + 5), '[': () => void line(-1), ']': () => void line(1),
+      ' ': toggle, k: toggle, ',': () => frame(-1), '.': () => frame(1), j: () => go(tr().time - 5), l: () => go(tr().time + 5), '[': () => void line(-1), ']': () => void line(1),
       home: () => go(0), end: () => go(dur()),
       ...(onRange ? {} : { arrowleft: () => (s ? go(tr().time - 1) : frame(-1)), arrowright: () => (s ? go(tr().time + 1) : frame(1)) }),
     };
@@ -68,7 +69,7 @@ export const initLabTransport = (player: Player, videoFps: () => number, onSeek:
       if (!dragging) seek.value = String(now);
       $(`${p}Cur`).textContent = clock(now);
       $(`${p}Total`).textContent = clock(d);
-      const want = t(tr().playing ? 'lab.pause' : 'lab.play');
+      const want = t(tr().playing ? 'st.pause' : 'st.play');
       if (play.textContent !== want) play.textContent = want;
     },
   };

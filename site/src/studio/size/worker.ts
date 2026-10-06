@@ -1,7 +1,7 @@
-import { AssIndex, bakePar, encodeXparTo, estimatePar, estimateXpar, indexAss } from '../../../src/format';
-import { PROFILES } from '../../../tools/xpar/bench-all';
+import { AssIndex, bakePar, encodeXparTo, estimatePar, estimateXpar, indexAss } from '../../../../src/format';
+import { PROFILES } from '../../../../tools/xpar/bench-all';
 
-import type { FromSizeWorker, JobKind, SizeResult, ToSizeWorker } from './labProtocol';
+import type { FromSizeWorker, JobKind, SizeResult, ToSizeWorker } from './protocol';
 
 const ctx = self as unknown as { postMessage(m: FromSizeWorker): void; onmessage: ((e: MessageEvent<ToSizeWorker>) => void) | null };
 let blob: Blob | null = null;

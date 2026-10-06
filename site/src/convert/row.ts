@@ -1,8 +1,8 @@
 import { t } from '../i18n/i18n';
 import type { Dict } from '../i18n/en';
 import { button, el } from '../playground/dom';
-import { humanBytes } from '../playground/labFormat';
-import { download } from '../playground/labSizeJobs';
+import { humanBytes } from '../common/format';
+import { download } from '../common/download';
 
 import { actionsFor, ratioPct, type Action } from './plan';
 import type { Item } from './queue';

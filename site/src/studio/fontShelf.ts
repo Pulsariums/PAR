@@ -1,6 +1,6 @@
 import type { FontLibrary, FontRecord } from '../../../src/fontlib';
 import { t } from '../i18n/i18n';
-import { humanBytes } from '../playground/labFormat';
+import { humanBytes } from '../common/format';
 import type { Player } from '../playground/player';
 
 import { createShelf } from './shelfView';
@@ -26,7 +26,7 @@ export const initFontShelf = (host: HTMLElement, player: Player, status: (msg: s
     if (!lib) return;
     const res = await lib.add(files);
     void lib.requestPersistence();
-    status(res.errors.length ? t('st.fontsErr', { n: res.added.length, e: res.errors.map((e) => `${e.name}: ${e.error}`).join('; ') }) : t('lab.fontsAdded', { n: res.added.length }));
+    status(res.errors.length ? t('st.fontsErr', { n: res.added.length, e: res.errors.map((e) => `${e.name}: ${e.error}`).join('; ') }) : t('st.fontsAdded', { n: res.added.length }));
   }
 
   void import('../playground/libShared').then((m) => m.getLibrary()).then(async (l) => {
@@ -35,7 +35,7 @@ export const initFontShelf = (host: HTMLElement, player: Player, status: (msg: s
     const load = (): void => void l.list().then((r) => { records = r.sort((a, b) => a.family.localeCompare(b.family)); draw(); });
     l.onChange(load);
     load();
-  }).catch((e: unknown) => status(t('lab.fail', { error: e instanceof Error ? e.message : String(e) })));
+  }).catch((e: unknown) => status(t('st.fail', { error: e instanceof Error ? e.message : String(e) })));
 
   return {
     render: draw,
