@@ -3,6 +3,7 @@ import type { ScriptInfo } from '../types/script';
 
 import type { Size } from './Layout';
 
+export const LAYOUT_1080P: Size = { width: 1920, height: 1080 };
 export const LAYOUT_720P: Size = { width: 1280, height: 720 };
 /** What libass and VSFilter use when a script has no PlayRes. */
 export const LAYOUT_LIBASS: Size = { width: 384, height: 288 };
@@ -32,7 +33,7 @@ export const writtenPlayRes = (info: ScriptInfo | null): { x: number; y: number 
 };
 
 export const defaultLayoutSize = (d: DefaultLayoutOption): Size =>
-  d === 'libass' ? { ...LAYOUT_LIBASS } : typeof d === 'object' ? { width: d.width, height: d.height } : { ...LAYOUT_720P };
+  d === 'libass' ? { ...LAYOUT_LIBASS } : typeof d === 'object' ? { width: d.width, height: d.height } : d === '720p' ? { ...LAYOUT_720P } : { ...LAYOUT_1080P };
 
 const whole = (n: number): number => Math.max(1, Math.round(n));
 
@@ -42,7 +43,7 @@ const whole = (n: number): number => Math.max(1, Math.round(n));
  *  2. script PlayResX and PlayResY (both)                       -> 'script'
  *  3. only one of them: the other follows the aspect ratio of `aspect` (the displayed region, else 16:9);
  *     with `defaultLayout: 'libass'` the libass rule instead (4:3, and 1280 <-> 1024) -> 'script', derived
- *  4. neither: `defaultLayout` (default 1280x720; 'libass' = 384x288) -> 'default'
+ *  4. neither: `defaultLayout` (default 1920x1080; 'libass' = 384x288) -> 'default'
  */
 export const resolveLayout = (option: LayoutOption, info: ScriptInfo | null, def: DefaultLayoutOption, aspect?: Size | null): ResolvedLayout => {
   if (typeof option === 'object' && option.width > 0 && option.height > 0) {

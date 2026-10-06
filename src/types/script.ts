@@ -46,6 +46,8 @@ export interface ScriptInfo {
   layoutResX: number | null;
   layoutResY: number | null;
   scaledBorderAndShadow: boolean;
+  /** True when the header key was written (the custom-Format compat rule then does not apply). */
+  scaledBorderAndShadowSet: boolean;
   /** 0..3, default 0. */
   wrapStyle: number;
 }

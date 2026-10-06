@@ -64,7 +64,7 @@ Cases are `cmp` ASS files (generated; recipe at the end). Before = commit 0dc09d
 | `\blur` with `\fscx`/`\fscy` ratio | round on screen | stretched | SVG blur with sigma per axis | row 8.5 -> 1.5 (53) |
 | border with `\fscx`/`\fscy` | not scaled by font scale | stroke stretched with x scale | unchanged: **approximate** | 3.08 (23), row 9.6 (53) |
 | `\xbord != \ybord` | elliptical | larger of the two | unchanged: **approximate** | 3.60 (22) |
-| ScaledBorderAndShadow=no, PlayRes != frame | no-op without storage size | screen-pixel border | unchanged (layout/core decision) | 4.32 -> 2.97 (21, blur part fixed) |
+| ScaledBorderAndShadow=no, PlayRes != frame | layout/storage base (no-op without storage size) | screen-pixel border | layout/storage base (see docs/parity.md) | 4.32 -> 2.97 (21, blur part fixed) |
 | `\fad`, karaoke, BorderStyle 3, rotation, shear | | | unchanged | 2.02 -> 0.82 (28), 1.42 -> 0.84 (29), 1.50 -> 1.42 (26), 0.56 (24), 1.75 -> 1.15 (25) |
 | collision stacking, wrap/margins | see above | | not touched | 8.78 (31), 20.11 (32): layout differences remain |
 
@@ -79,8 +79,8 @@ Cases are `cmp` ASS files (generated; recipe at the end). Before = commit 0dc09d
 - Clip edges are anti-aliased; libass cuts rects on whole pixels. Rect `\clip` + `\iclip` vector exotic combinations: only
   one rect and one vector clip are kept.
 - Fade is a group opacity; libass fades each bitmap, so a shadow under a fading outline shows through slightly there.
-- Not changed (other owners): ScaledBorderAndShadow default (the cross-check report says current libass defaults to `no`;
-  `src/parser/ScriptInfo.ts` defaults to yes), LayoutRes/storage scale base, collision rules, perspective distance.
+- Perspective distance is still a fixed 312.5 layout px (libass scales it with storage). ScaledBorderAndShadow default,
+  LayoutRes/storage scale base and collision rules were aligned later, see docs/parity.md.
 - BorderStyle 4 and `Effect` banners: unsupported.
 
 ## What JASSUB teaches (config, not code)

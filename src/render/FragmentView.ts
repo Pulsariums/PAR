@@ -100,8 +100,9 @@ export class FragmentView {
    * Filter of this fragment. CSS `blur()` unless the blur has to be anisotropic (stretched text) or the
    * glyph has to be carved out (see `svgFilter.ts`); `\be` is always CSS (device pixels).
    */
-  private filterOf(st: TextState, blur: number, be: number, carve: string | null): string {
-    const s = blurSigma(blur);
+  private filterOf(st: TextState, blur: number, be: number, carve: string | null, env: StyleEnv): string {
+    const bsc = env.blurScale ?? 1;
+    const s = blurSigma(blur, bsc);
     const ratio = xRatio(st);
     const aniso = s > 0 && ratio > 0 && Math.abs(ratio - 1) > 1e-3;
     if (this.defs && (carve !== null || aniso)) {
@@ -111,17 +112,17 @@ export class FragmentView {
       fx.set(aniso ? s / ratio : s, s, carve ?? undefined);
       return [`url(#${fx.id})`, ...beFn(be)].join(' ');
     }
-    return blurFilter(blur, be);
+    return blurFilter(blur, be, bsc);
   }
 
   private applyText(st: TextState, phase: KaraokePhase | null, env: StyleEnv): void {
     const kf = this.overlay !== null && phase !== null;
     const p = this.paint(st, phase, env, kf);
     let css: Css;
-    if (p) css = { ...fontCss(st, env), ...plateTextCss(p, this.filterOf(st, p.blur, p.be, p.carve)) };
+    if (p) css = { ...fontCss(st, env), ...plateTextCss(p, this.filterOf(st, p.blur, p.be, p.carve, env)) };
     else if (this.role === 'all' || this.role === 'fill') {
       css = { ...fontCss(st, env), ...paintCss(st, phase, env, kf) };
-      css.filter = this.filterOf(st, st.blur, st.be, null);
+      css.filter = this.filterOf(st, st.blur, st.be, null, env);
     }
     else css = { ...fontCss(st, env), visibility: 'hidden' };
     if (kf) css.position = 'relative';
@@ -146,12 +147,12 @@ export class FragmentView {
     const primary = phase === null || phase.fill >= 1;
     const filters: string[] = [];
     if (p) {
-      filters.push(this.filterOf(st, p.blur, p.be, p.carve));
+      filters.push(this.filterOf(st, p.blur, p.be, p.carve, env));
     } else {
       if (st.xshad !== 0 || st.yshad !== 0) {
         filters.push(`drop-shadow(${px(st.xshad * bs)} ${px(st.yshad * bs)} 0 ${cssColor(st.c4, st.a4)})`);
       }
-      filters.push(this.filterOf(st, st.blur, st.be, null));
+      filters.push(this.filterOf(st, st.blur, st.be, null, env));
     }
     this.svg!.set({
       width: px(this.size[0] * s),

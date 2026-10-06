@@ -14,6 +14,8 @@ export const FONT_SIZE_RATIO = DEFAULT_RATIO;
 export interface StyleEnv {
   /** Multiplier for border and shadow (ScaledBorderAndShadow handling); blur is never scaled by it (libass `blur_scale`). */
   borderScale: number;
+  /** libass blur_scale relative to the layout (layout height / LayoutRes or storage height); default 1. */
+  blurScale?: number;
   /** Font name => family, weight and size factor (loaded faces, `fontMap`, system probe). */
   fonts: FontEnv;
 }
@@ -59,7 +61,7 @@ export const paintCss = (st: TextState, phase: KaraokePhase | null, env: StyleEn
   const shadowOn = st.xshad !== 0 || st.yshad !== 0;
   const css: Css = {
     color: fill,
-    filter: blurFilter(st.blur, st.be),
+    filter: blurFilter(st.blur, st.be, env.blurScale ?? 1),
   };
   if (st.style.borderStyle === 3) {
     css['-webkit-text-stroke-width'] = '0px';

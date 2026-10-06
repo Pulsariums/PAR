@@ -11,7 +11,7 @@ export const initLabLayout = (par: PARRenderer, onChange: () => void) => {
   const kv = $<HTMLDListElement>('labLayKv');
   const frame = $('labFrame');
   const tag = $('labFrameTag');
-  let def: 'custom' | '720p' | 'libass' = '720p';
+  let def: 'custom' | '1080p' | '720p' | 'libass' = '1080p';
   let override = false;
 
   const defaultOption = (): DefaultLayoutOption => (def === 'custom' ? { width: Math.max(1, num('labDefW')), height: Math.max(1, num('labDefH')) } : def);

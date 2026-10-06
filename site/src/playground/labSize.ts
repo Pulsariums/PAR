@@ -1,4 +1,4 @@
-import { writtenPlayRes, LAYOUT_720P } from '../../../src/index';
+import { writtenPlayRes, LAYOUT_1080P } from '../../../src/index';
 import { t } from '../i18n/i18n';
 
 import { el } from './dom';
@@ -30,7 +30,7 @@ export const initLabSize = (panel: HTMLElement, client: SizeClient, getDefault: 
     if (!session) return;
     const w = writtenPlayRes(session.source.script.info);
     const def = getDefault();
-    play.textContent = w.x > 0 || w.y > 0 ? `${w.x || '?'} x ${w.y || '?'}` : t('lab.s.noPlayres', { w: def.width || LAYOUT_720P.width, h: def.height || LAYOUT_720P.height });
+    play.textContent = w.x > 0 || w.y > 0 ? `${w.x || '?'} x ${w.y || '?'}` : t('lab.s.noPlayres', { w: def.width || LAYOUT_1080P.width, h: def.height || LAYOUT_1080P.height });
   };
 
   const info = (s: LabSession): HTMLElement => {

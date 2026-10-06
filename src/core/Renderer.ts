@@ -186,8 +186,8 @@ export class PARRenderer extends FontApi {
     const { region, layout, resolved, transform: st } = computeStage(this.opts, this.host.info);
     const prev = this.env;
     if (prev.layout.width !== layout.width || prev.layout.height !== layout.height) this.scene.clear();
-    this.env = { ...prev, layout, borderScale: st.borderScale };
-    if (st.borderScale !== prev.borderScale) this.forceNext = true;
+    this.env = { ...prev, layout, borderScale: st.borderScale, blurScale: st.blurScale };
+    if (st.borderScale !== prev.borderScale || st.blurScale !== prev.blurScale) this.forceNext = true;
     this.geo = { region, scale: { x: st.scaleX, y: st.scaleY }, layout: resolved };
     this.overlay.place(region, layout);
   }

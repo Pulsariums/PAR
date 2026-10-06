@@ -58,7 +58,8 @@ const LAYOUT = `
   <dl class="lab-kv" id="labLayKv"></dl>
   <div class="fld"><span data-i18n="lab.l.default"></span>
     <div class="seg block" role="group" id="labDefault" data-i18n-attr="aria-label:lab.l.default">
-      <button type="button" data-def="720p" aria-pressed="true" data-i18n="lab.l.d720"></button>
+      <button type="button" data-def="1080p" aria-pressed="true" data-i18n="lab.l.d1080"></button>
+      <button type="button" data-def="720p" aria-pressed="false" data-i18n="lab.l.d720"></button>
       <button type="button" data-def="libass" aria-pressed="false" data-i18n="lab.l.dlibass"></button>
       <button type="button" data-def="custom" aria-pressed="false" data-i18n="lab.l.dcustom"></button>
     </div>

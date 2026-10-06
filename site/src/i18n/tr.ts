@@ -14,7 +14,7 @@ export const tr: Dict = {
   'f1.t': 'Sıfır bağımlılık', 'f1.d': 'Gzip ile yaklaşık 30 kB, saf TypeScript. Çalışma zamanında paket ya da WebAssembly indirmesi yok.',
   'f2.t': 'DOM, SVG ve CSS', 'f2.d': 'Metin gerçek metin olarak kalır; stilini tarayıcı verir, yazı tiplerinizi kullanabilirsiniz.',
   'f3.t': 'Tak ve çalıştır', 'f3.d': 'Bir video ve .ass metni verin yeter. Letterbox, boyut değişimi, oynat, duraklat ve sarma kendiliğinden izlenir.',
-  'f4.t': 'libass kurallarına yakın', 'f4.d': 'Etiket önceliği, \\t sırası, karaoke zamanlaması ve PlayRes yedekleri libass\'teki gibi çalışır (PlayRes\'siz betikler varsayılan 720p, istenirse 384x288).',
+  'f4.t': 'libass kurallarına yakın', 'f4.d': 'Etiket önceliği, \\t sırası, karaoke zamanlaması ve PlayRes yedekleri libass\'teki gibi çalışır (PlayRes\'siz betikler varsayılan 1080p, istenirse 384x288).',
   'f5.t': 'Deterministik', 'f5.d': 'Aynı girdi her zaman aynı çıktıyı verir. Satır kimlikleri dosya sırasından gelir, rastgelelikten değil.',
   'f6.t': 'Kare hızı sizde', 'f6.d': 'Her video karesinde çizin ya da 10 ile 200 fps arasında sınırlayın. Zamanı video kare hızına yuvarlayın.',
   'f7.t': 'Bölge ve yerleşim', 'f7.d': 'Altyazıyı görünen resme, konteynere ya da herhangi bir dikdörtgene, istediğiniz sanal çözünürlükte yerleştirin.',

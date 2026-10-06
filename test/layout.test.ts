@@ -49,14 +49,22 @@ describe('layout scaling', () => {
   it('uses PlayRes by default and an explicit size when given', () => {
     expect(resolveLayoutSize('script', info)).toEqual({ width: 1280, height: 720 });
     expect(resolveLayoutSize({ width: 1920, height: 1080 }, info)).toEqual({ width: 1920, height: 1080 });
-    expect(resolveLayoutSize('script', null)).toEqual({ width: 1280, height: 720 });
+    expect(resolveLayoutSize('script', null)).toEqual({ width: 1920, height: 1080 });
+    expect(resolveLayoutSize('script', null, '720p')).toEqual({ width: 1280, height: 720 });
     expect(resolveLayoutSize('script', null, 'libass')).toEqual({ width: 384, height: 288 });
   });
 
   it('maps layout units to region pixels and handles ScaledBorderAndShadow', () => {
     const t = stageTransform({ x: 0, y: 0, width: 640, height: 360 }, { width: 1280, height: 720 }, false);
-    expect(t).toEqual({ scaleX: 0.5, scaleY: 0.5, borderScale: 2 });
-    expect(stageTransform({ x: 0, y: 0, width: 640, height: 360 }, { width: 1280, height: 720 }, true).borderScale).toBe(1);
+    // No storage size (no video, no LayoutRes): libass makes the flag a no-op.
+    expect(t).toEqual({ scaleX: 0.5, scaleY: 0.5, borderScale: 1, blurScale: 1 });
+    // Storage 1920x1080 under a 1280x720 layout: no => 720/1080 in layout units, yes => 1; blur follows storage either way.
+    const st = { width: 1920, height: 1080 };
+    const r = { x: 0, y: 0, width: 640, height: 360 };
+    const lay = { width: 1280, height: 720 };
+    expect(stageTransform(r, lay, false, st).borderScale).toBeCloseTo(2 / 3);
+    expect(stageTransform(r, lay, true, st)).toMatchObject({ borderScale: 1 });
+    expect(stageTransform(r, lay, true, st).blurScale).toBeCloseTo(2 / 3);
     // Non-uniform when aspect ratios differ (VSFilter-style stretch).
     expect(stageTransform({ x: 0, y: 0, width: 1920, height: 1080 }, { width: 384, height: 288 }, true)).toMatchObject({ scaleX: 5, scaleY: 3.75 });
   });

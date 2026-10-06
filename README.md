@@ -32,7 +32,7 @@ with a built-in test card, your own video file or a video URL, without installin
 | **Zero dependencies** | About 30 kB gzipped. Plain TypeScript, no runtime packages, no WASM download. |
 | **DOM, SVG and CSS** | Text stays real text, drawings are SVG paths, the browser's own text engine does the shaping. |
 | **Plug and play** | `create({ video, subtitle })`. Letterbox, resize, play, pause and seek are tracked. |
-| **libass semantics** | Tag precedence, `\t` ordering, karaoke timing and PlayRes fallbacks follow libass (one exception: scripts with no PlayRes at all default to 1280x720; `defaultLayout: 'libass'` gives 384x288). |
+| **libass semantics** | Tag precedence, `\t` ordering, karaoke timing and PlayRes fallbacks follow libass (one exception: scripts with no PlayRes at all default to 1920x1080; `defaultLayout: 'libass'` gives 384x288). |
 | **Deterministic** | Same input, same output. Line ids come from file order, never from randomness. |
 | **Your frame rate** | Render on every video frame (`auto`) or cap at 10 to 200 fps; optionally snap time to the video frame rate. |
 | **Region and layout** | Visible video picture, whole container or any rectangle; script resolution or any virtual size. |
@@ -94,7 +94,7 @@ The video's parent needs to be the element the overlay can sit on (it becomes `p
 | `subtitle` | `string \| SubtitleSource` | - | Raw `.ass` / `.ssa` text, or a `SubtitleSource` for big files (see [Big files](#big-files-windowed-sources)). |
 | `region` | `'video' \| 'container' \| {x,y,width,height}` | `'video'` with a video, else `'container'` | Where subtitles are placed. `'video'`: the visible picture of the video, letterbox-aware, honouring `object-fit`. A rect is in container pixels. |
 | `layout` | `'script' \| {width,height}` | `'script'` | Virtual coordinate space. `'script'` = the script's PlayRes (see [Default layout size](#default-layout-size-virtual-vs-real)). An explicit size treats the script as authored for that size and wins over everything. |
-| `defaultLayout` | `'720p' \| 'libass' \| {width,height}` | `'720p'` | Virtual size for scripts without any PlayRes: 1280x720, libass's 384x288, or your own. |
+| `defaultLayout` | `'1080p' \| '720p' \| 'libass' \| {width,height}` | `'1080p'` | Virtual size for scripts without any PlayRes: 1920x1080, 1280x720, libass's 384x288, or your own. |
 | `windowSeconds` | `number` | `12` | With a `SubtitleSource`: seconds of events kept in memory (about 1/6 behind the playhead, the rest ahead). |
 | `fps` | `'auto' \| number` | `'auto'` | Render rate. `'auto'`: once per presented video frame (`requestVideoFrameCallback`), else once per display frame. A number in 10..200 caps the rate (it cannot exceed the display refresh rate). |
 | `videoFps` | `number \| null` | `null` | Source video frame rate. When set, time is snapped to frame starts. Independent of `fps`. |
@@ -149,11 +149,11 @@ Order in which the virtual size is chosen:
 | 1 | the `layout: { width, height }` option | `'option'` |
 | 2 | the script's `PlayResX` **and** `PlayResY` | `'script'` |
 | 3 | only one of them: the other side follows the aspect ratio of the displayed region (16:9 when there is no usable region); with `defaultLayout: 'libass'` the libass rule is used instead (X only: Y = X x 3/4, with 1280 giving 1024; Y only: X = Y x 4/3, with 1024 giving 1280) | `'script'`, `layoutDerived: true` |
-| 4 | neither | `defaultLayout`: `'720p'` (default, 1280x720), `'libass'` (384x288) or `{ width, height }` -> `'default'` |
+| 4 | neither | `defaultLayout`: `'1080p'` (default, 1920x1080), `'720p'` (1280x720), `'libass'` (384x288) or `{ width, height }` -> `'default'` |
 
 `getMetrics()` reports both worlds: `layoutSize` (virtual), `regionSize` (real, CSS px), `scale` (`{ x, y }`, real / virtual), `layoutSource` and `layoutDerived` (the older `layout`, `region`, `scaleX`, `scaleY` stay).
 
-**What the default changes.** libass and VSFilter fall back to 384x288 when a script has no PlayRes. PAR's default is 1280x720 instead, which is what most modern scripts and video players assume. Everything in the script is a number in the virtual space, so the default decides how big it looks: a `Fontsize: 20` is 6.9 % of the picture height at 384x288 but 2.8 % at 1280x720; outlines, shadows, margins and positions scale the same way. A script written for libass without PlayRes therefore looks about 2.5 times smaller in PAR's default than in libass. Use `defaultLayout: 'libass'` for strict libass compatibility. Scripts that carry a PlayRes are not affected.
+**What the default changes.** libass and VSFilter fall back to 384x288 when a script has no PlayRes. PAR's default is 1920x1080 instead, which is what most modern scripts and video players assume. Everything in the script is a number in the virtual space, so the default decides how big it looks: a `Fontsize: 20` is 6.9 % of the picture height at 384x288 but 1.9 % at 1920x1080; outlines, shadows, margins and positions scale the same way. A script written for libass without PlayRes therefore looks about 3.75 times smaller in PAR's default than in libass. Use `defaultLayout: 'libass'` for strict libass compatibility. Scripts that carry a PlayRes are not affected.
 
 ## Frame times: when is a line visible
 
@@ -181,7 +181,7 @@ Adapters (`pulsar-ass-renderer/source`): `fromAssText(text)` (also exported by t
 
 ## The Lab
 
-The [Lab section of the site](https://pulsariums.github.io/PAR/#lab-root) opens your own `.ass` / `.ssa` / `.xpar` / `.par` (nothing is uploaded): file size and statistics, the real **XPAR** size and the **PAR** (lossy) size at a chosen fps (exact for small files, sampled estimates with a stated margin for big ones, then exact on demand, with progress and cancel; downloads `name.xpar` and `name.<fps>fps.par`), the virtual vs real size with a switchable default (720p / libass 384x288 / custom) and override, and a timeline player whose length is the subtitle's duration with seek, frame / 1 s / 5 s steps, previous / next line, speed, loop, render fps and video fps, keyboard shortcuts (Space or K, arrows, Shift + arrows, J / L, [ / ], Home / End) and live window and timing numbers. Large files are indexed and decoded in a Worker. `.par` is lossy: it cannot rebuild the original ASS and is only visually equivalent at its target fps.
+The [Lab section of the site](https://pulsariums.github.io/PAR/#lab-root) opens your own `.ass` / `.ssa` / `.xpar` / `.par` (nothing is uploaded): file size and statistics, the real **XPAR** size and the **PAR** (lossy) size at a chosen fps (exact for small files, sampled estimates with a stated margin for big ones, then exact on demand, with progress and cancel; downloads `name.xpar` and `name.<fps>fps.par`), the virtual vs real size with a switchable default (1080p / 720p / libass 384x288 / custom) and override, and a timeline player whose length is the subtitle's duration with seek, frame / 1 s / 5 s steps, previous / next line, speed, loop, render fps and video fps, keyboard shortcuts (Space or K, arrows, Shift + arrows, J / L, [ / ], Home / End) and live window and timing numbers. Large files are indexed and decoded in a Worker. `.par` is lossy: it cannot rebuild the original ASS and is only visually equivalent at its target fps.
 
 ## Fonts
 
@@ -276,7 +276,7 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 - **Glyph metrics.** The browser shapes and rasterizes text; `\fs` maps to CSS with a fixed ratio (0.9), so widths, line heights and hinting differ slightly from libass.
 - A fragment whose rotation differs from the line's first fragment rotates around its own centre; a fragment with a different `\fscx`/`\fscy` ratio becomes an inline-block (no wrapping inside it); a `\kf` syllable cannot wrap across lines.
 - A script whose PlayRes aspect differs from the video is stretched (like VSFilter).
-- A missing `ScaledBorderAndShadow` defaults to `yes` (libass); VSFilter treats it as `no`.
+- A missing `ScaledBorderAndShadow` is `no`, like current libass and VSFilter; the one exception is libass' compatibility rule: when the `[V4+ Styles]` Format line is not the standard one, a missing key means `yes`. With `no`, border, shadow and blur scale by layout height / storage height (the script's `LayoutResY`, else the video's pixel height); with neither known the flag changes nothing (libass without a storage size).
 - In headless Chromium on Linux we observed positive `\fax` drawn without the glyph slant (negative values are fine). This looks like a rasterizer issue, not a PAR transform issue.
 </details>
 

@@ -12,7 +12,7 @@ export const en = {
   'f1.t': 'Zero dependencies', 'f1.d': 'About 30 kB gzipped, plain TypeScript, no runtime packages and no WebAssembly download.',
   'f2.t': 'DOM, SVG and CSS', 'f2.d': 'Text stays real text: selectable by tooling, styled by the browser, themed with your fonts.',
   'f3.t': 'Plug and play', 'f3.d': 'Give it a video and the .ass text. Letterbox, resize, play, pause and seek are tracked for you.',
-  'f4.t': 'libass semantics', 'f4.d': 'Tag precedence, \\t ordering, karaoke timing and PlayRes fallbacks follow libass (scripts with no PlayRes default to 720p, or 384x288 on request).',
+  'f4.t': 'libass semantics', 'f4.d': 'Tag precedence, \\t ordering, karaoke timing and PlayRes fallbacks follow libass (scripts with no PlayRes default to 1080p, or 384x288 on request).',
   'f5.t': 'Deterministic', 'f5.d': 'Same input, same output. Line ids come from file order, never from randomness.',
   'f6.t': 'Your frame rate', 'f6.d': 'Render on every video frame, or cap between 10 and 200 fps. Snap time to the video frame rate.',
   'f7.t': 'Region and layout', 'f7.d': 'Place subtitles on the visible picture, the container or any rectangle, in any virtual resolution.',

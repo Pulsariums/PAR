@@ -28,7 +28,8 @@ const ROWS: Row[] = [
   ['libass X only 1280 -> 1024', 'script', 'PlayResX: 1280', 'libass', R169, [1280, 1024], 'script', true],
   ['libass Y only 480 -> 640', 'script', 'PlayResY: 480', 'libass', R169, [640, 480], 'script', true],
   ['libass Y only 1024 -> 1280', 'script', 'PlayResY: 1024', 'libass', R169, [1280, 1024], 'script', true],
-  ['nothing: 720p default', 'script', 'Title: x', '720p', R169, [1280, 720], 'default', false],
+  ['nothing: 1080p default', 'script', 'Title: x', '1080p', R169, [1920, 1080], 'default', false],
+  ['nothing: 720p alias', 'script', 'Title: x', '720p', R169, [1280, 720], 'default', false],
   ['nothing: libass preset', 'script', 'Title: x', 'libass', R169, [384, 288], 'default', false],
   ['nothing: custom default', 'script', '', { width: 1000, height: 500 }, R169, [1000, 500], 'default', false],
   ['zero / garbage PlayRes count as absent', 'script', 'PlayResX: 0\nPlayResY: abc', '720p', R169, [1280, 720], 'default', false],
@@ -45,7 +46,7 @@ describe('layout (virtual) size: resolution order', () => {
     });
   }
   it('no script at all uses the default', () => {
-    expect(resolveLayout('script', null, '720p').size).toEqual({ width: 1280, height: 720 });
+    expect(resolveLayout('script', null, '1080p').size).toEqual({ width: 1920, height: 1080 });
     expect(resolveLayout('script', null, 'libass')).toMatchObject({ size: { width: 384, height: 288 }, source: 'default' });
   });
 });
@@ -70,9 +71,11 @@ describe('metrics: virtual vs real', () => {
     par.destroy();
   });
 
-  it('defaults to 720p without PlayRes and switches with defaultLayout', () => {
+  it('defaults to 1080p without PlayRes and switches with defaultLayout', () => {
     const par = create({ container: box(1280, 720), subtitle: ass('Title: x') });
-    expect(par.getMetrics()).toMatchObject({ layoutSize: { width: 1280, height: 720 }, scale: { x: 1, y: 1 }, layoutSource: 'default' });
+    expect(par.getMetrics()).toMatchObject({ layoutSize: { width: 1920, height: 1080 }, layoutSource: 'default' });
+    par.setOptions({ defaultLayout: '720p' });
+    expect(par.getMetrics()).toMatchObject({ layoutSize: { width: 1280, height: 720 }, scale: { x: 1, y: 1 } });
     par.setOptions({ defaultLayout: 'libass' });
     const m = par.getMetrics();
     expect(m.layoutSize).toEqual({ width: 384, height: 288 });

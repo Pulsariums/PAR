@@ -32,7 +32,7 @@ bir video adresiyle her etiketi denemek için [deneme alanını](https://pulsari
 | **Sıfır bağımlılık** | Gzip ile yaklaşık 30 kB. Saf TypeScript; çalışma zamanında paket ya da WASM indirmesi yok. |
 | **DOM, SVG ve CSS** | Metin gerçek metin olarak kalır, çizimler SVG yoludur, harfleri tarayıcının kendi yazı motoru şekillendirir. |
 | **Tak ve çalıştır** | `create({ video, subtitle })`. Letterbox, yeniden boyutlandırma, oynat, duraklat ve sarma izlenir. |
-| **libass kurallarına yakın** | Etiket önceliği, `\t` sırası, karaoke zamanlaması ve PlayRes yedekleri libass'teki gibidir (tek istisna: hiç PlayRes'i olmayan betikler varsayılan olarak 1280x720 olur; `defaultLayout: 'libass'` 384x288 verir). |
+| **libass kurallarına yakın** | Etiket önceliği, `\t` sırası, karaoke zamanlaması ve PlayRes yedekleri libass'teki gibidir (tek istisna: hiç PlayRes'i olmayan betikler varsayılan olarak 1920x1080 olur; `defaultLayout: 'libass'` 384x288 verir). |
 | **Deterministik** | Aynı girdi, aynı çıktı. Satır kimlikleri dosya sırasından gelir, rastgelelikten değil. |
 | **Kare hızı sizde** | Her video karesinde çizin (`auto`) ya da 10 ile 200 fps arasında sınırlayın; isterseniz zamanı video kare hızına yuvarlayın. |
 | **Bölge ve yerleşim** | Görünen video resmi, tüm konteyner ya da herhangi bir dikdörtgen; betik çözünürlüğü ya da istediğiniz sanal boyut. |
@@ -94,7 +94,7 @@ Katman, videonun ebeveyn elemanına eklenir (eleman `position: static` ise `rela
 | `subtitle` | `string \| SubtitleSource` | - | Ham `.ass` / `.ssa` metni ya da büyük dosyalar için bir `SubtitleSource` (bkz. [Büyük dosyalar](#büyük-dosyalar-pencereli-kaynaklar)). |
 | `region` | `'video' \| 'container' \| {x,y,width,height}` | videoyla `'video'`, yoksa `'container'` | Altyazının yeri. `'video'`: videonun görünen resmi (letterbox'a duyarlı, `object-fit` dikkate alınır). Dikdörtgen: konteyner pikseli. |
 | `layout` | `'script' \| {width,height}` | `'script'` | Sanal koordinat uzayı. `'script'` = betiğin PlayRes değeri (bkz. [Varsayılan yerleşim boyutu](#varsayılan-yerleşim-boyutu-sanal-ve-gerçek)). Boyut verilirse betik o boyuta göre yazılmış sayılır ve her şeyden önce gelir. |
-| `defaultLayout` | `'720p' \| 'libass' \| {width,height}` | `'720p'` | PlayRes'i hiç olmayan betikler için sanal boyut: 1280x720, libass'in 384x288'i ya da kendi boyutunuz. |
+| `defaultLayout` | `'1080p' \| '720p' \| 'libass' \| {width,height}` | `'1080p'` | PlayRes'i hiç olmayan betikler için sanal boyut: 1920x1080, 1280x720, libass'in 384x288'i ya da kendi boyutunuz. |
 | `windowSeconds` | `number` | `12` | `SubtitleSource` ile: bellekte tutulan olay süresi, sn (yaklaşık 1/6'sı oynatma konumunun gerisi, kalanı ilerisi). |
 | `fps` | `'auto' \| number` | `'auto'` | Çizim hızı. `'auto'`: her video karesinde (`requestVideoFrameCallback`), yoksa her ekran karesinde. Sayı: 10..200 üst sınır (ekran tazeleme hızını aşamaz). |
 | `videoFps` | `number \| null` | `null` | Kaynak videonun kare hızı. Verilirse zaman kare başına yuvarlanır. `fps`'ten bağımsızdır. |
@@ -149,11 +149,11 @@ Sanal boyutun seçilme sırası:
 | 1 | `layout: { width, height }` seçeneği | `'option'` |
 | 2 | betiğin `PlayResX` **ve** `PlayResY` değerleri | `'script'` |
 | 3 | yalnız biri var: diğer kenar, gösterilen bölgenin en-boy oranından türetilir (kullanılabilir bölge yoksa 16:9); `defaultLayout: 'libass'` ile bunun yerine libass kuralı uygulanır (yalnız X: Y = X x 3/4, 1280 için 1024; yalnız Y: X = Y x 4/3, 1024 için 1280) | `'script'`, `layoutDerived: true` |
-| 4 | ikisi de yok | `defaultLayout`: `'720p'` (varsayılan, 1280x720), `'libass'` (384x288) ya da `{ width, height }` -> `'default'` |
+| 4 | ikisi de yok | `defaultLayout`: `'1080p'` (varsayılan, 1920x1080), `'720p'` (1280x720), `'libass'` (384x288) ya da `{ width, height }` -> `'default'` |
 
 `getMetrics()` iki dünyayı birlikte bildirir: `layoutSize` (sanal), `regionSize` (gerçek, CSS px), `scale` (`{ x, y }`, gerçek / sanal), `layoutSource` ve `layoutDerived` (eski `layout`, `region`, `scaleX`, `scaleY` alanları duruyor).
 
-**Varsayılan neyi değiştirir?** libass ve VSFilter, betikte PlayRes yoksa 384x288'e düşer. PAR'ın varsayılanı bunun yerine 1280x720'dir; çoğu modern betik ve oynatıcı bunu varsayar. Betikteki her şey sanal uzayda bir sayıdır, bu yüzden varsayılan, görünüm boyutunu belirler: `Fontsize: 20`, 384x288'de görüntü yüksekliğinin %6,9'u, 1280x720'de %2,8'idir; kenarlık, gölge, boşluk ve konumlar da aynı oranda ölçeklenir. PlayRes'siz, libass için yazılmış bir betik PAR'ın varsayılanında libass'e göre yaklaşık 2,5 kat küçük görünür. Katı libass uyumluluğu için `defaultLayout: 'libass'` kullanın. PlayRes taşıyan betikler etkilenmez.
+**Varsayılan neyi değiştirir?** libass ve VSFilter, betikte PlayRes yoksa 384x288'e düşer. PAR'ın varsayılanı bunun yerine 1920x1080'dir; çoğu modern betik ve oynatıcı bunu varsayar. Betikteki her şey sanal uzayda bir sayıdır, bu yüzden varsayılan, görünüm boyutunu belirler: `Fontsize: 20`, 384x288'de görüntü yüksekliğinin %6,9'u, 1920x1080'de %1,9'udur; kenarlık, gölge, boşluk ve konumlar da aynı oranda ölçeklenir. PlayRes'siz, libass için yazılmış bir betik PAR'ın varsayılanında libass'e göre yaklaşık 3,75 kat küçük görünür. Katı libass uyumluluğu için `defaultLayout: 'libass'` kullanın. PlayRes taşıyan betikler etkilenmez.
 
 ## Kare zamanları: bir satır ne zaman görünür
 
@@ -181,7 +181,7 @@ Bağdaştırıcılar (`pulsar-ass-renderer/source`): `fromAssText(text)` (ana gi
 
 ## Lab
 
-[Sitenin Lab bölümü](https://pulsariums.github.io/PAR/#lab-root) kendi `.ass` / `.ssa` / `.xpar` / `.par` dosyanızı açar (hiçbir şey yüklenmez): dosya boyutu ve istatistikler, gerçek **XPAR** boyutu ve seçilen fps'te **PAR** (kayıplı) boyutu (küçük dosyalarda kesin; büyüklerde belirtilen payla örnekleme tahmini, ardından istek üzerine kesin, ilerleme ve iptalle; `name.xpar` ve `name.<fps>fps.par` indirilir), değiştirilebilir varsayılan (720p / libass 384x288 / özel) ve geçersiz kılma ile sanal ve gerçek boyut, ve uzunluğu altyazının süresi olan bir zaman çizgisi oynatıcısı: atlama, kare / 1 sn / 5 sn adımları, önceki / sonraki satır, hız, döngü, çizim fps ve video fps, klavye kısayolları (Boşluk ya da K, oklar, Shift + oklar, J / L, [ / ], Home / End) ve canlı pencere ve zamanlama değerleri. Büyük dosyalar bir Worker'da indekslenir ve çözülür. `.par` kayıplıdır: özgün ASS'yi geri üretemez ve yalnızca hedef fps'inde görsel olarak eşdeğerdir.
+[Sitenin Lab bölümü](https://pulsariums.github.io/PAR/#lab-root) kendi `.ass` / `.ssa` / `.xpar` / `.par` dosyanızı açar (hiçbir şey yüklenmez): dosya boyutu ve istatistikler, gerçek **XPAR** boyutu ve seçilen fps'te **PAR** (kayıplı) boyutu (küçük dosyalarda kesin; büyüklerde belirtilen payla örnekleme tahmini, ardından istek üzerine kesin, ilerleme ve iptalle; `name.xpar` ve `name.<fps>fps.par` indirilir), değiştirilebilir varsayılan (1080p / 720p / libass 384x288 / özel) ve geçersiz kılma ile sanal ve gerçek boyut, ve uzunluğu altyazının süresi olan bir zaman çizgisi oynatıcısı: atlama, kare / 1 sn / 5 sn adımları, önceki / sonraki satır, hız, döngü, çizim fps ve video fps, klavye kısayolları (Boşluk ya da K, oklar, Shift + oklar, J / L, [ / ], Home / End) ve canlı pencere ve zamanlama değerleri. Büyük dosyalar bir Worker'da indekslenir ve çözülür. `.par` kayıplıdır: özgün ASS'yi geri üretemez ve yalnızca hedef fps'inde görsel olarak eşdeğerdir.
 
 ## Fontlar
 
@@ -276,7 +276,7 @@ Durumlar, deneme alanındaki özellik test tablosuyla aynıdır; orada her satı
 - **Glif ölçüleri.** Metni tarayıcı şekillendirir ve çizer; `\fs` CSS'e sabit bir oranla (0,9) eşlenir. Bu yüzden genişlik, satır yüksekliği ve hinting libass'ten az da olsa farklıdır.
 - Dönüşü satırın ilk parçasından farklı olan parça kendi merkezi etrafında döner; `\fscx`/`\fscy` oranı farklı olan parça satır içi bloğa dönüşür (içinde satır kaydırma olmaz); bir `\kf` hecesi satırlara bölünemez.
 - PlayRes en-boy oranı videodan farklı olan betik gerilir (VSFilter gibi).
-- `ScaledBorderAndShadow` yoksa varsayılan `yes`'tir (libass); VSFilter bunu `no` sayar.
+- `ScaledBorderAndShadow` yoksa `no` sayılır (güncel libass ve VSFilter gibi); tek istisna libass'in uyumluluk kuralıdır: `[V4+ Styles]` Format satırı standart değilse eksik anahtar `yes` olur. `no` iken kenarlık, gölge ve bulanıklık, yerleşim yüksekliği / depolama yüksekliği oranıyla ölçeklenir (betiğin `LayoutResY` değeri, yoksa videonun piksel yüksekliği); ikisi de bilinmiyorsa bayrak bir şeyi değiştirmez (depolama boyutsuz libass).
 - Linux'ta headless Chromium'da pozitif `\fax` değerlerinin glif eğimi olmadan çizildiğini gözlemledik (negatif değerler doğru). Bu bir rasterizer sorunu gibi görünüyor, PAR dönüşümüyle ilgili değil.
 </details>
 

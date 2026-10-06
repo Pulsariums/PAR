@@ -21,9 +21,9 @@ export const validateRegion = (r: RegionOption): RegionOption => {
 };
 
 export const validateDefaultLayout = (l: DefaultLayoutOption): DefaultLayoutOption => {
-  if (l === '720p' || l === 'libass') return l;
+  if (l === '1080p' || l === '720p' || l === 'libass') return l;
   if (l && typeof l === 'object' && finite(l.width) && finite(l.height) && l.width > 0 && l.height > 0) return { width: l.width, height: l.height };
-  throw new TypeError(`PAR: defaultLayout must be '720p', 'libass' or { width, height } with positive size`);
+  throw new TypeError(`PAR: defaultLayout must be '1080p', '720p', 'libass' or { width, height } with positive size`);
 };
 
 export const validateWindow = (w: number): number => {
@@ -53,7 +53,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     container,
     region: validateRegion(patch.region ?? prev?.region ?? (video ? 'video' : 'container')),
     layout: validateLayout(patch.layout ?? prev?.layout ?? 'script'),
-    defaultLayout: validateDefaultLayout(patch.defaultLayout ?? prev?.defaultLayout ?? '720p'),
+    defaultLayout: validateDefaultLayout(patch.defaultLayout ?? prev?.defaultLayout ?? '1080p'),
     fps: validateFps(patch.fps ?? prev?.fps ?? 'auto'),
     videoFps,
     clock: patch.clock !== undefined ? patch.clock : prev?.clock ?? null,

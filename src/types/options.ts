@@ -25,11 +25,12 @@ export type LayoutOption = 'script' | { width: number; height: number };
 
 /**
  * Virtual size used when the script has no PlayRes at all (layout option and script both silent).
- * - `'720p'` (default): 1280x720.
+ * - `'1080p'` (default): 1920x1080.
+ * - `'720p'`: 1280x720 (alias kept for explicit use).
  * - `'libass'`: 384x288, what libass / VSFilter use (strict compatibility).
  * - `{ width, height }`: your own default.
  */
-export type DefaultLayoutOption = '720p' | 'libass' | { width: number; height: number };
+export type DefaultLayoutOption = '1080p' | '720p' | 'libass' | { width: number; height: number };
 
 /** Where the virtual layout size came from: the `layout` option, the script's PlayRes, or `defaultLayout`. */
 export type LayoutSource = 'option' | 'script' | 'default';
@@ -56,7 +57,7 @@ export interface PAROptions {
   region?: RegionOption;
   /** Default: `'script'`. */
   layout?: LayoutOption;
-  /** Virtual size for scripts without PlayRes. Default `'720p'`. See `DefaultLayoutOption`. */
+  /** Virtual size for scripts without PlayRes. Default `'1080p'`. See `DefaultLayoutOption`. */
   defaultLayout?: DefaultLayoutOption;
   /** Render rate. Default `'auto'`. */
   fps?: FpsOption;

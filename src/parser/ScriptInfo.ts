@@ -19,12 +19,10 @@ export const resolvePlayRes = (x: number, y: number): { x: number; y: number; fa
   return { x: y === 1024 ? 1280 : Math.floor((y * 4) / 3), y, fallback: true };
 };
 
-const parseBool = (v: string | undefined, def: boolean): boolean => {
-  if (v === undefined) return def;
+/** libass parse_bool: a "yes" prefix or a number > 0 is true; anything else ("true", "no", empty) is false. */
+const parseBool = (v: string): boolean => {
   const t = v.trim().toLowerCase();
-  if (t === 'yes' || t === 'true' || t === '1') return true;
-  if (t === 'no' || t === 'false' || t === '0') return false;
-  return def;
+  return t.startsWith('yes') || parseInt(t, 10) > 0;
 };
 
 export const parseScriptInfo = (lines: SourceLine[]): ScriptInfo => {
@@ -46,8 +44,9 @@ export const parseScriptInfo = (lines: SourceLine[]): ScriptInfo => {
     playResFallback: play.fallback,
     layoutResX: posInt(lower.layoutresx) || null,
     layoutResY: posInt(lower.layoutresy) || null,
-    // Missing key => true (libass default; VSFilter treats it as "no").
-    scaledBorderAndShadow: parseBool(lower.scaledborderandshadow, true),
+    // Missing key => no (libass). The ScriptParser flips it to yes for a custom style Format line (libass compat rule).
+    scaledBorderAndShadow: lower.scaledborderandshadow === undefined ? false : parseBool(lower.scaledborderandshadow),
+    scaledBorderAndShadowSet: lower.scaledborderandshadow !== undefined,
     wrapStyle: wrap >= 0 && wrap <= 3 ? wrap : 0,
   };
 };

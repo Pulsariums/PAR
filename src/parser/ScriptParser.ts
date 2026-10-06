@@ -7,20 +7,26 @@ import { V4_STYLE_FORMAT, V4P_STYLE_FORMAT, parseStyle } from './StyleParser';
 
 const STYLE_SECTIONS = new Set(['v4+ styles', 'v4 styles', 'v4 styles+']);
 
-const parseStyles = (sec: Section, legacy: boolean, styles: Map<string, AssStyle>, warnings: string[]) => {
-  let fields = legacy ? V4_STYLE_FORMAT : V4P_STYLE_FORMAT;
+/** Returns true when the section's Format line differs from the standard one (libass: custom_format_line_compatibility). */
+const parseStyles = (sec: Section, legacy: boolean, styles: Map<string, AssStyle>, warnings: string[]): boolean => {
+  const standard = legacy ? V4_STYLE_FORMAT : V4P_STYLE_FORMAT;
+  let fields = standard;
+  let custom = false;
   for (const line of sec.lines) {
     const kv = splitKeyValue(line.text);
     if (!kv) continue;
     const key = kv[0].toLowerCase();
-    if (key === 'format') fields = parseFormat(kv[1]);
-    else if (key === 'style') {
+    if (key === 'format') {
+      fields = parseFormat(kv[1]);
+      custom = fields.join() !== standard.join();
+    } else if (key === 'style') {
       const values = splitFields(kv[1], fields.length).map((v) => v.trim());
       if (values.length < fields.length) warnings.push(`line ${line.lineNo}: style has too few fields`);
       const style = parseStyle(fields, values, legacy);
       styles.set(style.name, style);
     }
   }
+  return custom;
 };
 
 const parseEvents = (sec: Section, legacy: boolean, events: AssEvent[], counter: { n: number }, warnings: string[]) => {
@@ -54,8 +60,9 @@ export const parseScript = (text: string): ParsedScript => {
   const warnings: string[] = [];
   const counter = { n: 0 };
   for (const sec of sections) {
-    if (STYLE_SECTIONS.has(sec.name)) parseStyles(sec, sec.name === 'v4 styles' || ssa, styles, warnings);
-    else if (sec.name === 'events') parseEvents(sec, ssa, events, counter, warnings);
+    if (STYLE_SECTIONS.has(sec.name) && parseStyles(sec, sec.name === 'v4 styles' || ssa, styles, warnings) && !info.scaledBorderAndShadowSet) {
+      info.scaledBorderAndShadow = true;
+    } else if (sec.name === 'events') parseEvents(sec, ssa, events, counter, warnings);
   }
   if (!infoSec) warnings.push('missing [Script Info] section');
   return { info, styles, events, warnings };

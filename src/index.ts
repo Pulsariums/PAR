@@ -25,7 +25,7 @@ export { fitRect, resolveRegion } from './layout/Region';
 export type { ObjectFit, RegionInput } from './layout/Region';
 export { resolveLayoutSize, stageTransform } from './layout/Layout';
 export type { Size, StageTransform } from './layout/Layout';
-export { resolveLayout, defaultLayoutSize, writtenPlayRes, LAYOUT_720P, LAYOUT_LIBASS } from './layout/resolve';
+export { resolveLayout, defaultLayoutSize, writtenPlayRes, LAYOUT_1080P, LAYOUT_720P, LAYOUT_LIBASS } from './layout/resolve';
 export type { ResolvedLayout } from './layout/resolve';
 export { msOf, timeToMs, frameRate, frameIndex, frameMs } from './core/time';
 export type { Rate } from './core/time';
