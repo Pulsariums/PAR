@@ -1,3 +1,4 @@
+import { takesPartInStacking } from '../layout/Stacking';
 import { findStyle } from '../parser/StyleParser';
 import type { AssEvent, AssStyle, ScriptInfo, Transition } from '../types/script';
 
@@ -16,6 +17,8 @@ export interface PreparedLine {
   /** Effective margins (event margins override style margins when non-zero). */
   margins: { l: number; r: number; v: number };
   positioned: boolean;
+  /** Takes part in collision stacking (see `layout/Stacking.ts`). */
+  stacks: boolean;
   /** Needs shadow/outline/fill plates (blur or translucent fill with a border), see `anim/plated.ts`. */
   plated: boolean;
   /** True when anything changes over time (`\t`, `\move`, `\fad`, `\fade`, karaoke). */
@@ -43,6 +46,7 @@ export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: S
       v: ev.marginV || style.marginV,
     },
     positioned: !!(lt.pos || lt.move),
+    stacks: takesPartInStacking(lt, transitions.length > 0),
     plated: isPlated(ev, style, styles),
     animated,
     clipTransitions: transitions.filter((t) => !!t.clip),

@@ -263,7 +263,7 @@ Durumlar, deneme alanındaki özellik test tablosuyla aynıdır; orada her satı
 | `\q0` `\q3`, `WrapStyle` 0 ve 3 | Yaklaşık | CSS `text-wrap: balance` kullanır. |
 | `\N` `\n` `\h` | Çiziliyor | |
 | BorderStyle 1 ve 3 | Çiziliyor | Kenar+gölge / opak kutu. |
-| Katmanlar, çarpışma dizilimi, yorumlar | Çiziliyor | Konumsuz satırlar dizilir ve yerini korur; `Comment:` atlanır. |
+| Katmanlar, çarpışma dizilimi, yorumlar | Çiziliyor | Satırlar aynı katman içinde dizilir ve yerini korur (alt hizalı yukarı, üst ve orta hizalı aşağı, kenarlık hesaba katılır); `\pos`, `\move`, `\org` ya da herhangi bir `\t` içeren satırlar libass'teki gibi muaftır. `Comment:` atlanır. |
 | `\fe` | Desteklenmiyor | Ayrıştırılır ve yok sayılır (web yazı tipleri için anlamı yok). |
 | Olay `Effect` alanı (`Banner;`, `Scroll up;`, `Scroll down;`) | Desteklenmiyor | |
 | Çizimlerde `\kf` süpürmesi | Desteklenmiyor | Çizimler rengi sonda değiştirir. |

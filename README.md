@@ -263,7 +263,7 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 | `\q0` `\q3`, `WrapStyle` 0 and 3 | Approximate | Uses CSS `text-wrap: balance`. |
 | `\N` `\n` `\h` | Rendered | |
 | BorderStyle 1 and 3 | Rendered | Outline+shadow / opaque box. |
-| Layers, collision stacking, comments | Rendered | Unpositioned lines stack and keep their place; `Comment:` is skipped. |
+| Layers, collision stacking, comments | Rendered | Lines stack within the same layer and keep their place (bottom aligned up, top and middle aligned down, outline counted); lines with `\pos`, `\move`, `\org` or any `\t` are exempt, as in libass. `Comment:` is skipped. |
 | `\fe` | Not supported | Parsed and ignored (no meaning for web fonts). |
 | Event `Effect` (`Banner;`, `Scroll up;`, `Scroll down;`) | Not supported | |
 | `\kf` sweep on drawings | Not supported | Drawings switch colour at the end. |

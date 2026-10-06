@@ -1,6 +1,6 @@
-import { prepareLine, type PreparedLine } from '../anim/Prepared';
-import { alignY } from '../layout/Anchor';
+import { evalStates, prepareLine, type PreparedLine } from '../anim/Prepared';
 import { collisionShift, type Placed } from '../layout/Collision';
+import { inflate, stackDirection } from '../layout/Stacking';
 import { LineView, type LineEnv } from '../render/LineView';
 import type { Overlay } from '../render/Overlay';
 import type { AssEvent, ParsedScript } from '../types/script';
@@ -73,18 +73,18 @@ export class Scene {
       this.views.set(line.event.id, view);
       this.overlay.insert(view.root, line.event.layer, line.event.index);
       view.update(rel, env, true);
-      if (!line.positioned) this.place(view, env, rel);
+      if (line.stacks) this.place(view, env, rel);
     }
   }
 
   /** Collision handling for unpositioned lines (lines already on screen keep their place). */
   private place(view: LineView, env: LineEnv, rel: number): void {
-    const ay = alignY(view.line.an);
-    if (ay === 0.5) return;
-    const box = view.measure(env.layout);
-    if (box.bottom - box.top <= 0) return;
+    const measured = view.measure(env.layout);
+    if (measured.bottom - measured.top <= 0) return;
+    const border = Math.max(0, ...evalStates(view.line, rel, env.styles).map((s) => Math.max(s.xbord, s.ybord))) * env.borderScale;
+    const box = inflate(measured, border);
     const layer = view.line.event.layer;
-    const shift = collisionShift(box, layer, ay === 1 ? -1 : 1, [...this.placed.values()]);
+    const shift = collisionShift(box, layer, stackDirection(view.line.an), [...this.placed.values()]);
     if (shift !== 0) {
       view.shiftY = shift;
       view.update(rel, env, true);

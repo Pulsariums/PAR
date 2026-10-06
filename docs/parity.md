@@ -11,6 +11,7 @@ JASSUB code is used. Scope: logic and layout rules, not pixel-identical rasteris
 | Border / shadow / blur base | `init_font_scale`: yes = PlayRes (1 in layout units); no = layout height / storage height; blur always layout / storage. Storage = script LayoutResX/Y, else the video's pixel size, else unknown (then 1, like libass without a storage size) |
 | `\t` | `t2` = 0 is the whole event duration; progress `pow(p, accel)` for any accel (0 gives 1; a non-finite result is kept at 1); `\b \i \u \s \fn \r` inside apply at any progress |
 | Karaoke | `\k` without a number = 100 cs; continuation text (`{\kf100}Hel{\b1}lo`) has zero duration and flips when its syllable ends (no proportional split) |
+| Collisions | Same layer only; lines with `\pos`, `\move`, `\org` or any `\t` are neither shifted nor counted; bottom aligned move up, top and middle aligned move down (`\an4-6` now stack); the rectangle includes the outline. `Collisions: Reverse` is not implemented (libass has no such setting either) |
 
 ## Intentionally different
 
