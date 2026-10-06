@@ -60,7 +60,7 @@ Storm of 40 random seeks: 0 wrong final frames, longest task 145 ms (canvas) vs 
 
 ## Seeking (scrub storms)
 
-Reproduced with `seek.mjs` (and in the Lab with the same file): seeks to the heavy moments took 1.1-3.8 s, a 40-seek storm left 160 s of decoding queued in the Worker and the window did not advance for seconds afterwards (loading never finished while playing). Causes:
+Reproduced with `seek.mjs` (and in the Studio with the same file): seeks to the heavy moments took 1.1-3.8 s, a 40-seek storm left 160 s of decoding queued in the Worker and the window did not advance for seconds afterwards (loading never finished while playing). Causes:
 
 1. The decoded-chunk cache held 8 chunks. The file is in file order (style groups), so a time window touches dozens of chunks: every window re-decoded (0.6 s for a 0.5 s window, 24 us/event warm). Now a 64 MB LRU by bytes.
 2. A stale read could not be cancelled: `readWindow` ignored the signal and a Worker handles `cancel` only between macrotasks, so each seek queued a full decode ahead of the last one. Reads now check the signal between chunks and yield before a cold chunk; a read the playhead left is aborted; the last seek wins.

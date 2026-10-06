@@ -46,4 +46,4 @@ A window `[t0, t1)` contains an event when `endMs > startMs && startMs < t1Ms &&
 
 ## Verify it yourself
 
-Playground preset "Time boundaries" plus the Lab: pick 24 / 30 / 60 / 23.976 video fps and step frame by frame (arrow keys). Tests: `test/lab-time.test.ts` (table of fps x random centisecond boundaries, float traps, mid-frame starts / ends, window borders).
+Playground preset "Time boundaries" plus the Studio (Examples menu, then Advanced > Video FPS): pick 24 / 30 / 60 / 23.976 video fps and step frame by frame (arrow keys). Tests: `test/time-boundaries.test.ts` (table of fps x random centisecond boundaries, float traps, mid-frame starts / ends, window borders).
