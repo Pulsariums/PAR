@@ -1,5 +1,6 @@
 import { libEn } from './libEn';
 import { labEn } from './labEn';
+import { studioEn } from './studioEn';
 
 export const en = {
   'nav.skip': 'Skip to playground', 'nav.features': 'Features', 'nav.playground': 'Playground', 'nav.docs': 'Docs',
@@ -52,5 +53,6 @@ export const en = {
   'foot.note': 'Rendered with the local PAR source from this repository.',
   ...libEn,
   ...labEn,
+  ...studioEn,
 };
 export type Dict = Record<keyof typeof en, string>;

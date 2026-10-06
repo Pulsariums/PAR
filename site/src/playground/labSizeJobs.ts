@@ -1,7 +1,7 @@
-import { parFileName } from '../../../src/format';
 import { t } from '../i18n/i18n';
 
 import { el } from './dom';
+import { exportName } from './labExportName';
 import { humanBytes, percent } from './labFormat';
 import type { JobKind, SizeResult } from './labProtocol';
 import { JobCancelled, type Job, type SizeClient } from './labSizeClient';
@@ -37,7 +37,7 @@ export class SizeJobs {
   private timer = 0;
   private dead = false;
 
-  constructor(private readonly client: SizeClient, private readonly s: LabSession, private readonly fps: () => number) {
+  constructor(private readonly client: SizeClient, private readonly s: LabSession, private readonly fps: () => number, private readonly dlLabel?: (k: 'xpar' | 'par', fps: number) => string) {
     this.big = s.blob.size > AUTO_EXACT_BYTES;
     const title = (key: 'lab.s.xpar' | 'lab.s.par'): HTMLElement => el('b', '', t(key));
     this.xparRow = new SizeRow(title('lab.s.xpar'), () => this.exact('xpar'), () => this.cancel('xpar'), () => this.save('xpar'));
@@ -107,8 +107,7 @@ export class SizeJobs {
   private save(k: 'xpar' | 'par'): void {
     const r = this.st[k].exact;
     if (!r?.blob) return;
-    const base = this.s.name.replace(/\.[^.]*$/, '');
-    download(r.blob, k === 'xpar' ? `${base}.xpar` : parFileName(base, this.fps()));
+    download(r.blob, exportName(k, this.s.name, this.fps()));
   }
 
   private draw(k: 'xpar' | 'par'): void {
@@ -122,7 +121,7 @@ export class SizeJobs {
       busy: st.busy, error: st.error || undefined, estimate: !!r && !r.exact,
       note: k === 'par' && r?.notes ? t('lab.s.bake', { m: r.notes.merged, d: r.notes.dropped, c: r.notes.collapsed }) : undefined,
       runLabel: this.big ? t('lab.s.runLong', { s: secs }) : t('lab.s.run'), cancelLabel: t('lab.cancel'),
-      canRun: !st.exact, dlLabel: k === 'xpar' ? t('lab.s.dlXpar') : t('lab.s.dlPar', { fps: this.fps() }), canDownload: !!st.exact?.blob,
+      canRun: !st.exact, dlLabel: this.dlLabel?.(k, this.fps()) ?? (k === 'xpar' ? t('lab.s.dlXpar') : t('lab.s.dlPar', { fps: this.fps() })), canDownload: !!st.exact?.blob,
     };
     (k === 'xpar' ? this.xparRow : this.parRow).show(state);
   }

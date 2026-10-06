@@ -1,5 +1,6 @@
 import { libRu } from './libRu';
 import { labRu } from './labRu';
+import { studioRu } from './studioRu';
 
 import type { Dict } from './en';
 
@@ -54,4 +55,5 @@ export const ru: Dict = {
   'foot.note': 'Отрисовано локальным исходником PAR из этого репозитория.',
   ...libRu,
   ...labRu,
+  ...studioRu,
 };

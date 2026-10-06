@@ -1,16 +1,13 @@
-import { openXpar, parHeader, type ParHeader } from '../../../src/format';
-import { openSourceInWorker, sniffBlob, type SubtitleSource } from '../../../src/source';
+import type { SubtitleSource } from '../../../src/source';
 import { t } from '../i18n/i18n';
 
 import { $ } from './dom';
 import { humanBytes } from './labFormat';
+import { openSession } from './labOpen';
 import type { SizeClient } from './labSizeClient';
 import type { LabSession } from './labTypes';
 
 const kindKey = { ass: 'lab.k.ass', xpar: 'lab.k.xpar', par: 'lab.k.par' } as const;
-
-/** The module Worker of the library (indexing and window decoding happen there). */
-const sourceWorker = (): Worker => new Worker(new URL('../../../src/source/worker.ts', import.meta.url), { type: 'module' });
 
 export interface LoadHooks {
   /** A file is ready: it replaces the previous session. */
@@ -45,20 +42,14 @@ export const initLabLoad = (client: SizeClient, hooks: LoadHooks) => {
     const t0 = performance.now();
     progress(0, t('lab.reading', { name }));
     try {
-      const kind = await sniffBlob(blob);
-      if (kind === 'unknown') throw new Error(t('lab.fail', { error: 'not an ASS, XPAR or PAR file' }));
-      const source = await openSourceInWorker(blob, {
-        worker: sourceWorker, kind, signal: ac.signal,
+      const session = await openSession(blob, name, {
+        signal: ac.signal,
         onProgress: (done, total) => progress(Math.round((done / Math.max(1, total)) * 100), t('lab.prog', { pct: Math.round((done / Math.max(1, total)) * 100), done: humanBytes(done), total: humanBytes(total) })),
       });
-      if (ac.signal.aborted) { source.close?.(); return; }
-      let header: ParHeader | null = null;
-      if (kind !== 'ass') header = parHeader(await openXpar(blob));
       current?.close?.();
-      current = source;
-      const openMs = performance.now() - t0;
-      progress(null, t('lab.ready', { name, kind: t(kindKey[kind]), ms: Math.round(openMs) }));
-      hooks.ready({ name, blob, kind, source, openMs, header });
+      current = session.source;
+      progress(null, t('lab.ready', { name, kind: t(kindKey[session.kind]), ms: Math.round(performance.now() - t0) }));
+      hooks.ready(session);
     } catch (e) {
       progress(null, ac.signal.aborted ? t('lab.cancelled') : t('lab.fail', { error: e instanceof Error ? e.message.replace(/^xpar: /, '') : String(e) }));
     }

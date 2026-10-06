@@ -8,10 +8,10 @@ import type { Player } from './player';
 
 const editable = (el: EventTarget | null): boolean => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName) && !(el instanceof HTMLInputElement && el.type === 'range'));
 
-/** Timeline controls: play / pause, scrub, +-1 s / 5 s / 1 frame, previous / next line, speed, loop, keys. Polled from the Lab loop. */
-export const initLabTransport = (player: Player, videoFps: () => number, onSeek: (t: number) => void, source: () => SubtitleSource | null) => {
-  const play = $<HTMLButtonElement>('labPlay');
-  const seek = $<HTMLInputElement>('labSeek');
+/** `p` is the id prefix of the markup (`lab` for the Lab, `st` for the Studio; see `transportMarkup`). Timeline controls: play / pause, scrub, +-1 s / 5 s / 1 frame, previous / next line, speed, loop, keys. Polled from the Lab loop. */
+export const initLabTransport = (player: Player, videoFps: () => number, onSeek: (t: number) => void, source: () => SubtitleSource | null, p = 'lab') => {
+  const play = $<HTMLButtonElement>(`${p}Play`);
+  const seek = $<HTMLInputElement>(`${p}Seek`);
   let dragging = false;
   const tr = () => player.transport;
   const dur = (): number => tr().duration || source()?.duration || 0;
@@ -35,16 +35,16 @@ export const initLabTransport = (player: Player, videoFps: () => number, onSeek:
   const label = (): void => { play.textContent = t(tr().playing ? 'lab.pause' : 'lab.play'); };
 
   play.addEventListener('click', toggle);
-  const step = (id: string, fn: () => void): void => $(id).addEventListener('click', fn);
-  step('labBack5', () => go(tr().time - 5)); step('labBack1', () => go(tr().time - 1)); step('labBackF', () => frame(-1));
-  step('labFwdF', () => frame(1)); step('labFwd1', () => go(tr().time + 1)); step('labFwd5', () => go(tr().time + 5));
-  step('labPrevLine', () => void line(-1)); step('labNextLine', () => void line(1));
+  const step = (id: string, fn: () => void): void => $(`${p}${id}`).addEventListener('click', fn);
+  step('Back5', () => go(tr().time - 5)); step('Back1', () => go(tr().time - 1)); step('BackF', () => frame(-1));
+  step('FwdF', () => frame(1)); step('Fwd1', () => go(tr().time + 1)); step('Fwd5', () => go(tr().time + 5));
+  step('PrevLine', () => void line(-1)); step('NextLine', () => void line(1));
   seek.addEventListener('input', () => { dragging = true; go(Number(seek.value)); });
   seek.addEventListener('change', () => { dragging = false; });
-  $('labSpeed').addEventListener('change', () => { const r = Number($<HTMLSelectElement>('labSpeed').value); player.card.setRate(r); player.video.playbackRate = r; });
-  $('labLoop').addEventListener('change', () => { const on = $<HTMLInputElement>('labLoop').checked; player.card.loop = on; player.video.loop = on; });
+  $(`${p}Speed`).addEventListener('change', () => { const r = Number($<HTMLSelectElement>(`${p}Speed`).value); player.card.setRate(r); player.video.playbackRate = r; });
+  $(`${p}Loop`).addEventListener('change', () => { const on = $<HTMLInputElement>(`${p}Loop`).checked; player.card.loop = on; player.video.loop = on; });
 
-  $('lab').addEventListener('keydown', (e: KeyboardEvent) => {
+  $(p).addEventListener('keydown', (e: KeyboardEvent) => {
     if (editable(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
     const onRange = e.target instanceof HTMLInputElement && e.target.type === 'range';
     const k = e.key.toLowerCase();
@@ -66,8 +66,8 @@ export const initLabTransport = (player: Player, videoFps: () => number, onSeek:
       seek.max = String(d || 1);
       const now = tr().time;
       if (!dragging) seek.value = String(now);
-      $('labCur').textContent = clock(now);
-      $('labTotal').textContent = clock(d);
+      $(`${p}Cur`).textContent = clock(now);
+      $(`${p}Total`).textContent = clock(d);
       const want = t(tr().playing ? 'lab.pause' : 'lab.play');
       if (play.textContent !== want) play.textContent = want;
     },

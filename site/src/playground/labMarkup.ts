@@ -1,25 +1,9 @@
 /** Static markup of the Lab section (texts come from data-i18n keys; dynamic parts are filled by the lab* modules). */
 
-const btn = (id: string, key: string, label: string, cls = 'btn sm') => `<button type="button" class="${cls}" id="${id}" data-i18n-attr="aria-label:${key},title:${key}">${label}</button>`;
+import { transportMarkup } from './labTransportMarkup';
 
-const TRANSPORT = `
-  <div class="lab-seekrow">
-    <output id="labCur" class="mono">00:00.00</output>
-    <input id="labSeek" type="range" min="0" max="1" step="0.001" value="0" data-i18n-attr="aria-label:lab.seek" />
-    <output id="labTotal" class="mono">00:00.00</output>
-  </div>
-  <div class="lab-btns" role="group" data-i18n-attr="aria-label:lab.pl">
-    ${btn('labPrevLine', 'lab.prevLine', '|&lt;')}${btn('labBack5', 'lab.back5', '-5s')}${btn('labBack1', 'lab.back1', '-1s')}${btn('labBackF', 'lab.backF', '-1f')}
-    <button type="button" class="btn primary" id="labPlay" data-i18n="lab.play"></button>
-    ${btn('labFwdF', 'lab.fwdF', '+1f')}${btn('labFwd1', 'lab.fwd1', '+1s')}${btn('labFwd5', 'lab.fwd5', '+5s')}${btn('labNextLine', 'lab.nextLine', '&gt;|')}
-  </div>
-  <div class="row lab-opts">
-    <label class="fld inline"><span data-i18n="lab.speed"></span>
-      <select id="labSpeed"><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select></label>
-    <label class="chk"><input id="labLoop" type="checkbox" checked /><span data-i18n="lab.loop"></span></label>
-    <button type="button" class="btn sm" id="labVideoBtn" data-i18n="lab.video"></button>
-    <input id="labVideoFile" type="file" accept="video/*" hidden />
-  </div>
+const TRANSPORT = transportMarkup('lab', `<button type="button" class="btn sm" id="labVideoBtn" data-i18n="lab.video"></button>
+    <input id="labVideoFile" type="file" accept="video/*" hidden />`) + `
   <div class="fld"><span data-i18n="lab.renderFps"></span>
     <div class="fpsrow">
       <label class="chk"><input id="labFpsAuto" type="checkbox" checked /><span data-i18n="lab.auto"></span></label>
