@@ -15,9 +15,13 @@ import { fail } from './errors';
 import type { ChunkRef } from './indexBlock';
 import type { FontRef, Meta, Provenance } from './meta';
 import type { ByteSource } from './source';
+import { ByteLru } from '../util/ByteLru';
+import { throwIfAborted, yieldNow } from '../util/cancel';
 
 const KEPT_SECTIONS = new Set(['script info', 'v4+ styles', 'v4 styles', 'v4 styles+', 'events']);
-const CACHE = 8;
+/** Decoded chunks held (bytes of line text, estimated): a time window touches many chunks of a file-ordered script. */
+const CACHE_BYTES = 64 << 20;
+const chunkBytes = (ev: DecodedEvent[]): number => ev.reduce((n, e) => n + e.line.length * 2 + 80, 0);
 
 export interface XparFont {
   name: string;
@@ -46,7 +50,8 @@ const headerText = (meta: Meta): string => {
 export class XparFile {
   readonly lossy: boolean;
   readonly script: ParsedScript;
-  private readonly cache = new Map<number, Promise<DecodedEvent[]>>();
+  private readonly cache = new ByteLru<number, DecodedEvent[]>(CACHE_BYTES);
+  private readonly inflight = new Map<number, Promise<DecodedEvent[]>>();
   private readonly formats: string[][];
 
   /** True when the file was in the stored form (verbatim ASS); the chunk structure is then rebuilt in memory. */
@@ -106,16 +111,21 @@ export class XparFile {
     }));
   }
 
-  /** Reads, checks and decodes one chunk (cached). */
+  /** True when the chunk is decoded already (reading it costs no decode time). */
+  warm(i: number): boolean {
+    return this.cache.has(i);
+  }
+
+  /** Reads, checks and decodes one chunk (cached, byte-capped; a chunk being decoded is shared by concurrent readers). */
   chunk(i: number): Promise<DecodedEvent[]> {
-    let p = this.cache.get(i);
+    const hit = this.cache.get(i);
+    if (hit) return Promise.resolve(hit);
+    let p = this.inflight.get(i);
     if (!p) {
       const ref = this.chunks[i];
       if (!ref) return Promise.reject(new RangeError('no such chunk'));
-      p = this.load(ref);
-      this.cache.set(i, p);
-      if (this.cache.size > CACHE) this.cache.delete(this.cache.keys().next().value as number);
-      p.catch(() => this.cache.delete(i));
+      p = this.load(ref).then((ev) => { this.cache.set(i, ev, chunkBytes(ev)); return ev; }).finally(() => this.inflight.delete(i));
+      this.inflight.set(i, p);
     }
     return p;
   }
@@ -146,11 +156,14 @@ export class XparFile {
   }
 
   /** Dialogue lines (as decoded text) visible in [t0, t1), in file order, with their ordinals. */
-  async readWindowLines(t0: number, t1: number): Promise<Array<{ ordinal: number; fmt: number; line: string }>> {
+  async readWindowLines(t0: number, t1: number, signal?: AbortSignal): Promise<Array<{ ordinal: number; fmt: number; line: string }>> {
     const picked: DecodedEvent[] = [];
     const a = t0 * 1000 - 1;
     const b = t1 * 1000 + 1;
     for (const i of this.chunksFor(t0, t1)) {
+      throwIfAborted(signal);
+      // A cold chunk costs a decode: let queued messages (a Worker's `cancel`) in first, a stale read stops here.
+      if (signal && !this.warm(i)) { await yieldNow(); throwIfAborted(signal); }
       for (const e of await this.chunk(i)) {
         if (e.comment) continue;
         if (!e.raw && !(e.startMs < b && e.endMs > a)) continue;
@@ -162,9 +175,11 @@ export class XparFile {
   }
 
   /** Parsed events visible in [t0, t1): the same structures `parseScript` yields (same ids, same order). */
-  async readWindow(t0: number, t1: number): Promise<AssEvent[]> {
+  async readWindow(t0: number, t1: number, signal?: AbortSignal): Promise<AssEvent[]> {
     const out: AssEvent[] = [];
-    for (const l of await this.readWindowLines(t0, t1)) {
+    let n = 0;
+    for (const l of await this.readWindowLines(t0, t1, signal)) {
+      if ((++n & 255) === 0) throwIfAborted(signal);
       const kv = splitKeyValue(l.line.replace(/^\s+/, ''));
       const ev = kv ? parseDialogue(this.eventFormat(l.fmt), kv[1], l.ordinal) : null;
       if (ev && typeof ev !== 'string' && ev.start < t1 && ev.end > t0) out.push(ev);

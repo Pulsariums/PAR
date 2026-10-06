@@ -26,7 +26,7 @@ const wrap = (file: XparFile, kind: string, meter: Meter, indexMs: number): Subt
   script: { info: file.script.info, styles: file.script.styles, warnings: file.script.warnings },
   duration: file.duration,
   eventCount: file.meta.dialogues,
-  readWindow: (t0, t1) => meter.time(async () => filterWindow(await file.readWindow(t0, t1), t0, t1)),
+  readWindow: (t0, t1, signal) => meter.time(async () => filterWindow(await file.readWindow(t0, t1, signal), t0, t1)),
   fontSection: async () => fontSection(file),
   stats: () => ({ bytesRead: meter.bytesRead, decodeMs: meter.decodeMs, indexMs }),
 });

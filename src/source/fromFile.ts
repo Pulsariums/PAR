@@ -24,7 +24,7 @@ export const fromAssFile = async (file: Blob, opts: FileSourceOptions = {}): Pro
     script: { info: ix.script.info, styles: ix.script.styles, warnings: ix.script.warnings },
     duration: ix.duration,
     eventCount: ix.data.events,
-    readWindow: (t0, t1) => meter.time(async () => filterWindow(await ix.readWindow(t0, t1), t0, t1)),
+    readWindow: (t0, t1, signal) => meter.time(async () => filterWindow(await ix.readWindow(t0, t1, signal), t0, t1)),
     fontSection: async () => {
       const f = ix.data.fonts;
       return f ? new TextDecoder().decode(await file.slice(f.off, f.off + f.len).arrayBuffer()) : null;

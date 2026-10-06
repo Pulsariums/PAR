@@ -35,7 +35,7 @@ export const attachSourceHost = (scope: HostScope): void => {
       aborts.set(m.id, ac);
       source.readWindow(m.t0, m.t1, ac.signal).then((events) => {
         if (!ac.signal.aborted) scope.postMessage({ op: 'window', id: m.id, events, stats: stats() });
-      }, (e) => fail(m.id, e)).finally(() => aborts.delete(m.id));
+      }, (e) => { if (!ac.signal.aborted) fail(m.id, e); }).finally(() => aborts.delete(m.id));
     } else if (m.op === 'warm' && source) void source.readWindow(m.t0, m.t1).catch(() => undefined);
     else if (m.op === 'fonts' && source) {
       (source.fontSection?.() ?? Promise.resolve(null)).then((text) => scope.postMessage({ op: 'fonts', id: m.id, text }), (e) => fail(m.id, e));

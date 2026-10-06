@@ -62,6 +62,8 @@ export class WindowFeed {
   update(tMs: number): void {
     if (this.dead || performance.now() < this.retryAt) return;
     if (this.has && tMs - this.back - this.lo >= 1000) this.evict(tMs);
+    // Last seek wins: a read the playhead has left (a seek far away, then another) is cancelled, not waited for.
+    if (this.req && (tMs < this.req.a - this.ahead || tMs >= this.req.b + this.ahead)) { this.req.ac.abort(); this.req = null; }
     const r = this.req;
     const backward = tMs < this.lastT;
     this.lastT = tMs;

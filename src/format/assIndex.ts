@@ -3,6 +3,9 @@ import { parseScript } from '../parser/ScriptParser';
 import { splitKeyValue } from '../parser/sections';
 import type { AssEvent, ParsedScript } from '../types/script';
 
+import { ByteLru } from '../util/ByteLru';
+import { throwIfAborted } from '../util/cancel';
+
 import { fail } from './errors';
 import type { AssIndexData, AssIndexOptions, AssRange } from './assTypes';
 import { LineSplitter } from './lines';
@@ -16,7 +19,7 @@ export type { AssIndexData, AssIndexOptions, AssRange } from './assTypes';
 /** Plain-ASS time index. Holds offsets only; the text stays in the file and is fetched with Blob.slice (or HTTP Range). */
 export class AssIndex {
   readonly script: ParsedScript;
-  private readonly cache = new Map<number, string[]>();
+  private readonly cache = new ByteLru<number, string[]>(64 << 20);
 
   constructor(readonly data: AssIndexData, private readonly blob: Blob) {
     this.script = parseScript(data.header);
@@ -42,8 +45,7 @@ export class AssIndex {
       const text = DEC.decode(await this.blob.slice(r.off, r.off + r.len).arrayBuffer());
       l = text.split('\n').map((s) => (s.endsWith('\r') ? s.slice(0, -1) : s));
       if (l[l.length - 1] === '') l.pop();
-      this.cache.set(i, l);
-      if (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value as number);
+      this.cache.set(i, l, r.len * 2);
     }
     return l;
   }
@@ -70,17 +72,18 @@ export class AssIndex {
   }
 
   /** Events visible in [t0, t1): same structures and ids as parsing the whole file. */
-  async readWindow(t0: number, t1: number): Promise<AssEvent[]> {
-    return (await this.window(t0, t1)).map((w) => w.ev);
+  async readWindow(t0: number, t1: number, signal?: AbortSignal): Promise<AssEvent[]> {
+    return (await this.window(t0, t1, signal)).map((w) => w.ev);
   }
 
-  private async window(t0: number, t1: number): Promise<Array<{ ev: AssEvent; line: string }>> {
+  private async window(t0: number, t1: number, signal?: AbortSignal): Promise<Array<{ ev: AssEvent; line: string }>> {
     const out: Array<{ ev: AssEvent; line: string }> = [];
     const a = t0 * 1000 - 1;
     const b = t1 * 1000 + 1;
     for (let i = 0; i < this.data.ranges.length; i++) {
       const r = this.data.ranges[i];
       if (!(r.minStartMs < b && r.maxEndMs > a)) continue;
+      throwIfAborted(signal);
       const fields = this.fields(r.fmt);
       let ord = r.ord0;
       for (const line of await this.lines(i)) {
