@@ -15,5 +15,5 @@
     "resolveJsonModule": true,
     "types": []
   },
-  "include": ["src", "test", "site", "vite.config.ts", "vite.fontlib.config.ts", "vite.site.config.ts", "vitest.config.ts"]
+  "include": ["src", "test", "site", "vite.config.ts", "vite.fontlib.config.ts", "vite.source.config.ts", "vite.worker.config.ts", "vite.site.config.ts", "vitest.config.ts"]
 }
