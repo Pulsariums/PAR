@@ -45,3 +45,34 @@ export const collectUsage = (lines: readonly PreparedLine[], styles: Map<string,
   }
   return out;
 };
+
+/** Fonts the STYLES name (no text scan): the starting set of a windowed script before any window has arrived. */
+export const styleUsage = (styles: Map<string, AssStyle>): Map<string, FontUse> => {
+  const out = new Map<string, FontUse>();
+  for (const s of styles.values()) {
+    const key = normalizeName(s.fontName);
+    const use = out.get(key) ?? { name: cleanName(s.fontName), looks: new Map(), styles: new Set(), lines: new Set(), chars: new Set() };
+    use.looks.set(`${s.bold}|${s.italic}`, { b: s.bold, i: s.italic });
+    use.styles.add(s.name);
+    out.set(key, use);
+  }
+  return out;
+};
+
+/**
+ * Windowed scripts: folds the fonts of a newly loaded window into the known set and forgets the event indexes of evicted
+ * events (so per-font line sets stay as small as the window). Returns whether anything the renderer cares about is new.
+ */
+export const mergeUsage = (into: Map<string, FontUse>, add: Map<string, FontUse>, removed: readonly number[] = []): boolean => {
+  let changed = false;
+  for (const u of into.values()) for (const i of removed) u.lines.delete(i);
+  for (const [k, u] of add) {
+    const t = into.get(k);
+    if (!t) { into.set(k, u); changed = true; continue; }
+    for (const [lk, l] of u.looks) if (!t.looks.has(lk)) { t.looks.set(lk, l); changed = true; }
+    for (const s of u.styles) t.styles.add(s);
+    for (const c of u.chars) if (!t.chars.has(c)) { t.chars.add(c); changed = true; }
+    u.lines.forEach((i) => t.lines.add(i));
+  }
+  return changed;
+};

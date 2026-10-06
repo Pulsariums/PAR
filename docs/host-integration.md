@@ -56,3 +56,28 @@ If the host keeps the user's fonts in cloud storage (their own Drive):
 - **Lazy download**: sync metadata (`list()`), fetch bytes only when a script needs the family (implement a second `FontProvider` that downloads on `get()` and then calls `library.add()`), or on explicit "download all".
 - **Size caps**: refuse single files above a limit (fonts with large CJK sets reach 15 MB+), and stop at the quota the browser reports.
 - Never expose a shared link to the font files; they are the user's licensed copies.
+
+## Big scripts: feeding a `SubtitleSource`
+
+For scripts that should not be loaded whole (100 MB+ typesetting, `.xpar`, `.par`) give PAR a `SubtitleSource` instead of text. The renderer keeps a sliding window (`windowSeconds`, default 12: about 2 s behind the playhead, 10 s ahead), reads ahead in slices, cancels reads a seek made stale, evicts old events and draws nothing for a time whose events are not loaded yet. `par.getSourceStats()` gives `{ windowEvents, windowRange, loading, bytesRead, decodeMs, indexMs }` for a status line.
+
+```ts
+import { create } from 'pulsar-ass-renderer';
+import { openSourceInWorker } from 'pulsar-ass-renderer/source';
+
+const controller = new AbortController();                       // wire to a Cancel button
+const source = await openSourceInWorker(fileOrBlob, {           // .ass / .ssa / .xpar / .par, sniffed from the content
+  worker: () => new Worker(new URL('pulsar-ass-renderer/worker', import.meta.url), { type: 'module' }),
+  onProgress: (bytes, total) => progress.set(bytes / total),   // indexing a plain ASS streams the file once
+  signal: controller.signal,
+});
+const par = create({ video, subtitle: source, fontProviders: [library.asProvider()] });
+// later: par.setSubtitle(otherSource | text | null); the old source is closed (its Worker terminated)
+```
+
+- **Worker.** `pulsar-ass-renderer/worker` is a self-contained module Worker (`dist/source.worker.js`). The Worker indexes the file, reads and parses windows and posts plain events back, so the main thread never decodes. Bundlers that understand `new Worker(new URL(..., import.meta.url))` (Vite, webpack 5, Rollup plugins) pick it up; otherwise serve the file yourself and pass `worker: () => new Worker('/static/par-source.worker.js', { type: 'module' })`. Without a Worker (`worker: null`) the same adapters run on the main thread in async chunks (`Blob.slice` reads, no whole-file string).
+- **What a source is.** `{ kind, script: { info, styles, warnings }, duration, eventCount, readWindow(t0, t1, signal?) => Promise<AssEvent[]>, prefetch?, fontSection?, stats?, close? }`. `readWindow` returns the events visible in `[t0, t1)` (half-open on integer ms, see `inWindow`) with the ids / `index` values `parseScript` would give. Implement it for any backend (your own database, an HTTP API); `signal` is aborted when a seek makes the read stale. `prefetch(t0, t1)` is an optional hint you may call yourself (the renderer does not need it).
+- **Remote files.** `fromXpar(url)` / `fromPar(url)` read with HTTP Range (the server must answer `206`); a plain `.ass` URL has to be fetched into a Blob first (or wrapped in your own source).
+- **Fonts.** Starting set: the fonts the styles name. Fonts used in `\fn` overrides are added when their window is read. Embedded fonts come from `source.fontSection()` (a plain ASS file records the byte range of `[Fonts]` while indexing). For an up-front check without playing, run `preflightScript(linesFromChunks(blob.stream()))` once (streams the file, memory-bounded) and show the prompt before opening.
+- **Size.** Windows of very dense scripts are big: the benchmark script with about 7 000 events per second held 35 000 events in a 5.4 s window and the page's JS heap sat near 90 MB (about 50 MB without a file). Lower `windowSeconds` for such files.
+- **Time rule.** All window and visibility compares use integer milliseconds with `[start, end)`: see [timing](./timing.md).

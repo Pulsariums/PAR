@@ -57,6 +57,8 @@ export class Overlay {
     const sx = layout.width > 0 ? region.width / layout.width : 0;
     const sy = layout.height > 0 ? region.height / layout.height : 0;
     s.setProperty('transform', `scale(${r6(sx)}, ${r6(sy)})`);
+    // Layout units per device pixel: `\be` is a per-pixel filter in libass (see `blur.ts`).
+    s.setProperty('--par-u', String(sy > 0 ? r6(1 / sy) : 1));
   }
 
   /** Inserts a line root keeping DOM order = (layer, file order), as libass composites. */

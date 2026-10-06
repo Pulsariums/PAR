@@ -1,17 +1,18 @@
 import { libEn } from './libEn';
+import { labEn } from './labEn';
 
 export const en = {
   'nav.skip': 'Skip to playground', 'nav.features': 'Features', 'nav.playground': 'Playground', 'nav.docs': 'Docs',
   'lang.label': 'Language', 'theme.toggle': 'Toggle light / dark theme',
   'hero.title': 'ASS subtitles, drawn by the browser.',
-  'hero.sub': 'PAR renders .ass / .ssa in plain DOM, SVG and CSS. No WebAssembly, no framework, about 22 kB gzipped.',
+  'hero.sub': 'PAR renders .ass / .ssa in plain DOM, SVG and CSS. No WebAssembly, no framework, about 30 kB gzipped.',
   'hero.cta': 'Open the playground', 'hero.gh': 'View on GitHub', 'hero.live': 'Live: rendered by PAR right now',
   'ctl.pause': 'Pause', 'ctl.play': 'Play', 'ctl.seek': 'Seek', 'ctl.speed': 'Speed',
   'feat.title': 'What you get',
-  'f1.t': 'Zero dependencies', 'f1.d': 'About 22 kB gzipped, plain TypeScript, no runtime packages and no WebAssembly download.',
+  'f1.t': 'Zero dependencies', 'f1.d': 'About 30 kB gzipped, plain TypeScript, no runtime packages and no WebAssembly download.',
   'f2.t': 'DOM, SVG and CSS', 'f2.d': 'Text stays real text: selectable by tooling, styled by the browser, themed with your fonts.',
   'f3.t': 'Plug and play', 'f3.d': 'Give it a video and the .ass text. Letterbox, resize, play, pause and seek are tracked for you.',
-  'f4.t': 'libass semantics', 'f4.d': 'Tag precedence, \\t ordering, karaoke timing and PlayRes fallbacks follow libass.',
+  'f4.t': 'libass semantics', 'f4.d': 'Tag precedence, \\t ordering, karaoke timing and PlayRes fallbacks follow libass (scripts with no PlayRes default to 720p, or 384x288 on request).',
   'f5.t': 'Deterministic', 'f5.d': 'Same input, same output. Line ids come from file order, never from randomness.',
   'f6.t': 'Your frame rate', 'f6.d': 'Render on every video frame, or cap between 10 and 200 fps. Snap time to the video frame rate.',
   'f7.t': 'Region and layout', 'f7.d': 'Place subtitles on the visible picture, the container or any rectangle, in any virtual resolution.',
@@ -50,5 +51,6 @@ export const en = {
   'docs.title': 'Docs', 'docs.install': 'Install', 'docs.use': 'Use', 'docs.read': 'Read more', 'docs.issues': 'Report an issue',
   'foot.note': 'Rendered with the local PAR source from this repository.',
   ...libEn,
+  ...labEn,
 };
 export type Dict = Record<keyof typeof en, string>;

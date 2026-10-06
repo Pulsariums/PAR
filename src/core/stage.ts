@@ -1,4 +1,5 @@
-import { resolveLayoutSize, stageTransform, type Size, type StageTransform } from '../layout/Layout';
+import { stageTransform, type Size, type StageTransform } from '../layout/Layout';
+import { resolveLayout, type ResolvedLayout } from '../layout/resolve';
 import { resolveRegion } from '../layout/Region';
 import type { Rect, ResolvedOptions } from '../types/options';
 import type { ScriptInfo } from '../types/script';
@@ -8,12 +9,14 @@ import { measureRegionInput } from './measure';
 export interface Stage {
   region: Rect;
   layout: Size;
+  resolved: ResolvedLayout;
   transform: StageTransform;
 }
 
 /** Region (DOM reads), virtual layout size and the layout => screen transform for the current options. */
 export const computeStage = (opts: ResolvedOptions, info: ScriptInfo | null): Stage => {
   const region = resolveRegion(opts.region, measureRegionInput(opts.container, opts.video));
-  const layout = resolveLayoutSize(opts.layout, info);
-  return { region, layout, transform: stageTransform(region, layout, info?.scaledBorderAndShadow ?? true) };
+  const resolved = resolveLayout(opts.layout, info, opts.defaultLayout, region);
+  const layout = resolved.size;
+  return { region, layout, resolved, transform: stageTransform(region, layout, info?.scaledBorderAndShadow ?? true) };
 };

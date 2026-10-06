@@ -12,6 +12,8 @@ export interface Transport {
 /** Virtual clock that loops over `duration`. PAR reads `time` through its `clock` option. */
 export class CardTransport implements Transport {
   duration = 10;
+  /** Loop at the end (default). Off: the clock stops at `duration`. */
+  loop = true;
   private base = 0;
   private t0 = performance.now();
   private run = false;
@@ -24,7 +26,11 @@ export class CardTransport implements Transport {
   get time(): number {
     if (!this.run) return this.base;
     const t = this.base + ((performance.now() - this.t0) / 1000) * this.rate;
-    return this.duration > 0 ? t % this.duration : t;
+    if (!(this.duration > 0) || t < this.duration) return t;
+    if (this.loop) return t % this.duration;
+    this.base = this.duration;
+    this.run = false;
+    return this.duration;
   }
 
   play(): void { this.rebase(true); }

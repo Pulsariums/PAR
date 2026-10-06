@@ -1,6 +1,6 @@
 import type { LineTags, SetOp, StateKey, StateOp, Transition } from '../types/script';
 
-import { normRect, parseClip } from './ClipParser';
+import { intRect, parseClip } from './ClipParser';
 import type { KaraTag } from './KaraokeTracker';
 import { lexOverrides, type RawTag } from './TagLexer';
 import { legacyToNumpad, parseAlphaTag, parseColorTag, parseNum, parseNumList, splitArgs } from './TagValues';
@@ -25,8 +25,12 @@ const NON_NEGATIVE = new Set<string>(['xbord', 'ybord', 'blur', 'be', 'fscx', 'f
 const set = (key: StateKey, value: number | string | null, relative?: boolean): SetOp =>
   relative ? { type: 'set', key, value, relative } : { type: 'set', key, value };
 
-const clampNum = (key: string, v: number | null): number | null =>
-  v === null ? null : NON_NEGATIVE.has(key) ? Math.max(0, v) : v;
+/** libass limits: `\blur` 0..100 (`BLUR_MAX_RADIUS`), the others in `NON_NEGATIVE` >= 0. */
+const clampNum = (key: string, v: number | null): number | null => {
+  if (v === null) return null;
+  const n = NON_NEGATIVE.has(key) ? Math.max(0, v) : v;
+  return key === 'blur' ? Math.min(100, n) : n;
+};
 
 /** Tags that change the text state; returns false when `tag` is not a state tag. */
 const stateOps = (tag: RawTag, ops: SetOp[]): boolean => {
@@ -73,7 +77,7 @@ export const parseTransition = (arg: string): Transition | null => {
     if (!tag.name || tag.name === 't') continue; // nested \t is ignored (libass)
     if (tag.name === 'clip' || tag.name === 'iclip') {
       const nl = parseNumList(tag.arg);
-      if (nl && nl.length === 4) tr.clip = normRect(nl);
+      if (nl && nl.length === 4) tr.clip = intRect(nl);
     } else stateOps(tag, tr.ops);
   }
   return tr;
@@ -94,7 +98,8 @@ const lineTag = (tag: RawTag, line: LineTags): boolean => {
     case 'fade': if (nums?.length === 7 && !faded) line.fade = nums; return true;
     case 'clip': case 'iclip': {
       const c = parseClip(tag.arg, name === 'iclip');
-      if (c) line.clip = c;
+      if (c?.drawing !== undefined) line.vclip ??= c; // libass: the first vector clip wins
+      else if (c) line.clip = c; // the last rect clip wins
       return true;
     }
     case 'an': {

@@ -16,7 +16,7 @@ const splineWindow = (c: Pt[]): [Pt, Pt, Pt, Pt] => {
 
 /**
  * ASS drawing commands => SVG path data. Coordinates are divided by `2^(scale-1)` (`\p<scale>`,
- * `\clip(<scale>, ...)`). `m` starts a new closed shape, `n` moves without closing, `b` cubic
+ * `\clip(<scale>, ...)`). `m` starts a new closed shape (the last shape is closed too), `n` moves without closing, `b` cubic
  * Bezier, `s`/`p` uniform B-spline (converted to Beziers), `c` closes the spline.
  */
 export const drawingToPath = (cmds: DrawCommand[], scale = 1): string => {
@@ -62,5 +62,7 @@ export const drawingToPath = (cmds: DrawCommand[], scale = 1): string => {
     }
   }
   if (out.length && !out[0].startsWith('M')) out.unshift('M 0 0');
+  // libass closes the last contour too: without it the stroke would miss the closing edge.
+  if (out.length && out[out.length - 1] !== 'Z') out.push('Z');
   return out.join(' ');
 };

@@ -5,6 +5,7 @@ import { drawingToPath } from './drawingPath';
 
 const FAR = 1e6;
 const OUTER = `M ${-FAR} ${-FAR} H ${FAR} V ${FAR} H ${-FAR} Z`;
+const EMPTY = 'path("M 0 0 Z")';
 const f = (n: number) => String(Math.round(n * 1000) / 1000);
 
 /**
@@ -16,10 +17,12 @@ export const clipPathCss = (clip: ClipSpec | undefined): string => {
   let inner: string;
   if (clip.rect) {
     const [x1, y1, x2, y2] = clip.rect;
+    // libass does not reorder the corners: an empty rect hides everything (`\clip`) or nothing (`\iclip`).
+    if (x2 <= x1 || y2 <= y1) return clip.inverse ? 'none' : EMPTY;
     inner = `M ${f(x1)} ${f(y1)} H ${f(x2)} V ${f(y2)} H ${f(x1)} Z`;
   } else if (clip.drawing) {
     inner = drawingToPath(parseDrawing(clip.drawing), clip.scale ?? 1);
-    if (!inner) return clip.inverse ? 'none' : 'path("M 0 0 Z")';
+    if (!inner) return clip.inverse ? 'none' : EMPTY;
     if (!inner.endsWith('Z')) inner += ' Z';
   } else return 'none';
   return clip.inverse ? `path(evenodd, "${OUTER} ${inner}")` : `path("${inner}")`;

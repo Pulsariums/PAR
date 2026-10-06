@@ -3,7 +3,8 @@ import type { LineTags } from '../types/script';
 /**
  * Merges line-level tags in block order with libass precedence:
  * - `\pos` / `\move` (shared flag), `\org`, `\an` / `\a`, `\fad` / `\fade` (shared flag): FIRST occurrence wins.
- * - `\clip` / `\iclip`, `\q`: LAST occurrence wins.
+ * - rect `\clip` / `\iclip`, `\q`: LAST occurrence wins.
+ * - vector `\clip` / `\iclip`: FIRST occurrence wins; it applies together with a rect clip.
  */
 export const mergeLineTags = (acc: LineTags, next: LineTags): LineTags => {
   const out: LineTags = { ...acc };
@@ -18,6 +19,7 @@ export const mergeLineTags = (acc: LineTags, next: LineTags): LineTags => {
     else if (next.fade) out.fade = next.fade;
   }
   if (next.clip) out.clip = next.clip;
+  if (!out.vclip && next.vclip) out.vclip = next.vclip;
   if (next.q !== undefined) out.q = next.q;
   return out;
 };

@@ -1,17 +1,21 @@
 import { Scheduler } from '../clock/Scheduler';
 import { bindVideoEvents, isPlaying } from '../clock/videoEvents';
-import { parseScript } from '../parser/ScriptParser';
 import { preflightScript } from '../preflight/preflight';
 import type { LineEnv } from '../render/LineView';
 import { Overlay } from '../render/Overlay';
-import type { PARMetrics, PAROptions, Rect, ResolvedOptions } from '../types/options';
+import type { SubtitleSource } from '../source/types';
+import type { PARMetrics, PAROptions, ResolvedOptions } from '../types/options';
 import type { ParsedScript } from '../types/script';
 
 import { FontApi } from './FontApi';
 import { observeSize } from './observe';
 import { computeStage } from './stage';
-import { resolveOptions, snapToFrame } from './options';
+import { resolveOptions } from './options';
+import { buildMetrics, type Geometry } from './metrics';
 import { Scene } from './Scene';
+import { ScriptHost } from './ScriptHost';
+import { timeToMs } from './time';
+import type { SourceStatsReport } from './WindowFeed';
 
 /** The PAR renderer instance. Create it with `PAR.create(options)` or `new PARRenderer(options)`. */
 export class PARRenderer extends FontApi {
@@ -20,16 +24,15 @@ export class PARRenderer extends FontApi {
   private opts: ResolvedOptions;
   private overlay!: Overlay;
   private scene!: Scene;
-  private parsed: ParsedScript | null = null;
+  private readonly host: ScriptHost;
   private readonly scheduler: Scheduler;
   /** Undo functions of everything `mount()` attached (size observer, video listeners). */
   private teardown: Array<() => void> = [];
-  private env: LineEnv = { layout: { width: 384, height: 288 }, styles: new Map(), borderScale: 1, fonts: this.fonts };
-  private region: Rect = { x: 0, y: 0, width: 0, height: 0 };
-  private scale = { x: 0, y: 0 };
+  private env: LineEnv = { layout: { width: 1280, height: 720 }, styles: new Map(), borderScale: 1, fonts: this.fonts };
+  private geo: Geometry = { region: { x: 0, y: 0, width: 0, height: 0 }, scale: { x: 0, y: 0 }, layout: { size: { width: 1280, height: 720 }, source: 'default', derived: false } };
   private layoutDirty = true;
   private forceNext = true;
-  private lastTime = NaN;
+  private lastMs = NaN;
   private lastRaw = 0;
   private destroyed = false;
 
@@ -37,6 +40,11 @@ export class PARRenderer extends FontApi {
     super();
     this.opts = resolveOptions(options);
     this.scheduler = new Scheduler((mediaTime) => this.frame(mediaTime));
+    this.host = new ScriptHost({
+      scene: () => this.scene, fonts: this.fonts, windowSeconds: () => this.opts.windowSeconds, reset: () => this.resetMissing(),
+      changed: () => { this.env = { ...this.env, styles: this.host.styles }; this.forceNext = true; this.draw(this.now(), false); },
+      error: (e) => console.warn('PAR: subtitle source error', e),
+    });
     this.mount();
     this.configureFonts(this.opts);
     if (options.fonts) void this.fonts.addMany(options.fonts);
@@ -44,25 +52,25 @@ export class PARRenderer extends FontApi {
   }
 
   /** Parsed script (read-only view), or null when none is loaded. */
-  get script(): ParsedScript | null {
-    return this.parsed;
-  }
+  get script(): ParsedScript | null { return this.host.script; }
 
   /** The overlay root element (inside the container). */
-  get element(): HTMLElement {
-    return this.overlay.root;
+  get element(): HTMLElement { return this.overlay.root; }
+
+  /**
+   * Loads (or with null/'' clears) the subtitle: ASS text (parsed whole), or a `SubtitleSource` (only a sliding window of
+   * events is held in memory, see `fromAssFile`). Never throws on malformed scripts.
+   */
+  setSubtitle(input: string | SubtitleSource | null): void {
+    this.assertAlive();
+    this.host.load(input || null);
+    this.env = { ...this.env, styles: this.host.styles };
+    this.invalidate();
   }
 
-  /** Loads (or with null/'' clears) the subtitle. Never throws on malformed scripts. */
-  setSubtitle(text: string | null): void {
-    this.assertAlive();
-    this.parsed = text ? parseScript(text) : null;
-    const styles = this.parsed?.styles ?? new Map();
-    this.env = { ...this.env, styles };
-    this.scene.setScript(this.parsed);
-    this.resetMissing();
-    this.fonts.setScript(text, this.scene.prepared, styles);
-    this.invalidate();
+  /** Window / source numbers: events in memory, loaded range, whether a read is running, bytes read and decode time. */
+  getSourceStats(): SourceStatsReport {
+    return this.host.stats();
   }
 
   /** Changes options at runtime. Only the given keys change. */
@@ -73,7 +81,7 @@ export class PARRenderer extends FontApi {
     if (this.opts.container !== prev.container || this.opts.video !== prev.video) {
       this.unmount();
       this.mount();
-      this.scene.setScript(this.parsed);
+      this.host.bind();
     } else if (this.opts.zIndex !== prev.zIndex) this.overlay.setZIndex(this.opts.zIndex);
     if (patch.subtitle !== undefined) this.setSubtitle(patch.subtitle);
     this.scheduler.configure(this.opts.fps, this.opts.video);
@@ -97,10 +105,7 @@ export class PARRenderer extends FontApi {
   }
 
   getMetrics(): PARMetrics {
-    return {
-      region: { ...this.region }, layout: { ...this.env.layout }, scaleX: this.scale.x, scaleY: this.scale.y,
-      time: this.lastTime, activeLines: this.scene.activeCount, running: this.scheduler.isRunning,
-    };
+    return buildMetrics(this.geo, { time: this.lastMs / 1000, activeLines: this.scene.activeCount, running: this.scheduler.isRunning });
   }
 
   /** Removes the overlay, listeners and loop. The instance cannot be used afterwards. */
@@ -108,8 +113,8 @@ export class PARRenderer extends FontApi {
     if (this.destroyed) return;
     this.unmount();
     this.disposeFonts();
+    this.host.dispose();
     this.destroyed = true;
-    this.parsed = null;
   }
 
   /** Fonts changed: measured boxes (collisions) are stale, so rebuild every visible line. */
@@ -153,14 +158,9 @@ export class PARRenderer extends FontApi {
     else this.scheduler.stop();
   }
 
-  private now(): number {
-    const { clock, video } = this.opts;
-    return clock ? clock() : video ? video.currentTime : this.lastRaw;
-  }
+  private now(): number { return this.opts.clock ? this.opts.clock() : this.opts.video ? this.opts.video.currentTime : this.lastRaw; }
 
-  private frame(mediaTime: number | null): void {
-    this.draw(this.opts.clock || mediaTime === null ? this.now() : mediaTime, false);
-  }
+  private frame(mediaTime: number | null): void { this.draw(this.opts.clock || mediaTime === null ? this.now() : mediaTime, false); }
 
   private invalidate(): void {
     if (this.destroyed) return;
@@ -171,28 +171,26 @@ export class PARRenderer extends FontApi {
 
   private draw(raw: number, force: boolean): void {
     if (this.destroyed || !Number.isFinite(raw) || this.fonts.blocking) return;
-    const t = snapToFrame(raw + this.opts.timeOffset, this.opts.videoFps);
+    const ms = timeToMs(raw + this.opts.timeOffset, this.opts.videoFps);
     if (this.layoutDirty) this.relayout();
+    this.host.update(ms);
     const forced = force || this.forceNext;
-    if (!forced && t === this.lastTime) return;
-    this.scene.render(t, this.env, forced);
+    if (!forced && ms === this.lastMs) return;
+    this.scene.render(ms, this.env, forced);
     this.forceNext = false;
-    this.lastTime = t;
+    this.lastMs = ms;
   }
 
   private relayout(): void {
     this.layoutDirty = false;
-    const { region, layout, transform: st } = computeStage(this.opts, this.parsed?.info ?? null);
+    const { region, layout, resolved, transform: st } = computeStage(this.opts, this.host.info);
     const prev = this.env;
     if (prev.layout.width !== layout.width || prev.layout.height !== layout.height) this.scene.clear();
     this.env = { ...prev, layout, borderScale: st.borderScale };
     if (st.borderScale !== prev.borderScale) this.forceNext = true;
-    this.region = region;
-    this.scale = { x: st.scaleX, y: st.scaleY };
+    this.geo = { region, scale: { x: st.scaleX, y: st.scaleY }, layout: resolved };
     this.overlay.place(region, layout);
   }
 
-  private assertAlive(): void {
-    if (this.destroyed) throw new Error('PAR: this renderer was destroyed');
-  }
+  private assertAlive(): void { if (this.destroyed) throw new Error('PAR: this renderer was destroyed'); }
 }

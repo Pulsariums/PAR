@@ -1,5 +1,6 @@
+import { frameIndex, frameRate } from './time';
 import { MAX_FPS, MIN_FPS } from '../clock/Scheduler';
-import type { FpsOption, LayoutOption, PAROptions, RegionOption, ResolvedOptions } from '../types/options';
+import type { DefaultLayoutOption, FpsOption, LayoutOption, PAROptions, RegionOption, ResolvedOptions } from '../types/options';
 
 const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
 
@@ -17,6 +18,17 @@ export const validateRegion = (r: RegionOption): RegionOption => {
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   }
   throw new TypeError(`PAR: region must be 'video', 'container' or { x, y, width, height } with positive size`);
+};
+
+export const validateDefaultLayout = (l: DefaultLayoutOption): DefaultLayoutOption => {
+  if (l === '720p' || l === 'libass') return l;
+  if (l && typeof l === 'object' && finite(l.width) && finite(l.height) && l.width > 0 && l.height > 0) return { width: l.width, height: l.height };
+  throw new TypeError(`PAR: defaultLayout must be '720p', 'libass' or { width, height } with positive size`);
+};
+
+export const validateWindow = (w: number): number => {
+  if (!finite(w) || w < 1) throw new RangeError('PAR: windowSeconds must be a number >= 1');
+  return w;
 };
 
 export const validateLayout = (l: LayoutOption): LayoutOption => {
@@ -41,6 +53,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     container,
     region: validateRegion(patch.region ?? prev?.region ?? (video ? 'video' : 'container')),
     layout: validateLayout(patch.layout ?? prev?.layout ?? 'script'),
+    defaultLayout: validateDefaultLayout(patch.defaultLayout ?? prev?.defaultLayout ?? '720p'),
     fps: validateFps(patch.fps ?? prev?.fps ?? 'auto'),
     videoFps,
     clock: patch.clock !== undefined ? patch.clock : prev?.clock ?? null,
@@ -51,10 +64,14 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     fontProviders: [...(patch.fontProviders ?? prev?.fontProviders ?? [])],
     providerTimeout: patch.providerTimeout ?? prev?.providerTimeout ?? 5000,
     onMissingFonts: patch.onMissingFonts !== undefined ? patch.onMissingFonts : prev?.onMissingFonts ?? null,
+    windowSeconds: validateWindow(patch.windowSeconds ?? prev?.windowSeconds ?? 12),
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
   };
 };
 
-/** Snaps to the start of the containing frame (small epsilon absorbs float error, e.g. 0.1 * 30). */
-export const snapToFrame = (t: number, fps: number | null): number =>
-  fps ? Math.floor(t * fps + 1e-6) / fps : t;
+/** Snaps to the start of the containing frame, in seconds (exact NTSC fractions, see `time.ts`). Without fps: unchanged. */
+export const snapToFrame = (t: number, fps: number | null): number => {
+  if (!fps) return t;
+  const r = frameRate(fps);
+  return (frameIndex(t, r) * r.den) / r.num;
+};

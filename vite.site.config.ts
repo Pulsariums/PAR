@@ -4,5 +4,6 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   root: 'site',
   base: '/PAR/',
+  worker: { format: 'es' },
   build: { outDir: '../site-dist', emptyOutDir: true, target: 'es2020' },
 });

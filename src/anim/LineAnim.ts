@@ -41,14 +41,22 @@ export const fadeAlphaAt = (tags: LineTags, t: number, durationMs: number): numb
   return 0;
 };
 
-/** Rect clip at `t` ms with `\t(\clip(...))` transitions applied in order. */
-export const clipAt = (clip: ClipSpec | undefined, transitions: Transition[], t: number, durationMs: number): ClipSpec | undefined => {
-  if (!clip?.rect || transitions.length === 0) return clip;
-  const r = [...clip.rect] as [number, number, number, number];
+/**
+ * Rect clip at `t` ms with `\t(\clip(...))` transitions applied in order. libass starts from the
+ * whole script area when the line has no rect clip, and stores each step as an integer (truncation).
+ */
+export const clipAt = (
+  clip: ClipSpec | undefined, transitions: Transition[], t: number, durationMs: number,
+  full?: [number, number, number, number],
+): ClipSpec | undefined => {
+  if (transitions.length === 0) return clip;
+  const start = clip?.rect ?? full;
+  if (!start) return clip;
+  const r = [...start] as [number, number, number, number];
   for (const tr of transitions) {
     if (!tr.clip) continue;
     const k = transitionProgress(tr, t, durationMs);
-    for (let i = 0; i < 4; i++) r[i] += (tr.clip[i] - r[i]) * k;
+    for (let i = 0; i < 4; i++) r[i] = Math.trunc(r[i] + (tr.clip[i] - r[i]) * k);
   }
-  return { ...clip, rect: r };
+  return { inverse: clip?.inverse ?? false, rect: r };
 };

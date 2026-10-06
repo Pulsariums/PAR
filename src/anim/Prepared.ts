@@ -1,6 +1,7 @@
 import { findStyle } from '../parser/StyleParser';
 import type { AssEvent, AssStyle, ScriptInfo, Transition } from '../types/script';
 
+import { isPlated } from './plated';
 import { foldOps, stateFromStyle, type TextState } from './State';
 
 /** An event with everything that does not depend on time or screen size resolved once. */
@@ -15,10 +16,14 @@ export interface PreparedLine {
   /** Effective margins (event margins override style margins when non-zero). */
   margins: { l: number; r: number; v: number };
   positioned: boolean;
+  /** Needs shadow/outline/fill plates (blur or translucent fill with a border), see `anim/plated.ts`. */
+  plated: boolean;
   /** True when anything changes over time (`\t`, `\move`, `\fad`, `\fade`, karaoke). */
   animated: boolean;
   /** `\t(...\clip(x1,y1,x2,y2)...)` transitions from all fragments, in order. */
   clipTransitions: Transition[];
+  /** Whole script area: where `\t(\clip)` starts when the line has no rect clip. */
+  fullRect: [number, number, number, number];
 }
 
 export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: ScriptInfo): PreparedLine => {
@@ -38,8 +43,10 @@ export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: S
       v: ev.marginV || style.marginV,
     },
     positioned: !!(lt.pos || lt.move),
+    plated: isPlated(ev, style, styles),
     animated,
     clipTransitions: transitions.filter((t) => !!t.clip),
+    fullRect: [0, 0, info.playResX, info.playResY],
   };
 };
 

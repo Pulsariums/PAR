@@ -9,7 +9,7 @@
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml/badge.svg" /></a>
   <img alt="Version" src="https://img.shields.io/github/package-json/v/Pulsariums/PAR?color=5b3df5" />
-  <img alt="Size: about 22 kB gzipped" src="https://img.shields.io/badge/gzip-~22%20kB-5b3df5" />
+  <img alt="Size: about 30 kB gzipped" src="https://img.shields.io/badge/gzip-~30%20kB-5b3df5" />
   <img alt="Zero dependencies" src="https://img.shields.io/badge/dependencies-0-brightgreen" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-typed-3178c6?logo=typescript&logoColor=white" />
 </p>
@@ -29,10 +29,10 @@ with a built-in test card, your own video file or a video URL, without installin
 
 | | |
 |---|---|
-| **Zero dependencies** | About 22 kB gzipped. Plain TypeScript, no runtime packages, no WASM download. |
+| **Zero dependencies** | About 30 kB gzipped. Plain TypeScript, no runtime packages, no WASM download. |
 | **DOM, SVG and CSS** | Text stays real text, drawings are SVG paths, the browser's own text engine does the shaping. |
 | **Plug and play** | `create({ video, subtitle })`. Letterbox, resize, play, pause and seek are tracked. |
-| **libass semantics** | Tag precedence, `\t` ordering, karaoke timing and PlayRes fallbacks follow libass. |
+| **libass semantics** | Tag precedence, `\t` ordering, karaoke timing and PlayRes fallbacks follow libass (one exception: scripts with no PlayRes at all default to 1280x720; `defaultLayout: 'libass'` gives 384x288). |
 | **Deterministic** | Same input, same output. Line ids come from file order, never from randomness. |
 | **Your frame rate** | Render on every video frame (`auto`) or cap at 10 to 200 fps; optionally snap time to the video frame rate. |
 | **Region and layout** | Visible video picture, whole container or any rectangle; script resolution or any virtual size. |
@@ -91,9 +91,11 @@ The video's parent needs to be the element the overlay can sit on (it becomes `p
 |---|---|---|---|
 | `video` | `HTMLVideoElement` | - | Followed for time, play/pause/seek and size. |
 | `container` | `HTMLElement` | `video.parentElement` | Element the overlay is mounted into; required without a video. A `position: static` container is switched to `relative` (restored by `destroy()`). |
-| `subtitle` | `string` | - | Raw `.ass` / `.ssa` text. |
+| `subtitle` | `string \| SubtitleSource` | - | Raw `.ass` / `.ssa` text, or a `SubtitleSource` for big files (see [Big files](#big-files-windowed-sources)). |
 | `region` | `'video' \| 'container' \| {x,y,width,height}` | `'video'` with a video, else `'container'` | Where subtitles are placed. `'video'`: the visible picture of the video, letterbox-aware, honouring `object-fit`. A rect is in container pixels. |
-| `layout` | `'script' \| {width,height}` | `'script'` | Virtual coordinate space. `'script'` = PlayResX/PlayResY with libass fallbacks. An explicit size treats the script as authored for that size. |
+| `layout` | `'script' \| {width,height}` | `'script'` | Virtual coordinate space. `'script'` = the script's PlayRes (see [Default layout size](#default-layout-size-virtual-vs-real)). An explicit size treats the script as authored for that size and wins over everything. |
+| `defaultLayout` | `'720p' \| 'libass' \| {width,height}` | `'720p'` | Virtual size for scripts without any PlayRes: 1280x720, libass's 384x288, or your own. |
+| `windowSeconds` | `number` | `12` | With a `SubtitleSource`: seconds of events kept in memory (about 1/6 behind the playhead, the rest ahead). |
 | `fps` | `'auto' \| number` | `'auto'` | Render rate. `'auto'`: once per presented video frame (`requestVideoFrameCallback`), else once per display frame. A number in 10..200 caps the rate (it cannot exceed the display refresh rate). |
 | `videoFps` | `number \| null` | `null` | Source video frame rate. When set, time is snapped to frame starts. Independent of `fps`. |
 | `clock` | `() => number` | `video.currentTime` | Custom clock in seconds. |
@@ -118,11 +120,12 @@ Invalid values throw (`fps: 5` gives a `RangeError`, a zero-size region a `TypeE
 | Member | Description |
 |---|---|
 | `create(options)` / `new PARRenderer(options)` | Creates a renderer and mounts its overlay. |
-| `setSubtitle(text \| null)` | Loads or clears the subtitle. Never throws on malformed scripts (see `script.warnings`). |
+| `setSubtitle(text \| SubtitleSource \| null)` | Loads or clears the subtitle. Never throws on malformed scripts (see `script.warnings`). |
 | `setOptions(patch)` | Changes options at runtime; only the given keys change. Changing `video`/`container` remounts. |
 | `renderAt(seconds)` | Renders media time `seconds` now (`timeOffset` and `videoFps` apply). |
 | `refresh()` | Re-measures the region and re-renders the current time. |
-| `getMetrics()` | `{ region, layout, scaleX, scaleY, time, activeLines, running }`. |
+| `getMetrics()` | `{ region, layout, scaleX, scaleY, layoutSize, regionSize, scale, layoutSource, layoutDerived, time, activeLines, running }`: virtual size, real size, their ratio and where the virtual size came from. |
+| `getSourceStats()` | `{ windowEvents, windowRange, loading, bytesRead, decodeMs, indexMs }` of the loaded `SubtitleSource` (events in memory, loaded range, bytes read, decode time). |
 | `script` | The parsed script (`ParsedScript`) or `null`. Read-only. |
 | `element` | The overlay root element. |
 | `destroy()` | Removes overlay, listeners, observers and loop. Further calls throw. |
@@ -134,6 +137,51 @@ Pure (DOM-free) helpers are exported too: `parseScript`, `parseText`, `parseBloc
 With a custom clock and no video the loop runs continuously (it skips work when the time has not changed). With neither,
 nothing runs until you call `renderAt()`. The overlay uses `pointer-events: none`, so video controls keep working.
 </details>
+
+## Default layout size (virtual vs real)
+
+Two sizes are always involved. The **virtual** (layout) size is the coordinate space the script is laid out in: `\pos`, margins, font sizes and borders are all numbers in it. The **real** size is the region of the screen the result is drawn into, in CSS pixels. PAR scales the virtual frame onto the real region (`scale = real / virtual`, per axis).
+
+Order in which the virtual size is chosen:
+
+| Step | Source | `getMetrics().layoutSource` |
+|---|---|---|
+| 1 | the `layout: { width, height }` option | `'option'` |
+| 2 | the script's `PlayResX` **and** `PlayResY` | `'script'` |
+| 3 | only one of them: the other side follows the aspect ratio of the displayed region (16:9 when there is no usable region); with `defaultLayout: 'libass'` the libass rule is used instead (X only: Y = X x 3/4, with 1280 giving 1024; Y only: X = Y x 4/3, with 1024 giving 1280) | `'script'`, `layoutDerived: true` |
+| 4 | neither | `defaultLayout`: `'720p'` (default, 1280x720), `'libass'` (384x288) or `{ width, height }` -> `'default'` |
+
+`getMetrics()` reports both worlds: `layoutSize` (virtual), `regionSize` (real, CSS px), `scale` (`{ x, y }`, real / virtual), `layoutSource` and `layoutDerived` (the older `layout`, `region`, `scaleX`, `scaleY` stay).
+
+**What the default changes.** libass and VSFilter fall back to 384x288 when a script has no PlayRes. PAR's default is 1280x720 instead, which is what most modern scripts and video players assume. Everything in the script is a number in the virtual space, so the default decides how big it looks: a `Fontsize: 20` is 6.9 % of the picture height at 384x288 but 2.8 % at 1280x720; outlines, shadows, margins and positions scale the same way. A script written for libass without PlayRes therefore looks about 2.5 times smaller in PAR's default than in libass. Use `defaultLayout: 'libass'` for strict libass compatibility. Scripts that carry a PlayRes are not affected.
+
+## Frame times: when is a line visible
+
+A line is visible from its start **up to, but not including,** its end (`startMs <= t < endMs`). When one line ends exactly where the next begins (`1.00` to `1.00`, very common), at that instant the first is gone and the second is there: never both, never neither. A line whose end is not after its start is never visible. All of it is compared as **integer milliseconds**: ASS times are centiseconds, and the media time is converted once with `Math.round(t * 1000)` (what mpv does before calling libass), so float noise such as `0.1 + 0.2` cannot move a boundary. `\fad`, `\t`, `\move` and karaoke times use the same integer base (ms since the line start).
+
+With `videoFps` the time first snaps to the **start of its frame**: frame `n` is evaluated at exactly `n / fps` (NTSC rates 23.976, 29.97, 59.94 are the fractions 24000/1001, 30000/1001, 60000/1001, no float accumulation), converted to ms with one rounding. At 24 fps a line starting at `2.02` first shows on the frame at `2.042 s`, not on the one at `2.000 s`; a line ending at `1.00` is already gone on the frame at `1.000 s`. `fps` (how often PAR draws) and `videoFps` (the frame grid the time snaps to) are independent. Try the "Time boundaries" preset in the playground and step frame by frame in the Lab.
+
+## Big files: windowed sources
+
+`subtitle` also takes a `SubtitleSource`: the renderer then keeps only a sliding window of events in memory (about 2 s behind the playhead and 10 s ahead, `windowSeconds: 12`), reads ahead in slices, cancels reads that a seek made stale, and draws **nothing** (rather than wrong lines) for a time whose events are not loaded yet. A 100 MB script plays with a few seconds of it in memory.
+
+```ts
+import { create } from 'pulsar-ass-renderer';
+import { fromAssFile, openSourceInWorker } from 'pulsar-ass-renderer/source';
+
+const source = await openSourceInWorker(file, {            // File or Blob: .ass, .ssa, .xpar or .par (sniffed from content)
+  worker: () => new Worker(new URL('pulsar-ass-renderer/worker', import.meta.url), { type: 'module' }),
+  onProgress: (bytes, total) => bar.update(bytes / total), // indexing a 100 MB file takes a few seconds
+});
+const par = create({ video, subtitle: source, windowSeconds: 12 });
+par.getSourceStats(); // { windowEvents, windowRange: [from, to] | null, loading, bytesRead, decodeMs, indexMs }
+```
+
+Adapters (`pulsar-ass-renderer/source`): `fromAssText(text)` (also exported by the main entry), `fromAssFile(blob)` (one streaming pass builds a small time index, windows are read with `Blob.slice`; the text is never held as one string), `fromXpar(blobOrUrl)` and `fromPar(...)` (only the chunks of a window are read and decoded; URLs need HTTP Range), `openSource(blob)` (sniffs the type) and `openSourceInWorker(blob, { worker })` (indexing and decoding in a Worker, falling back to chunked async reads on the main thread when no Worker is given). Implement `SubtitleSource` yourself to feed events from anywhere: `{ script, duration, eventCount, readWindow(t0, t1, signal?) }`; windows are half-open on integer ms, events are the structures `parseScript` yields (same ids). Fonts: styles name the starting set, fonts used in overrides are added as their windows arrive, `[Fonts]` is read from the source (`fontSection()`); the missing-font flow works unchanged.
+
+## The Lab
+
+The [Lab section of the site](https://pulsariums.github.io/PAR/#lab-root) opens your own `.ass` / `.ssa` / `.xpar` / `.par` (nothing is uploaded): file size and statistics, the real **XPAR** size and the **PAR** (lossy) size at a chosen fps (exact for small files, sampled estimates with a stated margin for big ones, then exact on demand, with progress and cancel; downloads `name.xpar` and `name.<fps>fps.par`), the virtual vs real size with a switchable default (720p / libass 384x288 / custom) and override, and a timeline player whose length is the subtitle's duration with seek, frame / 1 s / 5 s steps, previous / next line, speed, loop, render fps and video fps, keyboard shortcuts (Space or K, arrows, Shift + arrows, J / L, [ / ], Home / End) and live window and timing numbers. Large files are indexed and decoded in a Worker. `.par` is lossy: it cannot rebuild the original ASS and is only visually equivalent at its target fps.
 
 ## Fonts
 
@@ -197,17 +245,18 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 | `\an` `\a` | Rendered | First wins; legacy `\a` is converted. |
 | `\org` `\frx` `\fry` `\frz` `\fr` | Rendered | 3D with a fixed perspective; `\org` defaults to the anchor point. |
 | `\fad` `\fade` | Rendered | Line opacity, first wins. |
-| `\clip` `\iclip` (rect) | Rendered | CSS `clip-path`; last wins; animatable with `\t`. |
-| `\clip` `\iclip` (vector, with scale) | Rendered | Not animatable (as in libass). |
+| `\clip` `\iclip` (rect) | Rendered | CSS `clip-path` on the whole event, in script coordinates (does not follow `\pos`/`\move`/rotation). Last wins; corners are not reordered (an empty rect hides the line, as in libass); animatable with `\t` from the whole script area. Edges are anti-aliased (libass cuts on whole pixels). |
+| `\clip` `\iclip` (vector, with scale) | Rendered | First vector clip wins and applies together with a rect clip (libass). Not animatable (as in libass). |
 | `\t([t1,t2,][accel,]tags)` | Rendered | Multiple tags, optional times, acceleration, source-order evaluation. |
 | `\k` `\K` `\kf` `\ko` `\kt` | Rendered | Colour switch, sweep, outline reveal. |
 | `\r` `\r<style>` | Rendered | Unknown style falls back to the line style. |
 | `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Rendered | Loaded / embedded face, `fontMap`, or the name itself (see Fonts). |
 | `\fax` `\fay` | Rendered | Pivot is the text top-left. Per-fragment differences use the first fragment's value. |
 | `\b` `\i` `\u` `\s` | Rendered | |
-| `\bord` `\shad` `\xshad` `\yshad` | Rendered | CSS text stroke and shadow. |
+| `\bord` `\shad` `\xshad` `\yshad` | Rendered | Shadow, outline and fill are separate layers when a blur or a translucent fill needs it; a translucent fill cuts the glyph out of the outline like libass. CSS strokes use miter joins where libass rounds. |
 | `\xbord` `\ybord` | Approximate | Uses the larger of x/y when they differ. |
-| `\blur` `\be` | Approximate | CSS `blur()` over the whole fragment (fill and outline together). |
+| `\blur` | Rendered | Gaussian with libass' sigma (`blur * 0.849`); with a border only the outline and shadow are blurred and the fill stays sharp (libass). Blur is not scaled by `ScaledBorderAndShadow`. Stretched by `\fscx`/`\fscy` ratios and sheared with `\fax`/`\frx`, where libass blurs the final bitmap. |
+| `\be` | Approximate | N passes of libass' 3x3 box kernel are modelled as one gaussian of sigma sqrt(N/2) device pixels, with libass' rounding and 127 limit. |
 | `\c` `\1c`..`\4c` `\alpha` `\1a`..`\4a` | Rendered | |
 | `\p<n>` drawings (`m n l b s p c`), `\pbo` | Rendered | SVG path; spline close (`c`) is a straight close. |
 | `\q1` `\q2` | Rendered | Normal wrap / no wrap. |
@@ -243,7 +292,7 @@ PAR is a different trade-off: it does not embed libass, it renders with the brow
 |---|---|---|
 | Approach | DOM, SVG and CSS | libass compiled to WebAssembly |
 | WASM binary to ship | No | Yes (plus a worker script) |
-| Footprint | About 22 kB gzipped, zero dependencies | Larger: carries the compiled library |
+| Footprint | About 30 kB gzipped, zero dependencies | Larger: carries the compiled library |
 | Framework | None required, plain TypeScript | Plain JS, each with its own setup |
 | Output | Real DOM nodes and SVG | Pixels on a canvas |
 | Glyph-exact libass output | No (approximations are listed above) | Yes, that is the point of using libass |

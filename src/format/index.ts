@@ -12,3 +12,4 @@ export { decodeXpar, decodeXparTo } from './fullDecode';
 export { bytesSource, blobSource, urlSource, type ByteSource, type XparSource } from './source';
 export { indexAss, AssIndex, type AssIndexData, type AssIndexOptions, type AssRange } from './assIndex';
 export * from './bake';
+export { estimateXpar, type XparEstimate } from './estimateXpar';

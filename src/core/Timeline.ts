@@ -1,15 +1,24 @@
 import type { PreparedLine } from '../anim/Prepared';
 
-/** Visible-line queries in O(log n + k): lines sorted by start, scanned back by the longest duration. */
+import { msOf } from './time';
+
+/**
+ * Visible-line queries in O(log n + k) on INTEGER milliseconds (see `time.ts`): visible <=> startMs <= t < endMs.
+ * Lines are sorted by start and scanned back by the longest duration. A line with end <= start is never visible.
+ */
 export class Timeline {
   private readonly lines: PreparedLine[];
   private readonly starts: number[];
+  private readonly ends: number[];
   private readonly maxDuration: number;
 
-  constructor(lines: PreparedLine[]) {
-    this.lines = [...lines].sort((a, b) => a.event.start - b.event.start || a.event.index - b.event.index);
-    this.starts = this.lines.map((l) => l.event.start);
-    this.maxDuration = this.lines.reduce((m, l) => Math.max(m, l.event.end - l.event.start), 0);
+  constructor(lines: readonly PreparedLine[]) {
+    const keyed = lines.map((l) => ({ l, s: msOf(l.event.start), e: msOf(l.event.end) }));
+    keyed.sort((a, b) => a.s - b.s || a.l.event.index - b.l.event.index);
+    this.lines = keyed.map((k) => k.l);
+    this.starts = keyed.map((k) => k.s);
+    this.ends = keyed.map((k) => k.e);
+    this.maxDuration = keyed.reduce((m, k) => Math.max(m, k.e - k.s), 0);
   }
 
   /** All lines, sorted by start. */
@@ -33,14 +42,18 @@ export class Timeline {
     return lo;
   }
 
-  /** Lines with `start <= t < end` (seconds), ordered by (layer, file order). */
-  visibleAt(t: number): PreparedLine[] {
+  /** Start of the line in integer ms (what `visibleAt` compares). */
+  startMs(l: PreparedLine): number {
+    return msOf(l.event.start);
+  }
+
+  /** Lines with `startMs <= tMs < endMs`, ordered by (layer, file order). `tMs` is an integer. */
+  visibleAt(tMs: number): PreparedLine[] {
     const out: PreparedLine[] = [];
-    const end = this.upper(t);
-    const begin = this.upper(t - this.maxDuration - 1e-9);
+    const end = this.upper(tMs);
+    const begin = this.upper(tMs - this.maxDuration);
     for (let i = Math.max(0, begin - 1); i < end; i++) {
-      const l = this.lines[i];
-      if (l.event.start <= t && t < l.event.end) out.push(l);
+      if (this.starts[i] <= tMs && tMs < this.ends[i]) out.push(this.lines[i]);
     }
     return out.sort((a, b) => a.event.layer - b.event.layer || a.event.index - b.event.index);
   }

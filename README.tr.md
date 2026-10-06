@@ -9,7 +9,7 @@
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml/badge.svg" /></a>
   <img alt="Sürüm" src="https://img.shields.io/github/package-json/v/Pulsariums/PAR?color=5b3df5" />
-  <img alt="Boyut: gzip ile yaklaşık 22 kB" src="https://img.shields.io/badge/gzip-~22%20kB-5b3df5" />
+  <img alt="Boyut: gzip ile yaklaşık 30 kB" src="https://img.shields.io/badge/gzip-~30%20kB-5b3df5" />
   <img alt="Sıfır bağımlılık" src="https://img.shields.io/badge/dependencies-0-brightgreen" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-typed-3178c6?logo=typescript&logoColor=white" />
 </p>
@@ -29,10 +29,10 @@ bir video adresiyle her etiketi denemek için [deneme alanını](https://pulsari
 
 | | |
 |---|---|
-| **Sıfır bağımlılık** | Gzip ile yaklaşık 22 kB. Saf TypeScript; çalışma zamanında paket ya da WASM indirmesi yok. |
+| **Sıfır bağımlılık** | Gzip ile yaklaşık 30 kB. Saf TypeScript; çalışma zamanında paket ya da WASM indirmesi yok. |
 | **DOM, SVG ve CSS** | Metin gerçek metin olarak kalır, çizimler SVG yoludur, harfleri tarayıcının kendi yazı motoru şekillendirir. |
 | **Tak ve çalıştır** | `create({ video, subtitle })`. Letterbox, yeniden boyutlandırma, oynat, duraklat ve sarma izlenir. |
-| **libass kurallarına yakın** | Etiket önceliği, `\t` sırası, karaoke zamanlaması ve PlayRes yedekleri libass'teki gibidir. |
+| **libass kurallarına yakın** | Etiket önceliği, `\t` sırası, karaoke zamanlaması ve PlayRes yedekleri libass'teki gibidir (tek istisna: hiç PlayRes'i olmayan betikler varsayılan olarak 1280x720 olur; `defaultLayout: 'libass'` 384x288 verir). |
 | **Deterministik** | Aynı girdi, aynı çıktı. Satır kimlikleri dosya sırasından gelir, rastgelelikten değil. |
 | **Kare hızı sizde** | Her video karesinde çizin (`auto`) ya da 10 ile 200 fps arasında sınırlayın; isterseniz zamanı video kare hızına yuvarlayın. |
 | **Bölge ve yerleşim** | Görünen video resmi, tüm konteyner ya da herhangi bir dikdörtgen; betik çözünürlüğü ya da istediğiniz sanal boyut. |
@@ -91,9 +91,11 @@ Katman, videonun ebeveyn elemanına eklenir (eleman `position: static` ise `rela
 |---|---|---|---|
 | `video` | `HTMLVideoElement` | - | Zaman, oynat/duraklat/sar ve boyut bu elemandan izlenir. |
 | `container` | `HTMLElement` | `video.parentElement` | Katmanın eklendiği eleman; video yoksa zorunludur. `position: static` ise `relative` yapılır (`destroy()` geri alır). |
-| `subtitle` | `string` | - | Ham `.ass` / `.ssa` metni. |
+| `subtitle` | `string \| SubtitleSource` | - | Ham `.ass` / `.ssa` metni ya da büyük dosyalar için bir `SubtitleSource` (bkz. [Büyük dosyalar](#büyük-dosyalar-pencereli-kaynaklar)). |
 | `region` | `'video' \| 'container' \| {x,y,width,height}` | videoyla `'video'`, yoksa `'container'` | Altyazının yeri. `'video'`: videonun görünen resmi (letterbox'a duyarlı, `object-fit` dikkate alınır). Dikdörtgen: konteyner pikseli. |
-| `layout` | `'script' \| {width,height}` | `'script'` | Sanal koordinat uzayı. `'script'` = PlayResX/PlayResY (libass yedekleriyle). Boyut verilirse betik o boyuta göre yazılmış sayılır. |
+| `layout` | `'script' \| {width,height}` | `'script'` | Sanal koordinat uzayı. `'script'` = betiğin PlayRes değeri (bkz. [Varsayılan yerleşim boyutu](#varsayılan-yerleşim-boyutu-sanal-ve-gerçek)). Boyut verilirse betik o boyuta göre yazılmış sayılır ve her şeyden önce gelir. |
+| `defaultLayout` | `'720p' \| 'libass' \| {width,height}` | `'720p'` | PlayRes'i hiç olmayan betikler için sanal boyut: 1280x720, libass'in 384x288'i ya da kendi boyutunuz. |
+| `windowSeconds` | `number` | `12` | `SubtitleSource` ile: bellekte tutulan olay süresi, sn (yaklaşık 1/6'sı oynatma konumunun gerisi, kalanı ilerisi). |
 | `fps` | `'auto' \| number` | `'auto'` | Çizim hızı. `'auto'`: her video karesinde (`requestVideoFrameCallback`), yoksa her ekran karesinde. Sayı: 10..200 üst sınır (ekran tazeleme hızını aşamaz). |
 | `videoFps` | `number \| null` | `null` | Kaynak videonun kare hızı. Verilirse zaman kare başına yuvarlanır. `fps`'ten bağımsızdır. |
 | `clock` | `() => number` | `video.currentTime` | Özel saat (saniye). |
@@ -118,11 +120,12 @@ Geçersiz değerler hata fırlatır (`fps: 5` -> `RangeError`, sıfır boyutlu b
 | Üye | Açıklama |
 |---|---|
 | `create(options)` / `new PARRenderer(options)` | Çizici oluşturur ve katmanını ekler. |
-| `setSubtitle(text \| null)` | Altyazıyı yükler ya da temizler. Bozuk betikte hata fırlatmaz (`script.warnings`'e bakın). |
+| `setSubtitle(text \| SubtitleSource \| null)` | Altyazıyı yükler ya da temizler. Bozuk betikte hata fırlatmaz (`script.warnings`'e bakın). |
 | `setOptions(patch)` | Seçenekleri çalışırken değiştirir; yalnız verilen anahtarlar değişir. `video`/`container` değişirse yeniden bağlanır. |
 | `renderAt(seconds)` | `seconds` anını hemen çizer (`timeOffset` ve `videoFps` uygulanır). |
 | `refresh()` | Bölgeyi yeniden ölçer ve geçerli anı yeniden çizer. |
-| `getMetrics()` | `{ region, layout, scaleX, scaleY, time, activeLines, running }`. |
+| `getMetrics()` | `{ region, layout, scaleX, scaleY, layoutSize, regionSize, scale, layoutSource, layoutDerived, time, activeLines, running }`: sanal boyut, gerçek boyut, oranları ve sanal boyutun nereden geldiği. |
+| `getSourceStats()` | Yüklü `SubtitleSource` için `{ windowEvents, windowRange, loading, bytesRead, decodeMs, indexMs }` (bellekteki olaylar, yüklü aralık, okunan bayt, çözme süresi). |
 | `script` | Ayrıştırılmış betik (`ParsedScript`) ya da `null`. Salt okunur. |
 | `element` | Katman kök elemanı. |
 | `destroy()` | Katmanı, dinleyicileri, gözlemcileri ve döngüyü kaldırır. Sonraki çağrılar hata fırlatır. |
@@ -134,6 +137,51 @@ Saf (DOM'suz) yardımcılar da dışa aktarılır: `parseScript`, `parseText`, `
 Özel saat varsa ve video yoksa döngü sürekli çalışır (zaman değişmediyse iş yapmaz). İkisi de yoksa `renderAt()` çağırana kadar hiçbir şey çalışmaz.
 Katman `pointer-events: none` kullanır, video kontrollerini engellemez.
 </details>
+
+## Varsayılan yerleşim boyutu (sanal ve gerçek)
+
+Her zaman iki boyut vardır. **Sanal** (yerleşim) boyut, betiğin yerleştirildiği koordinat uzayıdır: `\pos`, kenar boşlukları, yazı boyutları ve çizgi kalınlıkları bu uzaydaki sayılardır. **Gerçek** boyut, sonucun çizildiği ekran bölgesidir (CSS piksel). PAR sanal çerçeveyi gerçek bölgeye ölçekler (`ölçek = gerçek / sanal`, eksen eksen).
+
+Sanal boyutun seçilme sırası:
+
+| Adım | Kaynak | `getMetrics().layoutSource` |
+|---|---|---|
+| 1 | `layout: { width, height }` seçeneği | `'option'` |
+| 2 | betiğin `PlayResX` **ve** `PlayResY` değerleri | `'script'` |
+| 3 | yalnız biri var: diğer kenar, gösterilen bölgenin en-boy oranından türetilir (kullanılabilir bölge yoksa 16:9); `defaultLayout: 'libass'` ile bunun yerine libass kuralı uygulanır (yalnız X: Y = X x 3/4, 1280 için 1024; yalnız Y: X = Y x 4/3, 1024 için 1280) | `'script'`, `layoutDerived: true` |
+| 4 | ikisi de yok | `defaultLayout`: `'720p'` (varsayılan, 1280x720), `'libass'` (384x288) ya da `{ width, height }` -> `'default'` |
+
+`getMetrics()` iki dünyayı birlikte bildirir: `layoutSize` (sanal), `regionSize` (gerçek, CSS px), `scale` (`{ x, y }`, gerçek / sanal), `layoutSource` ve `layoutDerived` (eski `layout`, `region`, `scaleX`, `scaleY` alanları duruyor).
+
+**Varsayılan neyi değiştirir?** libass ve VSFilter, betikte PlayRes yoksa 384x288'e düşer. PAR'ın varsayılanı bunun yerine 1280x720'dir; çoğu modern betik ve oynatıcı bunu varsayar. Betikteki her şey sanal uzayda bir sayıdır, bu yüzden varsayılan, görünüm boyutunu belirler: `Fontsize: 20`, 384x288'de görüntü yüksekliğinin %6,9'u, 1280x720'de %2,8'idir; kenarlık, gölge, boşluk ve konumlar da aynı oranda ölçeklenir. PlayRes'siz, libass için yazılmış bir betik PAR'ın varsayılanında libass'e göre yaklaşık 2,5 kat küçük görünür. Katı libass uyumluluğu için `defaultLayout: 'libass'` kullanın. PlayRes taşıyan betikler etkilenmez.
+
+## Kare zamanları: bir satır ne zaman görünür
+
+Bir satır başlangıcından bitişine kadar görünür, **bitiş anı dahil değildir** (`startMs <= t < endMs`). Bir satır tam sonrakinin başladığı anda biterse (`1.00` - `1.00`, çok yaygın) o anda ilki gider, ikincisi gelir: asla ikisi birden, asla ikisi de yok. Bitişi başlangıcından sonra olmayan satır hiç görünmez. Her karşılaştırma **tamsayı milisaniye** ile yapılır: ASS zamanları santisaniyedir, medya zamanı tek seferde `Math.round(t * 1000)` ile çevrilir (mpv'nin libass'i çağırmadan önce yaptığı gibi); böylece `0.1 + 0.2` gibi ondalık hatalar sınırı kaydıramaz. `\fad`, `\t`, `\move` ve karaoke zamanları da aynı tamsayı tabanını kullanır (satır başından itibaren ms).
+
+`videoFps` verilirse zaman önce **karenin başlangıcına** oturur: `n`. kare tam `n / fps` anında değerlendirilir (NTSC hızları 23.976, 29.97, 59.94 tam kesirlerdir: 24000/1001, 30000/1001, 60000/1001; ondalık birikim yok), tek yuvarlamayla ms'ye çevrilir. 24 fps'te `2.02`'de başlayan satır ilk kez `2.042 sn` karesinde görünür, `2.000 sn` karesinde değil; `1.00`'de biten satır `1.000 sn` karesinde artık yoktur. `fps` (PAR'ın ne sıklıkla çizdiği) ile `videoFps` (zamanın oturduğu kare ızgarası) birbirinden bağımsızdır. Deneme alanındaki "Time boundaries" presetini deneyin ve Lab'da kare kare ilerleyin.
+
+## Büyük dosyalar: pencereli kaynaklar
+
+`subtitle` bir `SubtitleSource` da alır: bu durumda çizici bellekte yalnızca kayan bir olay penceresi tutar (oynatma konumunun yaklaşık 2 sn gerisi, 10 sn ilerisi; `windowSeconds: 12`), ileriyi dilimler halinde okur, atlamayla geçersiz kalan okumaları iptal eder ve olayları henüz yüklenmemiş bir zaman için yanlış satırlar yerine **hiçbir şey** çizmez. 100 MB'lık bir betik, bellekte yalnızca birkaç saniyesiyle oynar.
+
+```ts
+import { create } from 'pulsar-ass-renderer';
+import { fromAssFile, openSourceInWorker } from 'pulsar-ass-renderer/source';
+
+const source = await openSourceInWorker(file, {            // File ya da Blob: .ass, .ssa, .xpar veya .par (içerikten anlaşılır)
+  worker: () => new Worker(new URL('pulsar-ass-renderer/worker', import.meta.url), { type: 'module' }),
+  onProgress: (bytes, total) => bar.update(bytes / total), // 100 MB'ı indekslemek birkaç saniye sürer
+});
+const par = create({ video, subtitle: source, windowSeconds: 12 });
+par.getSourceStats(); // { windowEvents, windowRange: [başlangıç, bitiş] | null, loading, bytesRead, decodeMs, indexMs }
+```
+
+Bağdaştırıcılar (`pulsar-ass-renderer/source`): `fromAssText(text)` (ana girişten de dışa aktarılır), `fromAssFile(blob)` (tek akış geçişi küçük bir zaman indeksi kurar, pencereler `Blob.slice` ile okunur; metin hiçbir zaman tek string olarak tutulmaz), `fromXpar(blobOrUrl)` ve `fromPar(...)` (yalnız pencerenin parçaları okunur ve çözülür; URL için HTTP Range gerekir), `openSource(blob)` (türü anlar) ve `openSourceInWorker(blob, { worker })` (indeksleme ve çözme bir Worker'da; Worker verilmezse ana iş parçacığında parçalı asenkron okumaya düşer). Olayları başka yerden beslemek için `SubtitleSource` arayüzünü kendiniz uygulayın: `{ script, duration, eventCount, readWindow(t0, t1, signal?) }`; pencereler tamsayı ms üzerinde yarı açıktır, olaylar `parseScript`'in verdiği yapılardır (aynı id'ler). Fontlar: stiller başlangıç kümesini verir, override'larla kullanılan fontlar pencereleri geldikçe eklenir, `[Fonts]` kaynaktan okunur (`fontSection()`); "font eksik" akışı değişmeden çalışır.
+
+## Lab
+
+[Sitenin Lab bölümü](https://pulsariums.github.io/PAR/#lab-root) kendi `.ass` / `.ssa` / `.xpar` / `.par` dosyanızı açar (hiçbir şey yüklenmez): dosya boyutu ve istatistikler, gerçek **XPAR** boyutu ve seçilen fps'te **PAR** (kayıplı) boyutu (küçük dosyalarda kesin; büyüklerde belirtilen payla örnekleme tahmini, ardından istek üzerine kesin, ilerleme ve iptalle; `name.xpar` ve `name.<fps>fps.par` indirilir), değiştirilebilir varsayılan (720p / libass 384x288 / özel) ve geçersiz kılma ile sanal ve gerçek boyut, ve uzunluğu altyazının süresi olan bir zaman çizgisi oynatıcısı: atlama, kare / 1 sn / 5 sn adımları, önceki / sonraki satır, hız, döngü, çizim fps ve video fps, klavye kısayolları (Boşluk ya da K, oklar, Shift + oklar, J / L, [ / ], Home / End) ve canlı pencere ve zamanlama değerleri. Büyük dosyalar bir Worker'da indekslenir ve çözülür. `.par` kayıplıdır: özgün ASS'yi geri üretemez ve yalnızca hedef fps'inde görsel olarak eşdeğerdir.
 
 ## Fontlar
 
@@ -197,17 +245,18 @@ Durumlar, deneme alanındaki özellik test tablosuyla aynıdır; orada her satı
 | `\an` `\a` | Çiziliyor | İlki geçerli; eski `\a` dönüştürülür. |
 | `\org` `\frx` `\fry` `\frz` `\fr` | Çiziliyor | Sabit perspektifli 3B; `\org` varsayılanı bağlantı noktasıdır. |
 | `\fad` `\fade` | Çiziliyor | Satır opaklığı, ilki geçerli. |
-| `\clip` `\iclip` (dikdörtgen) | Çiziliyor | CSS `clip-path`; sonuncusu geçerli; `\t` ile canlandırılabilir. |
-| `\clip` `\iclip` (vektör, ölçekli) | Çiziliyor | Canlandırılamaz (libass'teki gibi). |
+| `\clip` `\iclip` (dikdörtgen) | Çiziliyor | Tüm olay üzerinde CSS `clip-path`, betik koordinatlarında (`\pos`/`\move`/döndürmeyi izlemez). Sonuncusu geçerli; köşeler yer değiştirilmez (boş dikdörtgen satırı gizler, libass gibi); `\t` ile tüm betik alanından canlandırılabilir. Kenarlar yumuşatılır (libass tam piksele keser). |
+| `\clip` `\iclip` (vektör, ölçekli) | Çiziliyor | İlk vektör kırpma geçerli olur ve dikdörtgen kırpmayla birlikte uygulanır (libass). Canlandırılamaz (libass'teki gibi). |
 | `\t([t1,t2,][accel,]etiketler)` | Çiziliyor | Çoklu etiket, isteğe bağlı süre, ivme, kaynak sırasında değerlendirme. |
 | `\k` `\K` `\kf` `\ko` `\kt` | Çiziliyor | Renk değişimi, süpürme, kenar açılması. |
 | `\r` `\r<stil>` | Çiziliyor | Bilinmeyen stil satır stiline düşer. |
 | `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Çiziliyor | Yazı tipi `fontMap` ya da adın kendisiyle. |
 | `\fax` `\fay` | Çiziliyor | Eksen noktası metnin sol üstüdür. Parça başına farklar ilk parçanın değerini kullanır. |
 | `\b` `\i` `\u` `\s` | Çiziliyor | |
-| `\bord` `\shad` `\xshad` `\yshad` | Çiziliyor | CSS metin kenarı ve gölgesi. |
+| `\bord` `\shad` `\xshad` `\yshad` | Çiziliyor | Bulanıklık ya da yarı saydam dolgu gerektirdiğinde gölge, kenar ve dolgu ayrı katmanlardır; yarı saydam dolgu, libass gibi harfi kenardan oyar. CSS çizgi köşeleri sivridir, libass yuvarlar. |
 | `\xbord` `\ybord` | Yaklaşık | x/y farklıysa büyük değeri kullanır. |
-| `\blur` `\be` | Yaklaşık | Tüm parça üzerinde CSS `blur()` (dolgu ve kenar birlikte). |
+| `\blur` | Çiziliyor | libass'in sigma değeriyle Gauss (`blur * 0.849`); kenar varsa yalnız kenar ve gölge bulanır, dolgu keskin kalır (libass). Bulanıklık `ScaledBorderAndShadow` ile ölçeklenmez. `\fscx`/`\fscy` oranıyla uzar, `\fax`/`\frx` ile eğilir; libass son bitmap'i bulanıklaştırır. |
+| `\be` | Yaklaşık | libass'in 3x3 kutu çekirdeğinin N geçişi, sigma = sqrt(N/2) aygıt pikseli olan tek bir Gauss ile modellenir; libass'in yuvarlaması ve 127 sınırı uygulanır. |
 | `\c` `\1c`..`\4c` `\alpha` `\1a`..`\4a` | Çiziliyor | |
 | `\p<n>` çizimler (`m n l b s p c`), `\pbo` | Çiziliyor | SVG yolu; spline kapatma (`c`) düz kapatmadır. |
 | `\q1` `\q2` | Çiziliyor | Normal sarma / sarma yok. |
@@ -243,7 +292,7 @@ PAR farklı bir denge seçer: libass'i içine gömmez, çizimi tarayıcıya bır
 |---|---|---|
 | Yaklaşım | DOM, SVG ve CSS | WebAssembly'ye derlenmiş libass |
 | Dağıtılacak WASM dosyası | Yok | Var (bir de worker betiği) |
-| Boyut | Gzip ile yaklaşık 22 kB, sıfır bağımlılık | Daha büyük: derlenmiş kütüphaneyi taşır |
+| Boyut | Gzip ile yaklaşık 30 kB, sıfır bağımlılık | Daha büyük: derlenmiş kütüphaneyi taşır |
 | Framework | Gerekmez, saf TypeScript | Düz JS, her birinin kendi kurulumu var |
 | Çıktı | Gerçek DOM düğümleri ve SVG | Canvas üzerinde pikseller |
 | Glifi libass ile birebir çıktı | Hayır (yaklaşımlar yukarıda listeli) | Evet, libass kullanmanın amacı bu |

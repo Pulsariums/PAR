@@ -29,9 +29,9 @@ describe('line tag precedence (libass)', () => {
     expect(tags('{\\fade(255,0,255,0,1,2,3)\\fad(1,1)}a')).toMatchObject({ fade: [255, 0, 255, 0, 1, 2, 3] });
   });
 
-  it('keeps the last \\clip/\\iclip and the last \\q', () => {
+  it('keeps the last rect \\clip/\\iclip (corners are not reordered, like libass) and the last \\q', () => {
     expect(tags('{\\clip(0,0,1,1)}a{\\iclip(10,20,0,0)\\q2}b{\\q1}')).toMatchObject({
-      clip: { inverse: true, rect: [0, 0, 10, 20] },
+      clip: { inverse: true, rect: [10, 20, 0, 0] },
       q: 1,
     });
   });
@@ -41,8 +41,8 @@ describe('line tag precedence (libass)', () => {
   });
 
   it('parses vector clips with an optional scale', () => {
-    expect(tags('{\\clip(m 0 0 l 10 0 10 10)}a').clip).toEqual({ inverse: false, drawing: 'm 0 0 l 10 0 10 10', scale: 1 });
-    expect(tags('{\\iclip(2,m 0 0 l 8 0 8 8)}a').clip).toMatchObject({ inverse: true, scale: 2 });
+    expect(tags('{\\clip(m 0 0 l 10 0 10 10)}a').vclip).toEqual({ inverse: false, drawing: 'm 0 0 l 10 0 10 10', scale: 1 });
+    expect(tags('{\\iclip(2,m 0 0 l 8 0 8 8)}a').vclip).toMatchObject({ inverse: true, scale: 2 });
   });
 });
 
@@ -59,8 +59,8 @@ describe('drawings', () => {
 
   it('produces a non-empty SVG path (regression: drawings rendered empty)', () => {
     const d = drawingToPath(parseDrawing('m 0 0 l 100 0 100 100 0 100'));
-    expect(d).toBe('M 0 0 L 100 0 L 100 100 L 0 100');
-    expect(drawingToPath(parseDrawing('m 0 0 l 8 8'), 3)).toBe('M 0 0 L 2 2');
+    expect(d).toBe('M 0 0 L 100 0 L 100 100 L 0 100 Z');
+    expect(drawingToPath(parseDrawing('m 0 0 l 8 8'), 3)).toBe('M 0 0 L 2 2 Z');
     expect(drawingToPath(parseDrawing('m 0 0 s 10 0 10 10 0 10 c'))).toMatch(/^M 0 0 L .* C .* Z$/);
   });
 

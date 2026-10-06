@@ -49,7 +49,8 @@ describe('layout scaling', () => {
   it('uses PlayRes by default and an explicit size when given', () => {
     expect(resolveLayoutSize('script', info)).toEqual({ width: 1280, height: 720 });
     expect(resolveLayoutSize({ width: 1920, height: 1080 }, info)).toEqual({ width: 1920, height: 1080 });
-    expect(resolveLayoutSize('script', null)).toEqual({ width: 384, height: 288 });
+    expect(resolveLayoutSize('script', null)).toEqual({ width: 1280, height: 720 });
+    expect(resolveLayoutSize('script', null, 'libass')).toEqual({ width: 384, height: 288 });
   });
 
   it('maps layout units to region pixels and handles ScaledBorderAndShadow', () => {

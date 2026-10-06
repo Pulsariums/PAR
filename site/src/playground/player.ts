@@ -1,4 +1,4 @@
-import { create, type FpsOption, type LayoutOption, type PARRenderer, type RegionOption } from '../../../src/index';
+import { create, type FpsOption, type LayoutOption, type PARRenderer, type RegionOption, type SubtitleSource } from '../../../src/index';
 
 import type { Settings } from './store';
 import { drawCard } from './testcard';
@@ -32,6 +32,13 @@ export class Player {
     this.text = text;
     this.par.setSubtitle(text);
     this.fitDuration();
+  }
+
+  /** Plays a windowed source (big file, XPAR, PAR): the timeline is exactly its duration. */
+  setSource(source: SubtitleSource): void {
+    this.text = '';
+    this.par.setSubtitle(source);
+    this.card.duration = Math.max(0.01, source.duration);
   }
 
   private fitDuration(): void {

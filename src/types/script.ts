@@ -106,7 +106,10 @@ export interface LineTags {
   fad?: [number, number];
   /** a1,a2,a3,t1,t2,t3,t4 */
   fade?: number[];
+  /** Rect `\clip`/`\iclip`: the LAST one wins (libass). */
   clip?: ClipSpec;
+  /** Vector `\clip`/`\iclip`: the FIRST one wins, and it applies together with a rect clip (libass). */
+  vclip?: ClipSpec;
 }
 
 export type KaraokeType = 'k' | 'kf' | 'ko';

@@ -27,8 +27,7 @@ const texts = () => ({
  * Shown when a script has missing fonts (or fonts that lack glyphs the script draws), hidden again when they arrive.
  * "Continue" keeps the fallback font for that set of names; the toggle in the library section turns the prompt off.
  */
-export const initMissingPrompt = (player: Player, addFonts: () => void): void => {
-  const host = $('fontPrompt');
+export const initMissingPrompt = (player: Pick<Player, 'par'>, addFonts: () => void, host: HTMLElement = $('fontPrompt')): void => {
   let prompt: MissingPrompt | null = null;
   let dismissed = '';
   let last: PreflightReport | null = null;

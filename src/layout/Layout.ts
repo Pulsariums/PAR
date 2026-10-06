@@ -1,18 +1,16 @@
-import type { LayoutOption, Rect } from '../types/options';
+import type { DefaultLayoutOption, LayoutOption, Rect } from '../types/options';
 import type { ScriptInfo } from '../types/script';
+
+import { resolveLayout } from './resolve';
 
 export interface Size {
   width: number;
   height: number;
 }
 
-/** Virtual coordinate space: the script's PlayRes (with libass fallbacks) or an explicit size. */
-export const resolveLayoutSize = (option: LayoutOption, info: ScriptInfo | null): Size => {
-  if (typeof option === 'object' && option.width > 0 && option.height > 0) {
-    return { width: option.width, height: option.height };
-  }
-  return info ? { width: info.playResX, height: info.playResY } : { width: 384, height: 288 };
-};
+/** Virtual coordinate space of a script (see `resolveLayout` for the full rule); kept for callers that only need the size. */
+export const resolveLayoutSize = (option: LayoutOption, info: ScriptInfo | null, def: DefaultLayoutOption = '720p', aspect?: Size | null): Size =>
+  resolveLayout(option, info, def, aspect).size;
 
 export interface StageTransform {
   /** Screen pixels per layout unit. */

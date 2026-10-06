@@ -12,7 +12,7 @@ import { addMany, lowerKeys, toLoadedFont, toPoolFace, type Loaded } from './poo
 import type { FontProvider } from './provider';
 import { resolveFont, type PoolFace, type Resolved } from './resolver';
 import type { AddFontOptions, AddFontsEntry, FontInput, FontSourceKind, FontSpec, LoadedFont } from './types';
-import { collectUsage, type FontUse } from './usage';
+import { collectUsage, mergeUsage, styleUsage, type FontUse } from './usage';
 import { extractEmbeddedFiles } from './uudecode';
 import { WorkSet } from './work';
 
@@ -67,10 +67,10 @@ export class FontManager implements FontEnv {
   }
 
   /** New script: recompute needed fonts, load its `[Fonts]` section, drop embedded faces it no longer carries. */
-  setScript(text: string | null, lines: readonly PreparedLine[], styles: Map<string, AssStyle>): void {
+  setScript(text: string | null, lines: readonly PreparedLine[], styles: Map<string, AssStyle>, fromStyles = false): void {
     const gen = ++this.gen;
     this.warns.clear();
-    this.usage = collectUsage(lines, styles);
+    this.usage = fromStyles ? styleUsage(styles) : collectUsage(lines, styles);
     const files = this.embedded && text ? extractEmbeddedFiles(text) : [];
     if (files.length === 0) { this.dropStale('embedded', new Set()); this.ext.refresh(); } else {
       this.gate++;
@@ -82,6 +82,11 @@ export class FontManager implements FontEnv {
     }
     this.ext.ensureLocal();
     this.schedule();
+  }
+
+  /** Windowed script: folds a loaded window's fonts into the set (new fonts / glyphs are resolved and may be announced as missing). */
+  extendUsage(add: Map<string, FontUse>, removed: readonly number[] = []): void {
+    if (mergeUsage(this.usage, add, removed)) { this.ext.refresh(); this.schedule(); }
   }
 
   /** Loads fonts given as input (File, Blob, bytes, URL, zip). TTC files yield one entry per face. */
@@ -144,8 +149,7 @@ export class FontManager implements FontEnv {
   }
 
   dispose(): void {
-    this.disposed = true;
-    this.ext.dispose();
+    this.disposed = true; this.ext.dispose();
     [...this.loaded.keys()].forEach((k) => this.discard(k));
   }
 
@@ -159,8 +163,7 @@ export class FontManager implements FontEnv {
     l.sources.add(source);
     this.loaded.set(p.key, l);
     if (p.degraded) this.warn(`${p.label}: ${p.degraded}`);
-    this.faces = null;
-    void face.loaded.then(() => {
+    this.faces = null; void face.loaded.then(() => {
       if (face.state === 'failed') this.warn(`${p.label}: browser rejected the font (${face.error ?? 'unknown error'})`);
       this.schedule();
     });

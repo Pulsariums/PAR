@@ -3,40 +3,15 @@ import { parseScript } from '../parser/ScriptParser';
 import { splitKeyValue } from '../parser/sections';
 import type { AssEvent, ParsedScript } from '../types/script';
 
+import { fail } from './errors';
+import type { AssIndexData, AssIndexOptions, AssRange } from './assTypes';
 import { LineSplitter } from './lines';
 import { LineScanner } from './scan';
 
 const KEPT = new Set(['script info', 'v4+ styles', 'v4 styles', 'v4 styles+', 'events']);
 const DEC = new TextDecoder('utf-8');
 
-/** A run of consecutive event lines in the original file. */
-export interface AssRange {
-  off: number;
-  len: number;
-  minStartMs: number;
-  maxEndMs: number;
-  /** Dialogue ordinal of the first Dialogue line of the run. */
-  ord0: number;
-  fmt: number;
-  count: number;
-}
-
-export interface AssIndexOptions {
-  /** Close a run after this many bytes (default 256 KiB). */
-  rangeBytes?: number;
-  /** Events at least this long (ms) get runs of their own so they do not widen the short runs (default 20 s). */
-  longMs?: number;
-  maxHeaderBytes?: number;
-}
-
-export interface AssIndexData {
-  ranges: AssRange[];
-  header: string;
-  formats: string[];
-  durationMs: number;
-  events: number;
-  bytes: number;
-}
+export type { AssIndexData, AssIndexOptions, AssRange } from './assTypes';
 
 /** Plain-ASS time index. Holds offsets only; the text stays in the file and is fetched with Blob.slice (or HTTP Range). */
 export class AssIndex {
@@ -129,10 +104,12 @@ export const indexAss = async (file: Blob, opts: AssIndexOptions = {}): Promise<
   const maxHeader = opts.maxHeaderBytes ?? 8 * 1024 * 1024;
   const sc = new LineScanner();
   const sp = new LineSplitter();
-  const data: AssIndexData = { ranges: [], header: '', formats: [], durationMs: 0, events: 0, bytes: file.size };
+  const data: AssIndexData = { ranges: [], header: '', formats: [], durationMs: 0, events: 0, bytes: file.size, fonts: null };
   const header: string[] = [];
   let headerBytes = 0;
   let keep = false;
+  let fontsEnd = false;
+  let done2 = 0;
   let off = 0;
   let cur: (AssRange & { long: boolean }) | null = null;
   const close = (): void => {
@@ -157,7 +134,12 @@ export const indexAss = async (file: Blob, opts: AssIndexOptions = {}): Promise<
     } else {
       close();
       const h = /^\[(.+)\]$/.exec(text.trim());
-      if (h) keep = KEPT.has(h[1].trim().toLowerCase());
+      if (h) {
+        keep = KEPT.has(h[1].trim().toLowerCase());
+        if (h[1].trim().toLowerCase() === 'fonts') data.fonts = { off, len: 0 };
+        else if (data.fonts && !fontsEnd) fontsEnd = true;
+      }
+      if (data.fonts && !fontsEnd) data.fonts.len = off + size - data.fonts.off;
       if (keep && headerBytes < maxHeader) {
         header.push(text);
         headerBytes += bytes.length + 1;
@@ -168,8 +150,14 @@ export const indexAss = async (file: Blob, opts: AssIndexOptions = {}): Promise<
   const reader = file.stream().getReader();
   let first = true;
   for (;;) {
+    if (opts.signal?.aborted) {
+      void reader.cancel();
+      fail('ABORTED', 'indexing was cancelled');
+    }
     const { done, value } = await reader.read();
     if (done) break;
+    done2 += value.length;
+    opts.onProgress?.(done2, file.size);
     let chunk = value;
     if (first && chunk.length >= 3 && chunk[0] === 0xef && chunk[1] === 0xbb && chunk[2] === 0xbf) {
       chunk = chunk.subarray(3);

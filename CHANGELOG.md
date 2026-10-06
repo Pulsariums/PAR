@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Default virtual size: new `defaultLayout` option (`'720p'` default = 1280x720, `'libass'` = 384x288, or `{ width, height }`), used when a script has no PlayRes. Resolution order: `layout` option, script PlayResX + PlayResY, one side only (other side from the region's aspect ratio, 16:9 without a region; libass 4:3 rule with `defaultLayout: 'libass'`), `defaultLayout`. `getMetrics()` gains `layoutSize`, `regionSize`, `scale`, `layoutSource`, `layoutDerived`. `resolveLayout`, `writtenPlayRes`, `LAYOUT_720P`, `LAYOUT_LIBASS` exported.
+- Windowed subtitle sources: `subtitle` / `setSubtitle` accept a `SubtitleSource` (sliding window of events in memory, `windowSeconds`, slice-wise read-ahead, stale reads cancelled, nothing drawn for unloaded times); `getSourceStats()`. New entries `pulsar-ass-renderer/source` (`fromAssFile`, `fromXpar`, `fromPar`, `openSource`, `openSourceInWorker`) and `pulsar-ass-renderer/worker` (module Worker). `fromAssText` and the `SubtitleSource` types are in the main entry. `indexAss` gains `onProgress` / `signal` and records the `[Fonts]` byte range; `estimateXpar` added next to `estimatePar`.
+- Fonts of a windowed script: styles give the starting set, fonts from overrides are added as windows arrive (`FontManager.extendUsage`).
+- Site: Lab section (open .ass / .ssa / .xpar / .par, sizes with XPAR and PAR computed or estimated, virtual vs real panel with overlay, timeline player with render fps and video fps, keyboard shortcuts, window stats) and the "Time boundaries" preset. TR / RU / EN.
+- docs/timing.md and README sections on the default layout rule, frame times, big files and the Lab.
+
+### Changed
+- BREAKING (visual): scripts without any PlayRes now lay out in 1280x720 instead of 384x288 (`defaultLayout: 'libass'` restores the old behaviour). Scripts with PlayRes are unchanged.
+- Visibility is half-open on integer milliseconds: `startMs <= t < endMs` (a line is gone at its end instant, the next one starting there is shown; end <= start is never visible). Media time converts with `Math.round(t * 1000)`; with `videoFps` the time snaps to the frame start `n / fps` (NTSC rates as exact fractions). `\fad` / `\t` / `\move` / karaoke use the same ms base. Previously float seconds were compared and a line ending exactly where another started could overlap or leave a gap on a frame.
+- `snapToFrame` uses exact fractions for 23.976 / 29.97 / 59.94.
+
+### Added (fonts)
 - Font providers: `fontProviders` / `providerTimeout` options, `FontProvider` interface (`has`, `get`, `subscribe`), `createUrlProvider` (URL map or manifest), `refreshProviders()`. Resolution order: user > embedded > `fontMap` > providers > local > system > generic.
 - Preflight: `par.preflight(text?)`, `preflightScript(input, options)` (also `PARRenderer.preflightScript`): streaming scan (strings, line iterables, `linesFromChunks`), `usedFonts` input, `{ ok, resolved, missing, synthetic, providerHits, missingGlyphs, warnings, stats }`; `usedCharacters()`.
 - Missing fonts: `onMissingFonts(report, ctrl)` ('continue' | 'wait' | Promise), `par.on('missingfonts')`, `continueWithMissing()`, `missingFonts`; `createMissingFontsPrompt()` helper (accessible, no CSS).

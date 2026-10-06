@@ -132,7 +132,7 @@ describe('renderer (DOM)', () => {
     const par = create({ container: makeContainer(), subtitle: sub });
     par.renderAt(20.5);
     const path = par.element.querySelector('path')!;
-    expect(path.getAttribute('d')).toBe('M 0 0 L 100 0 L 100 100 L 0 100');
+    expect(path.getAttribute('d')).toBe('M 0 0 L 100 0 L 100 100 L 0 100 Z');
     expect(path.getAttribute('fill')).toBe('rgba(255, 255, 255, 1)');
   });
 

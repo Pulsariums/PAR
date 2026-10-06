@@ -3,7 +3,7 @@ import { alignY } from '../layout/Anchor';
 import { collisionShift, type Placed } from '../layout/Collision';
 import { LineView, type LineEnv } from '../render/LineView';
 import type { Overlay } from '../render/Overlay';
-import type { ParsedScript } from '../types/script';
+import type { AssEvent, ParsedScript } from '../types/script';
 
 import { Timeline } from './Timeline';
 
@@ -17,14 +17,29 @@ export class Scene {
   private readonly placed = new Map<string, Placed>();
   /** Event indexes that must not be drawn (lines waiting for a missing font). */
   hold: ReadonlySet<number> | null = null;
+  /** Windowed script: prepared lines by event index, kept across window updates. */
+  private readonly cache = new Map<number, PreparedLine>();
+  /** Windowed script: lines are only drawn while this says the time is loaded. */
+  covers: ((tMs: number) => boolean) | null = null;
 
   constructor(private readonly overlay: Overlay) {}
 
   setScript(script: ParsedScript | null): void {
     this.clear();
+    this.cache.clear();
+    this.covers = null;
     this.timeline = script
       ? new Timeline(script.events.map((e) => prepareLine(e, script.styles, script.info)))
       : new Timeline([]);
+  }
+
+  /** Windowed script: applies a window change. Returns the newly prepared lines (what the font layer scans). */
+  setWindow(events: readonly AssEvent[], added: readonly AssEvent[], removed: readonly number[], script: Pick<ParsedScript, 'styles' | 'info'>): PreparedLine[] {
+    removed.forEach((i) => this.cache.delete(i));
+    const fresh = added.map((e) => prepareLine(e, script.styles, script.info));
+    fresh.forEach((l) => this.cache.set(l.event.index, l));
+    this.timeline = new Timeline(events.map((e) => this.cache.get(e.index)!).filter(Boolean));
+    return fresh;
   }
 
   /** Every prepared line of the loaded script (what the font layer scans). */
@@ -36,9 +51,9 @@ export class Scene {
     return this.views.size;
   }
 
-  /** Renders at `t` seconds. `force` re-applies static lines too (after layout/option changes). */
+  /** Renders at integer ms `t`. `force` re-applies static lines too (after layout/option changes). */
   render(t: number, env: LineEnv, force: boolean): void {
-    const all = this.timeline.visibleAt(t);
+    const all = this.covers && !this.covers(t) ? [] : this.timeline.visibleAt(t);
     const visible = this.hold ? all.filter((l) => !this.hold!.has(l.event.index)) : all;
     const ids = new Set(visible.map((l) => l.event.id));
     for (const [id, view] of this.views) {
@@ -48,7 +63,7 @@ export class Scene {
       this.placed.delete(id);
     }
     for (const line of visible) {
-      const rel = (t - line.event.start) * 1000;
+      const rel = t - this.timeline.startMs(line);
       const existing = this.views.get(line.event.id);
       if (existing) {
         existing.update(rel, env, force);

@@ -2,6 +2,7 @@ import { initHero } from './hero';
 import { initI18n, onLang, t } from './i18n/i18n';
 import type { Dict } from './i18n/en';
 import { initPlayground } from './playground';
+import { initLab } from './playground/lab';
 import { initTheme } from './theme';
 
 /** Feature cards (texts live in the dictionaries: f1.t / f1.d ...). */
@@ -17,6 +18,7 @@ const renderFeatures = () => {
 
 initTheme();
 initPlayground(document.getElementById('playground') as HTMLElement);
+initLab(document.getElementById('lab-root') as HTMLElement);
 initI18n();
 renderFeatures();
 onLang(renderFeatures);

@@ -98,9 +98,9 @@ export const initFontLib = (player: Player, selectTab: (id: string) => void): vo
   void (async () => {
     try {
       // the library and its UI are separate chunks: nothing is downloaded until the playground opens
-      const [mod, ui] = await Promise.all([import('../../../src/fontlib'), import('./libList')]);
+      const [ui, shared] = await Promise.all([import('./libList'), import('./libShared')]);
       ListCtor = ui.LibList;
-      lib = await mod.FontLibrary.open();
+      lib = await shared.getLibrary();
       lib.onChange(() => void refresh());
       player.par.setOptions({ fontProviders: [lib.asProvider()] });
     } catch {

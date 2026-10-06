@@ -5,13 +5,14 @@ import type { FontEnv } from '../fonts/env';
 import { DEFAULT_RATIO } from '../fonts/ratio';
 import { fontFamilyCss, wantedWeight } from '../fonts/resolver';
 
+import { blurFilter } from './blur';
 import { cssColor } from './color';
 
 /** Fallback `\fs` to CSS size factor when a font's metrics are unknown (see `fonts/ratio.ts` for the real rule). */
 export const FONT_SIZE_RATIO = DEFAULT_RATIO;
 
 export interface StyleEnv {
-  /** Multiplier for border/shadow/blur (ScaledBorderAndShadow handling). */
+  /** Multiplier for border and shadow (ScaledBorderAndShadow handling); blur is never scaled by it (libass `blur_scale`). */
   borderScale: number;
   /** Font name => family, weight and size factor (loaded faces, `fontMap`, system probe). */
   fonts: FontEnv;
@@ -48,10 +49,6 @@ export const fontCss = (st: TextState, env: StyleEnv): Css => {
   };
 };
 
-/** Blur in layout px: `\blur` is ~ a gaussian sigma, each `\be` pass ~ 0.6 px sigma. */
-export const blurPx = (st: TextState, env: StyleEnv): number =>
-  (st.blur + Math.sqrt(st.be) * 0.6) * env.borderScale;
-
 /** Fill, outline, shadow, blur and opaque box (BorderStyle 3) of a text fragment. */
 export const paintCss = (st: TextState, phase: KaraokePhase | null, env: StyleEnv, secondaryFill: boolean): Css => {
   const useSecondary = secondaryFill || (phase !== null && phase.fill < 1);
@@ -60,10 +57,9 @@ export const paintCss = (st: TextState, phase: KaraokePhase | null, env: StyleEn
   const bord = Math.max(st.xbord, st.ybord) * bs;
   const outline = phase === null || phase.outline;
   const shadowOn = st.xshad !== 0 || st.yshad !== 0;
-  const blur = blurPx(st, env);
   const css: Css = {
     color: fill,
-    filter: blur > 0 ? `blur(${px(blur)})` : 'none',
+    filter: blurFilter(st.blur, st.be),
   };
   if (st.style.borderStyle === 3) {
     css['-webkit-text-stroke-width'] = '0px';

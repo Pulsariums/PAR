@@ -22,6 +22,12 @@
       "import": "./dist/fontlib.js",
       "require": "./dist/fontlib.cjs"
     },
+    "./source": {
+      "types": "./dist/types/source/index.d.ts",
+      "import": "./dist/source.js",
+      "require": "./dist/source.cjs"
+    },
+    "./worker": "./dist/source.worker.js",
     "./global": "./dist/par.global.js",
     "./package.json": "./package.json"
   },
@@ -57,7 +63,7 @@
   "scripts": {
     "dev": "vite --config vite.site.config.ts",
     "build": "npm run build:lib && npm run build:types",
-    "build:lib": "vite build && vite build --config vite.fontlib.config.ts",
+    "build:lib": "vite build && vite build --config vite.fontlib.config.ts && vite build --config vite.source.config.ts && vite build --config vite.worker.config.ts",
     "build:types": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

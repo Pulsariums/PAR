@@ -1,4 +1,5 @@
 import { libTr } from './libTr';
+import { labTr } from './labTr';
 
 import type { Dict } from './en';
 
@@ -6,14 +7,14 @@ export const tr: Dict = {
   'nav.skip': 'Deneme alanına geç', 'nav.features': 'Özellikler', 'nav.playground': 'Deneme alanı', 'nav.docs': 'Belgeler',
   'lang.label': 'Dil', 'theme.toggle': 'Açık / koyu temayı değiştir',
   'hero.title': 'ASS altyazıları, doğrudan tarayıcıda çizilir.',
-  'hero.sub': 'PAR, .ass / .ssa dosyalarını düz DOM, SVG ve CSS ile çizer. WebAssembly yok, framework yok, gzip ile yaklaşık 22 kB.',
+  'hero.sub': 'PAR, .ass / .ssa dosyalarını düz DOM, SVG ve CSS ile çizer. WebAssembly yok, framework yok, gzip ile yaklaşık 30 kB.',
   'hero.cta': 'Deneme alanını aç', 'hero.gh': 'GitHub\'da gör', 'hero.live': 'Canlı: şu an PAR çiziyor',
   'ctl.pause': 'Duraklat', 'ctl.play': 'Oynat', 'ctl.seek': 'Sar', 'ctl.speed': 'Hız',
   'feat.title': 'Neler sunuyor',
-  'f1.t': 'Sıfır bağımlılık', 'f1.d': 'Gzip ile yaklaşık 22 kB, saf TypeScript. Çalışma zamanında paket ya da WebAssembly indirmesi yok.',
+  'f1.t': 'Sıfır bağımlılık', 'f1.d': 'Gzip ile yaklaşık 30 kB, saf TypeScript. Çalışma zamanında paket ya da WebAssembly indirmesi yok.',
   'f2.t': 'DOM, SVG ve CSS', 'f2.d': 'Metin gerçek metin olarak kalır; stilini tarayıcı verir, yazı tiplerinizi kullanabilirsiniz.',
   'f3.t': 'Tak ve çalıştır', 'f3.d': 'Bir video ve .ass metni verin yeter. Letterbox, boyut değişimi, oynat, duraklat ve sarma kendiliğinden izlenir.',
-  'f4.t': 'libass kurallarına yakın', 'f4.d': 'Etiket önceliği, \\t sırası, karaoke zamanlaması ve PlayRes yedekleri libass\'teki gibi çalışır.',
+  'f4.t': 'libass kurallarına yakın', 'f4.d': 'Etiket önceliği, \\t sırası, karaoke zamanlaması ve PlayRes yedekleri libass\'teki gibi çalışır (PlayRes\'siz betikler varsayılan 720p, istenirse 384x288).',
   'f5.t': 'Deterministik', 'f5.d': 'Aynı girdi her zaman aynı çıktıyı verir. Satır kimlikleri dosya sırasından gelir, rastgelelikten değil.',
   'f6.t': 'Kare hızı sizde', 'f6.d': 'Her video karesinde çizin ya da 10 ile 200 fps arasında sınırlayın. Zamanı video kare hızına yuvarlayın.',
   'f7.t': 'Bölge ve yerleşim', 'f7.d': 'Altyazıyı görünen resme, konteynere ya da herhangi bir dikdörtgene, istediğiniz sanal çözünürlükte yerleştirin.',
@@ -52,4 +53,5 @@ export const tr: Dict = {
   'docs.title': 'Belgeler', 'docs.install': 'Kurulum', 'docs.use': 'Kullanım', 'docs.read': 'Daha fazlası', 'docs.issues': 'Sorun bildir',
   'foot.note': 'Bu depodaki yerel PAR kaynağıyla çizilir.',
   ...libTr,
+  ...labTr,
 };

@@ -8,8 +8,9 @@ import type { Size } from '../layout/Layout';
 import type { AssStyle } from '../types/script';
 
 import { clipPathCss } from './clipCss';
-import { CssWriter, div } from './dom';
+import { CssWriter, div, SVG_NS } from './dom';
 import { FragmentView } from './FragmentView';
+import { PLATE_ROLES, type Role } from './plates';
 import { xRatio, type StyleEnv } from './textCss';
 
 /** libass/VSFilter perspective distance for `\frx`/`\fry`, in layout pixels. */
@@ -49,16 +50,23 @@ export const boxTransformCss = (an: number, rx: number, fax: number, fay: number
   return t;
 };
 
+interface Plate {
+  box: CssWriter;
+  frags: FragmentView[];
+}
+
 /**
  * DOM of one visible event, built once when it becomes visible:
- * root (clip, fade, z-order) > layer (rotation/shear around the origin) > box (anchor, x-scale, wrap) > fragments.
+ * root (rect clip, fade, z-order) > [vector clip wrapper] > layer (rotation/shear around the origin) > plate boxes (anchor, x-scale,
+ * wrap) > fragments. Most events have one plate; events with a border and blur or a translucent
+ * fill have three (shadow, outline, fill: one full copy of the text each, see `render/plates.ts`).
  */
 export class LineView {
   readonly root: HTMLDivElement;
   private readonly layer: CssWriter;
-  private readonly box: CssWriter;
+  private readonly plates: Plate[];
   private readonly rootW: CssWriter;
-  private readonly frags: FragmentView[];
+  private defs: SVGElement | null = null;
   private staticClip: string | null = null;
   private applied = false;
   private rx = 1;
@@ -73,24 +81,48 @@ export class LineView {
     const layerEl = div('par-layer', abs);
     const ax = alignX(line.an);
     const ay = alignY(line.an);
-    const boxEl = div('par-box', {
-      position: 'absolute',
-      width: 'max-content',
-      'font-size': '0px',
-      'line-height': '0px',
-      'white-space': line.wrapStyle === 2 ? 'pre' : 'pre-wrap',
-      'overflow-wrap': 'break-word',
-      'text-wrap': line.wrapStyle === 0 || line.wrapStyle === 3 ? 'balance' : 'wrap',
-      'text-align': ax === 0 ? 'left' : ax === 1 ? 'right' : 'center',
-      'transform-origin': `${ax * 100}% ${ay * 100}%`,
+    const roles: readonly Role[] = line.plated ? PLATE_ROLES : ['all'];
+    this.plates = roles.map((role) => {
+      const boxEl = div('par-box', {
+        position: 'absolute',
+        width: 'max-content',
+        'font-size': '0px',
+        'line-height': '0px',
+        'white-space': line.wrapStyle === 2 ? 'pre' : 'pre-wrap',
+        'overflow-wrap': 'break-word',
+        'text-wrap': line.wrapStyle === 0 || line.wrapStyle === 3 ? 'balance' : 'wrap',
+        'text-align': ax === 0 ? 'left' : ax === 1 ? 'right' : 'center',
+        'transform-origin': `${ax * 100}% ${ay * 100}%`,
+      });
+      const frags = line.event.fragments.map((f) => new FragmentView(f, line.wrapStyle, role, () => this.defsEl()));
+      for (const f of frags) boxEl.appendChild(f.el);
+      layerEl.appendChild(boxEl);
+      return { box: new CssWriter(boxEl), frags };
     });
-    this.frags = line.event.fragments.map((f) => new FragmentView(f, line.wrapStyle));
-    for (const f of this.frags) boxEl.appendChild(f.el);
-    layerEl.appendChild(boxEl);
-    this.root.appendChild(layerEl);
+    const vclip = line.event.lineTags.vclip;
+    if (vclip) {
+      // A vector clip applies together with a rect clip (libass), so it gets its own un-rotated wrapper.
+      const wrap = div('par-vclip', abs);
+      wrap.style.setProperty('clip-path', clipPathCss(vclip));
+      wrap.appendChild(layerEl);
+      this.root.appendChild(wrap);
+    } else this.root.appendChild(layerEl);
     this.rootW = new CssWriter(this.root);
     this.layer = new CssWriter(layerEl);
-    this.box = new CssWriter(boxEl);
+  }
+
+  /** Hidden `<defs>` of this line (carve filters), created on first use. */
+  private defsEl(): SVGElement {
+    if (!this.defs) {
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('width', '0');
+      svg.setAttribute('height', '0');
+      svg.style.setProperty('position', 'absolute');
+      this.defs = document.createElementNS(SVG_NS, 'defs');
+      svg.appendChild(this.defs);
+      this.root.appendChild(svg);
+    }
+    return this.defs;
   }
 
   /** True when this line must be updated every frame. */
@@ -105,19 +137,20 @@ export class LineView {
     const { line } = this;
     const states = evalStates(line, t, env.styles);
     const base = states[0] ?? stateFromStyle(line.style);
-    this.frags.forEach((f, i) => {
-      const k = line.event.fragments[i].karaoke;
-      f.apply(states[i], k ? karaokePhase(k, t) : null, env, base);
-    });
+    const phases = line.event.fragments.map((f) => (f.karaoke ? karaokePhase(f.karaoke, t) : null));
     const anchor = this.anchorAt(t, env.layout);
     const rx = xRatio(base);
     this.rx = rx;
-    this.box.set({
+    const boxCss = {
       left: `${r3(anchor[0])}px`,
       top: `${r3(anchor[1])}px`,
       'max-width': `${r3(maxTextWidth(line.margins, env.layout) / (rx > 0 ? rx : 1))}px`,
       transform: boxTransformCss(line.an, rx, base.fax, base.fay),
-    });
+    };
+    for (const p of this.plates) {
+      p.frags.forEach((f, i) => f.apply(states[i], phases[i], env, base));
+      p.box.set(boxCss);
+    }
     const org = line.event.lineTags.org ?? anchor;
     this.layer.set({
       'transform-origin': `${r3(org[0])}px ${r3(org[1])}px`,
@@ -134,7 +167,7 @@ export class LineView {
       if (this.staticClip === null) this.staticClip = clipPathCss(line.event.lineTags.clip);
       return this.staticClip;
     }
-    return clipPathCss(clipAt(line.event.lineTags.clip, line.clipTransitions, t, line.durationMs));
+    return clipPathCss(clipAt(line.event.lineTags.clip, line.clipTransitions, t, line.durationMs, line.fullRect));
   }
 
   /** Anchor point at `t`: `\pos`/`\move`, else margins + alignment + collision shift. */
@@ -147,7 +180,7 @@ export class LineView {
 
   /** Measured box in layout px (uses layout reads; call once after the first update). */
   measure(layout: Size): Box {
-    const el = this.box.el as HTMLElement;
+    const el = this.plates[this.plates.length - 1].box.el as HTMLElement;
     const w = el.offsetWidth * this.rx;
     const h = el.offsetHeight;
     const [x, y] = this.anchorAt(0, layout);
