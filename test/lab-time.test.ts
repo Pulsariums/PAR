@@ -99,7 +99,7 @@ describe('time rule: integer ms, half-open [start, end)', () => {
         }
       }
     }
-  });
+  }, 60_000); // exhaustive and deterministic; the default 5 s limit only tripped on a loaded CI runner
 
   it('end == next start on the same layer is never drawn twice or not at all (renderer, 24/30/60 fps)', () => {
     const ass = '[Script Info]\nPlayResX: 640\nPlayResY: 360\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n' +
