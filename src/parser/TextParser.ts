@@ -1,7 +1,7 @@
 import { SOFT_BREAK, type Fragment, type LineTags, type StateOp } from '../types/script';
 
 import { parseDrawing } from './DrawingParser';
-import { KaraokeTracker, splitSyllables } from './KaraokeTracker';
+import { KaraokeTracker } from './KaraokeTracker';
 import { mergeLineTags } from './LineTags';
 import { parseBlock } from './TagParser';
 
@@ -48,6 +48,5 @@ export const parseText = (rawText: string): ParsedText => {
     fragments.push(frag);
     ops = [];
   }
-  splitSyllables(fragments);
   return { fragments, lineTags, unknownTags };
 };

@@ -14,6 +14,7 @@ const ID = {
 const ANGLE = new Set(['frx', 'fry', 'frz', 'fr']);
 const LENGTH = new Set(['bord', 'xbord', 'ybord', 'shad', 'xshad', 'yshad']);
 const KARA = new Set(['k', 'kf', 'ko', 'kt', 'K']);
+const UNCONDITIONAL = new Set([id('b'), id('i'), id('u'), id('s')]);
 
 export interface BakeCtx {
   q: Quanta;
@@ -57,6 +58,8 @@ const quantDraw = (d: Draw, level: number, c: BakeCtx): void => {
 /** `\t` progress at the single sample, using PAR's own interpolation (null = cannot be resolved). */
 const resolveT = (t: Extract<Tag, { k: 't' }>, c: BakeCtx): 'drop' | 'inline' | null => {
   if (!c.single) return null;
+  // `\b \i \u \s \fn \r` inside `\t` apply at any progress (libass): never drop or fold them.
+  if (t.tags.some((x) => x.k === 's' || (x.k === 'n' && UNCONDITIONAL.has(x.id)))) return null;
   const a = t.nums.map(numValue);
   const tr = a.length === 0 ? { t1: 0, t2: null, accel: 1 } : a.length === 1 ? { t1: 0, t2: null, accel: a[0] } : { t1: a[0], t2: a[1], accel: a.length === 3 ? a[2] : 1 };
   const k = transitionProgress({ type: 't', ...tr, ops: [] }, c.single.rel, c.single.dur);

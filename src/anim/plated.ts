@@ -1,4 +1,4 @@
-import type { AssEvent, AssStyle, SetOp } from '../types/script';
+import type { AssEvent, AssStyle, ResetOp, SetOp } from '../types/script';
 
 interface Seen {
   border: boolean;
@@ -26,17 +26,22 @@ const walk = (ev: AssEvent, style: AssStyle, styles: Map<string, AssStyle>): See
     else if (op.key === 'a1') a1 = v === null ? cur.primaryAlpha : v;
     else if ((op.key === 'blur' || op.key === 'be') && v !== null && v > 0) seen.blur = true;
   };
+  const reset = (op: ResetOp): void => {
+    cur = op.style === null ? style : styles.get(op.style) ?? style;
+    bx = by = cur.outline;
+    a1 = cur.primaryAlpha;
+  };
   // The state is noted once per fragment and after each `\t` (its target), never between the ops of
   // one block: `{\bord0\blur3}` passes through "border from the style" without ever drawing it.
   for (const f of ev.fragments) {
     for (const op of f.ops) {
       if (op.type === 'set') set(op);
-      else if (op.type === 'r') {
-        cur = op.style === null ? style : styles.get(op.style) ?? style;
-        bx = by = cur.outline;
-        a1 = cur.primaryAlpha;
-      } else {
-        op.ops.forEach(set);
+      else if (op.type === 'r') reset(op);
+      else {
+        for (const o of op.ops) {
+          if (o.type === 'set') set(o);
+          else reset(o);
+        }
         note();
       }
     }

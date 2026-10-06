@@ -79,7 +79,7 @@ describe('\\t parsing', () => {
 
   it('collects several tags, a clip rect, and ignores nested \\t', () => {
     const tr = parseTransition('0,1000,\\1c&H00FF00&\\frz90\\clip(0,0,100,50)\\t(\\fs1)')!;
-    expect(tr.ops.map((o) => o.key)).toEqual(['c1', 'frz']);
+    expect(tr.ops.map((o) => (o as { key: string }).key)).toEqual(['c1', 'frz']);
     expect(tr.clip).toEqual([0, 0, 100, 50]);
   });
 

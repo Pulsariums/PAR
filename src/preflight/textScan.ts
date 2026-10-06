@@ -21,7 +21,7 @@ const fromStyle = (style: AssStyle): State => ({ style, fn: style.fontName, b: s
 
 /**
  * Records the fonts the text of one event draws. Same rules as `collectUsage` over parsed fragments (single source of
- * truth is the lexer): `\fn` / `\b` / `\i` / `\r<style>` fold in source order, `\t(...)` cannot change them, drawings
+ * truth is the lexer): `\fn` / `\b` / `\i` / `\r<style>` fold in source order (also inside `\t(...)`, where they apply unconditionally), drawings
  * (`\p1`) and whitespace-only fragments need no font. `uses` is updated in place; `touched` collects the fonts of this event.
  */
 export const scanEventText = (
@@ -47,6 +47,16 @@ export const scanEventText = (
     touched.add(use);
     if (glyphs) addChars(use.chars, shown);
   };
+  const fold = (tag: { name: string | null; arg: string }): void => {
+    switch (tag.name) {
+      case 'r': { const n = tag.arg.trim(); st = fromStyle(n ? styles.get(n) ?? base : base); break; }
+      case 'fn': st = { ...st, fn: tag.arg.trim() || st.style.fontName }; break;
+      case 'b': st = { ...st, b: parseNum(tag.arg) ?? st.style.bold }; break;
+      case 'i': { const v = parseNum(tag.arg); st = { ...st, i: v === null ? st.style.italic : v !== 0 }; break; }
+      case 'p': drawing = Math.max(0, Math.floor(parseNum(tag.arg) ?? 0)); break;
+      default:
+    }
+  };
   while (pos < text.length) {
     const open = text.indexOf('{', pos);
     const close = open === -1 ? -1 : text.indexOf('}', open);
@@ -56,14 +66,13 @@ export const scanEventText = (
     const block = text.slice(open + 1, close);
     if (!RELEVANT.test(block)) continue;
     for (const tag of lexOverrides(block)) {
-      switch (tag.name) {
-        case 'r': { const n = tag.arg.trim(); st = fromStyle(n ? styles.get(n) ?? base : base); break; }
-        case 'fn': st = { ...st, fn: tag.arg.trim() || st.style.fontName }; break;
-        case 'b': st = { ...st, b: parseNum(tag.arg) ?? st.style.bold }; break;
-        case 'i': { const v = parseNum(tag.arg); st = { ...st, i: v === null ? st.style.italic : v !== 0 }; break; }
-        case 'p': drawing = Math.max(0, Math.floor(parseNum(tag.arg) ?? 0)); break;
-        default:
+      if (tag.name !== 't') {
+        fold(tag);
+        continue;
       }
+      // `\fn \b \i \r` inside `\t` apply unconditionally (libass); the other tags there do not touch fonts.
+      const at = tag.arg.indexOf('\\');
+      if (at !== -1) for (const inner of lexOverrides(tag.arg.slice(at))) if (inner.name !== 't' && inner.name !== 'p') fold(inner);
     }
   }
 };

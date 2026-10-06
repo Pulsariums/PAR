@@ -75,7 +75,8 @@ export interface Transition {
   /** `null` = line end (libass: times not given). */
   t2: number | null;
   accel: number;
-  ops: SetOp[];
+  /** Sets and `\r` resets inside the `\t`; animatable keys interpolate, the others apply unconditionally (libass). */
+  ops: (SetOp | ResetOp)[];
   /** Rect clip target inside the transition, if any. */
   clip?: [number, number, number, number];
 }

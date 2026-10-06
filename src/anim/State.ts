@@ -36,7 +36,7 @@ export const stateFromStyle = (style: AssStyle): TextState => ({
 
 type NumKey = Exclude<StateKey, 'fn' | 'i' | 'u' | 's'>;
 const COLOR_KEYS = new Set<StateKey>(['c1', 'c2', 'c3', 'c4']);
-/** Keys `\t` can animate (libass); others inside `\t` are ignored. */
+/** Keys `\t` interpolates (libass); `fn b i u s` and `\r` inside `\t` apply unconditionally. */
 const ANIMATABLE = new Set<StateKey>([
   'fs', 'fscx', 'fscy', 'fsp', 'frx', 'fry', 'frz', 'fax', 'fay', 'xbord', 'ybord', 'xshad', 'yshad',
   'blur', 'be', 'c1', 'c2', 'c3', 'c4', 'a1', 'a2', 'a3', 'a4',
@@ -74,14 +74,17 @@ export const lerpColor = (a: number, b: number, k: number): number => {
   return out >>> 0;
 };
 
-/** Progress of a transition at `t` ms (libass: step when t2 <= t1, `pow(p, accel)` otherwise). */
+/**
+ * Progress of a transition at `t` ms (libass): t2 absent or 0 = the whole event duration; 0 before t1,
+ * 1 from t2 (a step when t2 <= t1), `pow(p, accel)` in between for any accel (0 => 1, negative => > 1).
+ */
 export const transitionProgress = (tr: Transition, t: number, durationMs: number): number => {
   const t1 = tr.t1;
-  const t2 = tr.t2 === null ? durationMs : tr.t2;
+  const t2 = tr.t2 === null || tr.t2 === 0 ? durationMs : tr.t2;
   if (t < t1) return 0;
   if (t >= t2) return 1;
-  const p = (t - t1) / (t2 - t1);
-  return tr.accel > 0 ? Math.pow(p, tr.accel) : 1;
+  const k = Math.pow((t - t1) / (t2 - t1), tr.accel);
+  return Number.isFinite(k) ? k : 1; // accel < 0 at p = 0 is Infinity in libass; keep the state finite
 };
 
 export interface FoldEnv {
@@ -92,16 +95,26 @@ export interface FoldEnv {
   resetStyle: (name: string | null) => AssStyle;
 }
 
-const applyTransition = (st: TextState, tr: Transition, k: number): void => {
+/** Ops of a `\t`; returns the (possibly reset) state. */
+const applyTransition = (st: TextState, tr: Transition, k: number, env: FoldEnv): TextState => {
+  let cur = st;
   for (const op of tr.ops) {
-    if (!ANIMATABLE.has(op.key)) continue;
-    const to = targetValue(st, op) as number;
+    if (op.type === 'r') {
+      cur = stateFromStyle(env.resetStyle(op.style));
+      continue;
+    }
+    if (!ANIMATABLE.has(op.key)) {
+      applySet(cur, op);
+      continue;
+    }
+    const to = targetValue(cur, op) as number;
     const key = op.key as NumKey;
-    const from = st[key];
-    if (COLOR_KEYS.has(key)) setKey(st, key, lerpColor(from, to, k));
-    else if (key[0] === 'a') setKey(st, key, Math.round(lerp(from, to, k)));
-    else setKey(st, key, lerp(from, to, k));
+    const from = cur[key];
+    if (COLOR_KEYS.has(key)) setKey(cur, key, lerpColor(from, to, k));
+    else if (key[0] === 'a') setKey(cur, key, Math.round(lerp(from, to, k)));
+    else setKey(cur, key, lerp(from, to, k));
   }
+  return cur;
 };
 
 /** Applies ordered ops to `st` in place (sets, `\r` resets, `\t` evaluated at `env.t`). */
@@ -110,7 +123,7 @@ export const foldOps = (st: TextState, ops: StateOp[], env: FoldEnv): TextState 
   for (const op of ops) {
     if (op.type === 'set') applySet(cur, op);
     else if (op.type === 'r') cur = stateFromStyle(env.resetStyle(op.style));
-    else applyTransition(cur, op, transitionProgress(op, env.t, env.durationMs));
+    else cur = applyTransition(cur, op, transitionProgress(op, env.t, env.durationMs), env);
   }
   return cur;
 };

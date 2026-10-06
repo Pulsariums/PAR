@@ -100,11 +100,6 @@ describe('karaoke', () => {
     expect(p.fragments[1].karaoke).toMatchObject({ type: 'kf', start: 1000, duration: 400 });
   });
 
-  it('splits a \\kf syllable across fragments by text length', () => {
-    const p = parseText('{\\kf100}abc{\\b1}d{\\kf50}e');
-    expect(p.fragments.map((f) => [f.karaoke!.start, f.karaoke!.duration])).toEqual([[0, 750], [750, 250], [1000, 500]]);
-  });
-
   it('reports fill and outline phases', () => {
     expect(karaokePhase({ type: 'k', start: 100, duration: 100, syllable: 0 }, 99).fill).toBe(0);
     expect(karaokePhase({ type: 'k', start: 100, duration: 100, syllable: 0 }, 100).fill).toBe(1);

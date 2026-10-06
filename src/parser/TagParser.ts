@@ -1,4 +1,4 @@
-import type { LineTags, SetOp, StateKey, StateOp, Transition } from '../types/script';
+import type { LineTags, ResetOp, SetOp, StateKey, StateOp, Transition } from '../types/script';
 
 import { intRect, parseClip } from './ClipParser';
 import type { KaraTag } from './KaraokeTracker';
@@ -33,7 +33,7 @@ const clampNum = (key: string, v: number | null): number | null => {
 };
 
 /** Tags that change the text state; returns false when `tag` is not a state tag. */
-const stateOps = (tag: RawTag, ops: SetOp[]): boolean => {
+const stateOps = (tag: RawTag, ops: (SetOp | ResetOp)[]): boolean => {
   const name = tag.name!;
   const arg = tag.arg;
   if (NUM_KEYS.has(name)) ops.push(set(name as StateKey, clampNum(name, parseNum(arg))));
@@ -75,7 +75,8 @@ export const parseTransition = (arg: string): Transition | null => {
   };
   for (const tag of lexOverrides(arg.slice(idx))) {
     if (!tag.name || tag.name === 't') continue; // nested \t is ignored (libass)
-    if (tag.name === 'clip' || tag.name === 'iclip') {
+    if (tag.name === 'r') tr.ops.push({ type: 'r', style: tag.arg.trim() || null });
+    else    if (tag.name === 'clip' || tag.name === 'iclip') {
       const nl = parseNumList(tag.arg);
       if (nl && nl.length === 4) tr.clip = intRect(nl);
     } else stateOps(tag, tr.ops);
@@ -134,7 +135,8 @@ export const parseBlock = (block: string): ParsedBlock => {
       else out.unknown.push(tag.raw);
     } else if (name === 'r') out.ops.push({ type: 'r', style: tag.arg.trim() || null });
     else if (name === 'k' || name === 'K' || name === 'kf' || name === 'ko' || name === 'kt') {
-      const cs = Math.max(0, parseNum(tag.arg) ?? 0);
+      // libass: `\k` without an argument is 100 cs.
+      const cs = tag.arg.trim() === '' ? 100 : Math.max(0, parseNum(tag.arg) ?? 0);
       out.kara.push({ type: name === 'K' ? 'kf' : name, cs });
     } else if (name === 'p') out.drawing = Math.max(0, Math.floor(parseNum(tag.arg) ?? 0));
     else if (name === 'fe') continue; // font encoding: no effect in browsers

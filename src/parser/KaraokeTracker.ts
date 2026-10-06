@@ -1,4 +1,4 @@
-import type { Fragment, KaraokeSpan, KaraokeType } from '../types/script';
+import type { KaraokeSpan, KaraokeType } from '../types/script';
 
 export interface KaraTag {
   type: KaraokeType | 'kt';
@@ -10,12 +10,15 @@ export interface KaraTag {
  * Karaoke timing (libass): every `\k*` starts a syllable; durations accumulate from the line start.
  * Consecutive `\k` tags without text in between skip the previous duration; `\kt` sets an absolute
  * cursor. Blocks without karaoke tags (e.g. `{\b1}`) keep the current syllable.
+ * Continuation text of a syllable (`{\kf100}Hel{\b1}lo`) has no timing of its own (libass:
+ * effect_timing = 0): the first piece takes the whole syllable, the continuation switches at its end.
  */
 export class KaraokeTracker {
   private cursor = 0;
   private syllable = -1;
   private pending: { type: KaraokeType; duration: number } | null = null;
   private current: KaraokeSpan | null = null;
+  private taken = false;
 
   apply(tags: KaraTag[]): void {
     for (const t of tags) {
@@ -35,34 +38,12 @@ export class KaraokeTracker {
       this.current = { type: this.pending.type, start: this.cursor, duration: this.pending.duration, syllable: this.syllable };
       this.cursor += this.pending.duration;
       this.pending = null;
+      this.taken = false;
     }
-    return this.current ? { ...this.current } : undefined;
+    if (!this.current) return undefined;
+    const c = this.current;
+    if (this.taken) return { ...c, start: c.start + c.duration, duration: 0 };
+    this.taken = true;
+    return { ...c };
   }
 }
-
-/**
- * A `\kf` syllable split over several fragments (`{\kf50}Hel{\b1}lo`) is swept as one unit:
- * each fragment gets a slice of the syllable window proportional to its text length.
- */
-export const splitSyllables = (fragments: Fragment[]): void => {
-  const groups = new Map<number, Fragment[]>();
-  for (const f of fragments) {
-    if (!f.karaoke) continue;
-    const g = groups.get(f.karaoke.syllable);
-    if (g) g.push(f);
-    else groups.set(f.karaoke.syllable, [f]);
-  }
-  for (const group of groups.values()) {
-    if (group.length < 2 || group[0].karaoke!.type !== 'kf') continue;
-    const weights = group.map((f) => Math.max(1, f.drawing ? 1 : [...f.text].length));
-    const total = weights.reduce((a, b) => a + b, 0);
-    const { start, duration } = group[0].karaoke!;
-    let acc = 0;
-    group.forEach((f, i) => {
-      const k = f.karaoke!;
-      k.start = start + (duration * acc) / total;
-      k.duration = (duration * weights[i]) / total;
-      acc += weights[i];
-    });
-  }
-};

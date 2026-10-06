@@ -247,8 +247,8 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 | `\fad` `\fade` | Rendered | Line opacity, first wins. |
 | `\clip` `\iclip` (rect) | Rendered | CSS `clip-path` on the whole event, in script coordinates (does not follow `\pos`/`\move`/rotation). Last wins; corners are not reordered (an empty rect hides the line, as in libass); animatable with `\t` from the whole script area. Edges are anti-aliased (libass cuts on whole pixels). |
 | `\clip` `\iclip` (vector, with scale) | Rendered | First vector clip wins and applies together with a rect clip (libass). Not animatable (as in libass). |
-| `\t([t1,t2,][accel,]tags)` | Rendered | Multiple tags, optional times, acceleration, source-order evaluation. |
-| `\k` `\K` `\kf` `\ko` `\kt` | Rendered | Colour switch, sweep, outline reveal. |
+| `\t([t1,t2,][accel,]tags)` | Rendered | Multiple tags, optional times (`t2` = 0 means the whole event), acceleration (`pow`, also <= 0), source-order evaluation. `\b \i \u \s \fn \r` inside apply unconditionally, as in libass. |
+| `\k` `\K` `\kf` `\ko` `\kt` | Rendered | Colour switch, sweep, outline reveal. `\k` without a number is 100 cs. Text after a tag block inside a syllable (`{\kf100}Hel{\b1}lo`) has no time of its own: it flips when the syllable ends (libass). |
 | `\r` `\r<style>` | Rendered | Unknown style falls back to the line style. |
 | `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Rendered | Loaded / embedded face, `fontMap`, or the name itself (see Fonts). |
 | `\fax` `\fay` | Rendered | Pivot is the text top-left. Per-fragment differences use the first fragment's value. |

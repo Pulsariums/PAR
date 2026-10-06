@@ -29,7 +29,7 @@ describe('preflightScript: which families a script uses', () => {
     expect(r.resolved[0].lineCount).toBe(2);
   });
 
-  it('skips drawings, whitespace-only text, tags inside \\t and unclosed braces are plain text', async () => {
+  it('skips drawings and whitespace-only text; \\fn inside \\t counts (libass applies it unconditionally); unclosed braces are plain text', async () => {
     const text = ass([style('Default', 'Real')], [
       dialogue('Default', '{\\p1\\fnDraw}m 0 0 l 10 10{\\p0}'),
       dialogue('Default', '{\\fnSpace} \\N\\h '),
@@ -37,7 +37,7 @@ describe('preflightScript: which families a script uses', () => {
       dialogue('Default', '{\\fnBroken text'),
     ]);
     const r = await preflightScript(text);
-    expect(names(r)).toEqual(['Real']); // an unclosed brace is plain text, drawn in the line's font
+    expect(names(r)).toEqual(['Anim', 'Real']); // an unclosed brace is plain text, drawn in the line's font
   });
 
   it('handles \\b / \\i overrides and flags synthetic bold and italic (not missing)', async () => {

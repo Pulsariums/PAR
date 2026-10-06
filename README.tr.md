@@ -247,8 +247,8 @@ Durumlar, deneme alanındaki özellik test tablosuyla aynıdır; orada her satı
 | `\fad` `\fade` | Çiziliyor | Satır opaklığı, ilki geçerli. |
 | `\clip` `\iclip` (dikdörtgen) | Çiziliyor | Tüm olay üzerinde CSS `clip-path`, betik koordinatlarında (`\pos`/`\move`/döndürmeyi izlemez). Sonuncusu geçerli; köşeler yer değiştirilmez (boş dikdörtgen satırı gizler, libass gibi); `\t` ile tüm betik alanından canlandırılabilir. Kenarlar yumuşatılır (libass tam piksele keser). |
 | `\clip` `\iclip` (vektör, ölçekli) | Çiziliyor | İlk vektör kırpma geçerli olur ve dikdörtgen kırpmayla birlikte uygulanır (libass). Canlandırılamaz (libass'teki gibi). |
-| `\t([t1,t2,][accel,]etiketler)` | Çiziliyor | Çoklu etiket, isteğe bağlı süre, ivme, kaynak sırasında değerlendirme. |
-| `\k` `\K` `\kf` `\ko` `\kt` | Çiziliyor | Renk değişimi, süpürme, kenar açılması. |
+| `\t([t1,t2,][accel,]etiketler)` | Çiziliyor | Çoklu etiket, isteğe bağlı süre (`t2` = 0 tüm olay demektir), ivme (`pow`, <= 0 dahil), kaynak sırasında değerlendirme. İçindeki `\b \i \u \s \fn \r` libass'teki gibi koşulsuz uygulanır. |
+| `\k` `\K` `\kf` `\ko` `\kt` | Çiziliyor | Renk değişimi, süpürme, kenar açılması. Sayısız `\k` 100 cs'dir. Hece içinde etiket bloğundan sonraki metnin (`{\kf100}Hel{\b1}lo`) kendi süresi yoktur: hece bitince döner (libass). |
 | `\r` `\r<stil>` | Çiziliyor | Bilinmeyen stil satır stiline düşer. |
 | `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Çiziliyor | Yazı tipi `fontMap` ya da adın kendisiyle. |
 | `\fax` `\fay` | Çiziliyor | Eksen noktası metnin sol üstüdür. Parça başına farklar ilk parçanın değerini kullanır. |

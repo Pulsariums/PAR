@@ -9,6 +9,8 @@ JASSUB code is used. Scope: logic and layout rules, not pixel-identical rasteris
 |---|---|
 | ScaledBorderAndShadow default | Missing key = no; yes only with a non-standard `[V4+ Styles]` Format line (`custom_format_line_compatibility`); `parse_bool` = "yes" prefix or number > 0 |
 | Border / shadow / blur base | `init_font_scale`: yes = PlayRes (1 in layout units); no = layout height / storage height; blur always layout / storage. Storage = script LayoutResX/Y, else the video's pixel size, else unknown (then 1, like libass without a storage size) |
+| `\t` | `t2` = 0 is the whole event duration; progress `pow(p, accel)` for any accel (0 gives 1; a non-finite result is kept at 1); `\b \i \u \s \fn \r` inside apply at any progress |
+| Karaoke | `\k` without a number = 100 cs; continuation text (`{\kf100}Hel{\b1}lo`) has zero duration and flips when its syllable ends (no proportional split) |
 
 ## Intentionally different
 
