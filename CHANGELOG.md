@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Static GitHub Pages site (`site/`, Vite): live hero, playground with test card / video file / video URL,
+  one preset per feature, feature test matrix, option controls, metrics panel and copyable `create(...)` snippet. TR / RU / EN UI.
+- README in English, Turkish and Russian; CONTRIBUTING.md; SECURITY.md; animated SVG banner; favicon and social preview.
+- GitHub Actions: `ci.yml` (typecheck, test, build on PRs) and `pages.yml` (deploy to Pages on `main`).
+
+### Changed
+- The old `demo/` page is replaced by `site/`; `npm run build:demo` is now `npm run build:site`.
+
 ## [0.1.0] - 2026-10-05
 
 First standalone release of PAR (Pulsar ASS Renderer), extracted from the

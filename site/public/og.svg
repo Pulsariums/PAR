@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14112b"/><stop offset="1" stop-color="#0a1426"/></linearGradient>
+    <linearGradient id="sw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffd54a"/><stop offset="1" stop-color="#ff7ab8"/></linearGradient>
+    <radialGradient id="gl" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#7c5cff" stop-opacity=".5"/><stop offset="1" stop-color="#7c5cff" stop-opacity="0"/></radialGradient>
+    <clipPath id="c"><rect x="100" y="250" width="620" height="140"/></clipPath>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="980" cy="120" r="360" fill="url(#gl)"/>
+  <g font-family="system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-weight="800">
+    <text x="100" y="150" font-size="34" fill="#a594ff" letter-spacing="10" font-weight="700">PULSAR ASS RENDERER</text>
+    <g font-size="150">
+      <text x="100" y="340" fill="#fff" fill-opacity=".25" stroke="#000" stroke-opacity=".6" stroke-width="8" paint-order="stroke">PAR</text>
+      <text x="100" y="340" fill="url(#sw)" stroke="#000" stroke-opacity=".6" stroke-width="8" paint-order="stroke" clip-path="url(#c)">PAR</text>
+    </g>
+    <text x="100" y="440" font-size="40" font-weight="600" fill="#e8e8f0">ASS / SSA subtitles in the browser.</text>
+    <text x="100" y="496" font-size="30" font-weight="500" fill="#b8b8c8">DOM + SVG + CSS. No WebAssembly. Zero dependencies.</text>
+    <text x="100" y="568" font-size="26" font-weight="600" fill="#a594ff">pulsariums.github.io/PAR</text>
+  </g>
+</svg>

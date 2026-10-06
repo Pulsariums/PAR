@@ -1,0 +1,86 @@
+import { create, type FpsOption, type LayoutOption, type PARRenderer, type RegionOption } from '../../../src/index';
+
+import type { Settings } from './store';
+import { drawCard } from './testcard';
+import { CardTransport, VideoTransport, type Transport } from './transport';
+
+/** Owns the PAR instance, the two transports and the mapping Settings -> PAR options. */
+export class Player {
+  readonly card = new CardTransport();
+  readonly par: PARRenderer;
+  transport: Transport = this.card;
+  hasVideo = false;
+  private readonly videoTransport: VideoTransport;
+  private lastDrawn = NaN;
+
+  constructor(
+    readonly stage: HTMLElement,
+    private readonly canvas: HTMLCanvasElement,
+    readonly video: HTMLVideoElement,
+    subtitle: string,
+  ) {
+    this.videoTransport = new VideoTransport(video);
+    this.par = create({ container: stage, clock: () => this.card.time, subtitle });
+    this.fitDuration();
+  }
+
+  /** Sets the subtitle and sizes the card timeline to the last event end. */
+  setSubtitle(text: string): void {
+    this.par.setSubtitle(text);
+    this.fitDuration();
+  }
+
+  private fitDuration(): void {
+    const end = this.par.script?.events.reduce((m, e) => Math.max(m, e.end), 0) ?? 0;
+    this.card.duration = Math.max(4, Math.ceil(end));
+  }
+
+  useCard(): void {
+    if (this.hasVideo) {
+      this.video.pause();
+      this.video.removeAttribute('src');
+      this.video.load();
+    }
+    this.hasVideo = false;
+    this.video.hidden = true;
+    this.canvas.hidden = false;
+    this.transport = this.card;
+    this.par.setOptions({ video: null, clock: () => this.card.time });
+  }
+
+  useVideo(src: string): void {
+    this.video.hidden = false;
+    this.canvas.hidden = true;
+    this.video.loop = true;
+    this.video.src = src;
+    this.hasVideo = true;
+    this.card.pause();
+    this.transport = this.videoTransport;
+    this.par.setOptions({ video: this.video, clock: null });
+  }
+
+  /** Maps settings to PAR options. Returns an error message, or '' on success. */
+  apply(s: Readonly<Settings>): string {
+    this.video.style.objectFit = s.fit;
+    const region: RegionOption = s.region === 'custom' ? { ...s.rect } : s.region === 'video' && !this.hasVideo ? 'container' : s.region;
+    const layout: LayoutOption = s.layoutCustom ? { ...s.layout } : 'script';
+    const fps: FpsOption = s.fpsAuto ? 'auto' : s.fps;
+    const vf = s.videoFps.trim() === '' ? null : Number(s.videoFps);
+    try {
+      this.par.setOptions({ region, layout, fps, videoFps: vf, timeOffset: s.timeOffset, zIndex: s.zIndex });
+      return '';
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  /** Called every animation frame: redraws the test card when its time changed. */
+  tick(): void {
+    if (this.hasVideo) return;
+    const t = this.card.time;
+    const size = this.canvas.clientWidth;
+    const w = Math.max(320, Math.min(1280, Math.round(size * (window.devicePixelRatio || 1))));
+    if (this.canvas.width !== w) { this.canvas.width = w; this.canvas.height = Math.round((w * 9) / 16); this.lastDrawn = NaN; }
+    if (t !== this.lastDrawn) { drawCard(this.canvas, t); this.lastDrawn = t; }
+  }
+}

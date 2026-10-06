@@ -1,0 +1,41 @@
+import { t } from '../i18n/i18n';
+
+import type { Player } from './player';
+
+const r = (n: number) => String(Math.round(n * 100) / 100);
+
+/** Live metrics from getMetrics(). Measured FPS counts distinct subtitle times rendered per second. */
+export const initMetrics = (player: Player) => {
+  const dl = document.getElementById('metrics') as HTMLDListElement;
+  let lastTime = NaN;
+  let frames = 0;
+  let since = performance.now();
+  let fps = 0;
+
+  const row = (k: string, v: string) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+  const draw = () => {
+    const m = player.par.getMetrics();
+    dl.innerHTML =
+      row(t('m.region'), `${r(m.region.x)},${r(m.region.y)} ${r(m.region.width)}x${r(m.region.height)}`) +
+      row(t('m.layout'), `${m.layout.width}x${m.layout.height}`) +
+      row(t('m.scale'), `${r(m.scaleX)} x ${r(m.scaleY)}`) +
+      row(t('m.lines'), String(m.activeLines)) +
+      row(t('m.fps'), String(fps)) +
+      row(t('m.time'), `${Number.isFinite(m.time) ? r(m.time) : '-'} s`);
+  };
+  return {
+    /** Call every animation frame. */
+    sample(): void {
+      const m = player.par.getMetrics();
+      if (m.time !== lastTime) { frames++; lastTime = m.time; }
+      const now = performance.now();
+      if (now - since >= 500) {
+        fps = Math.round((frames * 1000) / (now - since));
+        frames = 0;
+        since = now;
+        draw();
+      }
+    },
+    draw,
+  };
+};

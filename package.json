@@ -23,6 +23,8 @@
   "files": [
     "dist",
     "README.md",
+    "README.tr.md",
+    "README.ru.md",
     "LICENSE",
     "CHANGELOG.md"
   ],
@@ -35,26 +37,40 @@
     "libass",
     "karaoke",
     "video",
-    "fansub"
+    "fansub",
+    "advanced-substation-alpha",
+    "html5-video",
+    "dom",
+    "svg",
+    "typescript",
+    "zero-dependencies"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Pulsariums/pulsar-ass-renderer.git"
+    "url": "git+https://github.com/Pulsariums/PAR.git"
   },
   "scripts": {
-    "dev": "vite --config vite.demo.config.ts",
+    "dev": "vite --config vite.site.config.ts",
     "build": "npm run build:lib && npm run build:types",
     "build:lib": "vite build",
     "build:types": "tsc -p tsconfig.build.json",
-    "build:demo": "vite build --config vite.demo.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:site": "vite build --config vite.site.config.ts",
+    "preview:site": "vite preview --config vite.site.config.ts --port 4173"
   },
   "devDependencies": {
     "jsdom": "^30.1.2",
     "typescript": "~5.9",
     "vite": "^8.3.2",
     "vitest": "^5.0.3"
+  },
+  "homepage": "https://pulsariums.github.io/PAR/",
+  "bugs": {
+    "url": "https://github.com/Pulsariums/PAR/issues"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
