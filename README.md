@@ -108,6 +108,8 @@ The video's parent needs to be the element the overlay can sit on (it becomes `p
 | `providerTimeout` | `number` | `5000` | Per provider call, ms. A silent provider counts as "not found". |
 | `onMissingFonts` | `(report, ctrl) => 'continue' \| 'wait' \| Promise` | none | Decides what happens when fonts are missing. Default: continue with fallback fonts. |
 | `zIndex` | `number` | `1` | z-index of the overlay. |
+| `renderMode` | `'auto' \| 'dom' \| 'canvas'` | `'auto'` | How simple per-glyph events (karaoke particles) are drawn: `'auto'` = from cached sprites on a canvas once a scene is heavy, DOM otherwise; `'dom'` = never canvas; `'canvas'` = whenever an event qualifies. See [Heavy scenes](#heavy-scenes-karaoke-oped). |
+| `spriteCacheMB` | `number` | `96` | Memory cap of the canvas sprite cache (least recently used sprites are dropped). |
 
 Invalid values throw (`fps: 5` gives a `RangeError`, a zero-size region a `TypeError`).
 </details>
@@ -178,6 +180,10 @@ par.getSourceStats(); // { windowEvents, windowRange: [from, to] | null, loading
 ```
 
 Adapters (`pulsar-ass-renderer/source`): `fromAssText(text)` (also exported by the main entry), `fromAssFile(blob)` (one streaming pass builds a small time index, windows are read with `Blob.slice`; the text is never held as one string), `fromXpar(blobOrUrl)` and `fromPar(...)` (only the chunks of a window are read and decoded; URLs need HTTP Range), `openSource(blob)` (sniffs the type) and `openSourceInWorker(blob, { worker })` (indexing and decoding in a Worker, falling back to chunked async reads on the main thread when no Worker is given). Implement `SubtitleSource` yourself to feed events from anywhere: `{ script, duration, eventCount, readWindow(t0, t1, signal?) }`; windows are half-open on integer ms, events are the structures `parseScript` yields (same ids). Fonts: styles name the starting set, fonts used in overrides are added as their windows arrive, `[Fonts]` is read from the source (`fontSection()`); the missing-font flow works unchanged.
+
+## Heavy scenes: karaoke, OP/ED
+
+An OP/ED can put hundreds of per-letter particles on screen at once (single glyph, `\pos` / `\move`, `\blur`, `\c`, `\t`, `\frz`, `\fscx/y`, `\clip`, `\fad`). One DOM element with CSS filters per particle does not keep up, so PAR draws such events on a canvas: glyph, border, shadow and blur are rasterised **once** into a sprite (a white mask tinted per colour, cached by font / glyph / size / blur under a memory cap) and every frame is one transformed `drawImage` per event; the sprites of events about to start are built ahead of time in spare frame time. Anything more complex (karaoke `\k`, drawings, 3D rotation, shear, wrapped or colliding text) stays DOM, and so does everything when the scene is light or the browser lacks canvas filters. Pixel difference to the DOM path on particle fixtures is at the noise floor; a frame that runs out of build time ships with blurs left out and is finished on the next turn, and every such decision is counted in `getMetrics().render` (lines per path, sprite cache, `detailDropped`, `skipped`, frame time p50/p95). Seeking is cancel-safe: a stale read is aborted and the last seek wins. Numbers and method: [docs/performance.md](docs/performance.md).
 
 ## The Studio
 

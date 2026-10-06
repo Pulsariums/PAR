@@ -108,6 +108,8 @@ Katman, videonun ebeveyn elemanına eklenir (eleman `position: static` ise `rela
 | `providerTimeout` | `number` | `5000` | Sağlayıcı çağrısı başına ms. Susan sağlayıcı "bulunamadı" sayılır. |
 | `onMissingFonts` | `(report, ctrl) => 'continue' \| 'wait' \| Promise` | yok | Font eksikse ne olacağına karar verir. Varsayılan: yedek fontla devam. |
 | `zIndex` | `number` | `1` | Katmanın z-index değeri. |
+| `renderMode` | `'auto' \| 'dom' \| 'canvas'` | `'auto'` | Basit tek harfli olaylar (karaoke parçacıkları) nasıl çizilir: `'auto'` = sahne ağırlaşınca önbellekli sprite'larla canvas, aksi halde DOM; `'dom'` = canvas yok; `'canvas'` = uygun olan her olay. Bkz. [Ağır sahneler](#ağır-sahneler-karaoke-oped). |
+| `spriteCacheMB` | `number` | `96` | Canvas sprite önbelleğinin bellek sınırı (en az kullanılan sprite'lar atılır). |
 
 Geçersiz değerler hata fırlatır (`fps: 5` -> `RangeError`, sıfır boyutlu bölge -> `TypeError`).
 </details>
@@ -178,6 +180,10 @@ par.getSourceStats(); // { windowEvents, windowRange: [başlangıç, bitiş] | n
 ```
 
 Bağdaştırıcılar (`pulsar-ass-renderer/source`): `fromAssText(text)` (ana girişten de dışa aktarılır), `fromAssFile(blob)` (tek akış geçişi küçük bir zaman indeksi kurar, pencereler `Blob.slice` ile okunur; metin hiçbir zaman tek string olarak tutulmaz), `fromXpar(blobOrUrl)` ve `fromPar(...)` (yalnız pencerenin parçaları okunur ve çözülür; URL için HTTP Range gerekir), `openSource(blob)` (türü anlar) ve `openSourceInWorker(blob, { worker })` (indeksleme ve çözme bir Worker'da; Worker verilmezse ana iş parçacığında parçalı asenkron okumaya düşer). Olayları başka yerden beslemek için `SubtitleSource` arayüzünü kendiniz uygulayın: `{ script, duration, eventCount, readWindow(t0, t1, signal?) }`; pencereler tamsayı ms üzerinde yarı açıktır, olaylar `parseScript`'in verdiği yapılardır (aynı id'ler). Fontlar: stiller başlangıç kümesini verir, override'larla kullanılan fontlar pencereleri geldikçe eklenir, `[Fonts]` kaynaktan okunur (`fontSection()`); "font eksik" akışı değişmeden çalışır.
+
+## Ağır sahneler: karaoke, OP/ED
+
+Bir OP/ED aynı anda yüzlerce harf parçacığı gösterebilir (tek harf, `\pos` / `\move`, `\blur`, `\c`, `\t`, `\frz`, `\fscx/y`, `\clip`, `\fad`). Parçacık başına CSS filtreli bir DOM öğesi bunu kaldırmaz; PAR bu olayları canvas'a çizer: harf, kenarlık, gölge ve bulanıklık bir sprite'a **bir kez** işlenir (beyaz bir maske, renge göre boyanır; yazı tipi / harf / boyut / bulanıklığa göre bellek sınırı altında önbelleğe alınır) ve her karede olay başına tek bir dönüşümlü `drawImage` çizilir; yakında başlayacak olayların sprite'ları karede kalan boş sürede önceden üretilir. Daha karmaşık her şey (karaoke `\k`, çizimler, 3B döndürme, eğme, satır kaydırma ya da çarpışan metin) DOM'da kalır; sahne hafifse ya da tarayıcıda canvas filtresi yoksa her şey DOM'dur. DOM yoluna göre piksel farkı parçacık örneklerinde gürültü tabanındadır; sprite üretmeye süresi yetmeyen kare bulanıksız çıkar ve bir sonraki turda tamamlanır, her bu tür karar `getMetrics().render` içinde sayılır (yola göre satır sayısı, sprite önbelleği, `detailDropped`, `skipped`, kare süresi p50/p95). Atlama iptale dayanıklıdır: eski okuma iptal edilir, son atlama kazanır. Sayılar ve yöntem: [docs/performance.md](docs/performance.md).
 
 ## Stüdyo
 
