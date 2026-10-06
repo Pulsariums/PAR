@@ -4,7 +4,7 @@ import { create } from '../src/index';
 import { findBlockOpen, unescapeText } from '../src/parser/textBlocks';
 import { parseScript } from '../src/parser/ScriptParser';
 import { parseText } from '../src/parser/TextParser';
-import { displayText } from '../src/render/FragmentView';
+import { displayText } from '../src/render/displayText';
 import { parseTextModel, printText } from '../src/format/textModel';
 
 const texts = (s: string) => parseText(s).fragments.map((f) => f.text);

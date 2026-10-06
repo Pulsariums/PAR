@@ -4,7 +4,7 @@ import { staticFontEnv } from '../src/fonts/env';
 import { stateFromStyle } from '../src/anim/State';
 import { DEFAULT_STYLE } from '../src/parser/StyleParser';
 import { cssColor } from '../src/render/color';
-import { displayText } from '../src/render/FragmentView';
+import { displayText } from '../src/render/displayText';
 import { boxTransformCss, lineTransformCss } from '../src/render/LineView';
 import { fontCss, fontFamilyCss, paintCss, weightCss } from '../src/render/textCss';
 import { SOFT_BREAK } from '../src/types/script';
