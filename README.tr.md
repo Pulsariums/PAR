@@ -261,13 +261,13 @@ Durumlar, deneme alanındaki özellik test tablosuyla aynıdır; orada her satı
 | `\p<n>` çizimler (`m n l b s p c`), `\pbo` | Çiziliyor | SVG yolu; spline kapatma (`c`) düz kapatmadır. |
 | `\q1` `\q2` | Çiziliyor | Normal sarma / sarma yok. |
 | `\q0` `\q3`, `WrapStyle` 0 ve 3 | Yaklaşık | CSS `text-wrap: balance` kullanır. |
-| `\N` `\n` `\h` | Çiziliyor | |
+| `\N` `\n` `\h` `\{` `\}` TAB | Çiziliyor | libass gibi: her satırın başındaki ve sonundaki (`\N` çevresi dahil) boşluklar kırpılır, TAB boşluktur, `\{` `\}` düz süslü paranteze döner, satır yalnız U+0020'de kırılır (kelime içinde, tireden sonra ya da CJK karakterleri arasında kırılmaz; uzun kelime taşar), `Kerning: yes` yoksa kerning kapalıdır. |
 | BorderStyle 1 ve 3 | Çiziliyor | Kenar+gölge / opak kutu. |
 | Katmanlar, çarpışma dizilimi, yorumlar | Çiziliyor | Satırlar aynı katman içinde dizilir ve yerini korur (alt hizalı yukarı, üst ve orta hizalı aşağı, kenarlık hesaba katılır); `\pos`, `\move`, `\org` ya da herhangi bir `\t` içeren satırlar libass'teki gibi muaftır. `Comment:` atlanır. |
 | `\fe` | Desteklenmiyor | Ayrıştırılır ve yok sayılır (web yazı tipleri için anlamı yok). |
 | Olay `Effect` alanı (`Banner;`, `Scroll up;`, `Scroll down;`) | Desteklenmiyor | |
 | Çizimlerde `\kf` süpürmesi | Desteklenmiyor | Çizimler rengi sonda değiştirir. |
-| `[Graphics]`, BorderStyle 4, LayoutResX/Y düzeltmesi | Desteklenmiyor | `LayoutResX/Y` ayrıştırılır ama kullanılmaz. |
+| `[Graphics]`, BorderStyle 4, LayoutResX/Y koordinat düzeltmesi | Desteklenmiyor | `LayoutResX/Y` yalnızca kenarlık/gölge/bulanıklık ölçeğinde kullanılan depolama boyutunu belirler (aşağıda ScaledBorderAndShadow), koordinatları değil. |
 </details>
 
 <details>

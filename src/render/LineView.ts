@@ -89,7 +89,10 @@ export class LineView {
         'font-size': '0px',
         'line-height': '0px',
         'white-space': line.wrapStyle === 2 ? 'pre' : 'pre-wrap',
-        'overflow-wrap': 'break-word',
+        // libass breaks lines only at U+0020 and never inside a word (a too-long word overflows).
+        'overflow-wrap': 'normal',
+        'word-break': 'keep-all',
+        'font-kerning': line.kerning ? 'auto' : 'none',
         'text-wrap': line.wrapStyle === 0 || line.wrapStyle === 3 ? 'balance' : 'wrap',
         'text-align': ax === 0 ? 'left' : ax === 1 ? 'right' : 'center',
         'transform-origin': `${ax * 100}% ${ay * 100}%`,

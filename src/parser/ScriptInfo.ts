@@ -47,6 +47,7 @@ export const parseScriptInfo = (lines: SourceLine[]): ScriptInfo => {
     // Missing key => no (libass). The ScriptParser flips it to yes for a custom style Format line (libass compat rule).
     scaledBorderAndShadow: lower.scaledborderandshadow === undefined ? false : parseBool(lower.scaledborderandshadow),
     scaledBorderAndShadowSet: lower.scaledborderandshadow !== undefined,
+    kerning: lower.kerning !== undefined && parseBool(lower.kerning),
     wrapStyle: wrap >= 0 && wrap <= 3 ? wrap : 0,
   };
 };

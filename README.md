@@ -261,13 +261,13 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 | `\p<n>` drawings (`m n l b s p c`), `\pbo` | Rendered | SVG path; spline close (`c`) is a straight close. |
 | `\q1` `\q2` | Rendered | Normal wrap / no wrap. |
 | `\q0` `\q3`, `WrapStyle` 0 and 3 | Approximate | Uses CSS `text-wrap: balance`. |
-| `\N` `\n` `\h` | Rendered | |
+| `\N` `\n` `\h` `\{` `\}` TAB | Rendered | Like libass: spaces at the start and end of every line (also around `\N`) are trimmed, TAB is a space, `\{` `\}` are literal braces, lines break only at U+0020 (no breaks inside words, after hyphens or between CJK characters; a longer word overflows), kerning is off unless `Kerning: yes`. |
 | BorderStyle 1 and 3 | Rendered | Outline+shadow / opaque box. |
 | Layers, collision stacking, comments | Rendered | Lines stack within the same layer and keep their place (bottom aligned up, top and middle aligned down, outline counted); lines with `\pos`, `\move`, `\org` or any `\t` are exempt, as in libass. `Comment:` is skipped. |
 | `\fe` | Not supported | Parsed and ignored (no meaning for web fonts). |
 | Event `Effect` (`Banner;`, `Scroll up;`, `Scroll down;`) | Not supported | |
 | `\kf` sweep on drawings | Not supported | Drawings switch colour at the end. |
-| `[Graphics]`, BorderStyle 4, LayoutResX/Y correction | Not supported | `LayoutResX/Y` is parsed, not used. |
+| `[Graphics]`, BorderStyle 4, LayoutResX/Y coordinate correction | Not supported | `LayoutResX/Y` only sets the storage size used for the border/shadow/blur scale (see ScaledBorderAndShadow below), not coordinates. |
 </details>
 
 <details>

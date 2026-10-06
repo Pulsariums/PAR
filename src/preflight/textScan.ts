@@ -1,6 +1,6 @@
 import { lexOverrides } from '../parser/TagLexer';
 import { parseNum } from '../parser/TagValues';
-import { unescapeText } from '../parser/TextParser';
+import { findBlockOpen, unescapeText } from '../parser/textBlocks';
 import { addChars } from '../fonts/usage';
 import { cleanName, normalizeName } from '../fonts/resolver';
 import type { AssStyle } from '../types/script';
@@ -37,7 +37,7 @@ export const scanEventText = (
   let pos = 0;
   const emit = (seg: string): void => {
     if (drawing > 0 || seg === '') return;
-    const shown = seg.indexOf('\\') === -1 ? seg : unescapeText(seg);
+    const shown = seg.indexOf('\\') === -1 && seg.indexOf('\t') === -1 ? seg : unescapeText(seg);
     if (shown.trim() === '') return;
     const key = normalizeName(st.fn);
     let use = uses.get(key);
@@ -58,7 +58,7 @@ export const scanEventText = (
     }
   };
   while (pos < text.length) {
-    const open = text.indexOf('{', pos);
+    const open = findBlockOpen(text, pos);
     const close = open === -1 ? -1 : text.indexOf('}', open);
     if (close === -1) { emit(text.slice(pos)); break; }
     emit(text.slice(pos, open));

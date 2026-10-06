@@ -19,6 +19,8 @@ export interface PreparedLine {
   positioned: boolean;
   /** Takes part in collision stacking (see `layout/Stacking.ts`). */
   stacks: boolean;
+  /** `Kerning: yes` in the script header; libass shapes without kerning by default. */
+  kerning: boolean;
   /** Needs shadow/outline/fill plates (blur or translucent fill with a border), see `anim/plated.ts`. */
   plated: boolean;
   /** True when anything changes over time (`\t`, `\move`, `\fad`, `\fade`, karaoke). */
@@ -46,6 +48,7 @@ export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: S
       v: ev.marginV || style.marginV,
     },
     positioned: !!(lt.pos || lt.move),
+    kerning: info.kerning,
     stacks: takesPartInStacking(lt, transitions.length > 0),
     plated: isPlated(ev, style, styles),
     animated,

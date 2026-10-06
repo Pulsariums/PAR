@@ -1,9 +1,11 @@
-import { SOFT_BREAK, type Fragment, type LineTags, type StateOp } from '../types/script';
+import type { Fragment, LineTags, StateOp } from '../types/script';
 
 import { parseDrawing } from './DrawingParser';
 import { KaraokeTracker } from './KaraokeTracker';
 import { mergeLineTags } from './LineTags';
 import { parseBlock } from './TagParser';
+import { findBlockOpen, unescapeText } from './textBlocks';
+import { trimLines } from './trimLines';
 
 export interface ParsedText {
   fragments: Fragment[];
@@ -11,11 +13,7 @@ export interface ParsedText {
   unknownTags: string[];
 }
 
-const BLOCK_RE = /^\{[^}]*\}$/;
-
-/** `\N` => newline, `\n` => soft break, `\h` => non-breaking space. Other backslashes stay literal. */
-export const unescapeText = (s: string): string =>
-  s.replace(/\\([Nnh])/g, (_m, c: string) => (c === 'N' ? '\n' : c === 'n' ? SOFT_BREAK : ' '));
+export { unescapeText };
 
 /**
  * Event text => fragments + line tags. Deterministic and pure.
@@ -30,23 +28,32 @@ export const parseText = (rawText: string): ParsedText => {
   let drawingScale = 0;
   const unknownTags: string[] = [];
 
-  for (const part of rawText.split(/(\{[^}]*\})/g)) {
-    if (!part) continue;
-    if (BLOCK_RE.test(part)) {
-      const blk = parseBlock(part);
-      ops = ops.concat(blk.ops);
-      if (blk.drawing !== undefined) drawingScale = blk.drawing;
-      lineTags = mergeLineTags(lineTags, blk.line);
-      kara.apply(blk.kara);
-      unknownTags.push(...blk.unknown);
-      continue;
-    }
+  const text = (part: string): void => {
+    if (!part) return;
     const frag: Fragment = { text: '', ops, drawingScale, karaoke: kara.take() };
     if (drawingScale > 0) frag.drawing = parseDrawing(part);
     else frag.text = unescapeText(part);
     if (!frag.karaoke) delete frag.karaoke;
     fragments.push(frag);
     ops = [];
+  };
+  let pos = 0;
+  while (pos < rawText.length) {
+    const open = findBlockOpen(rawText, pos);
+    const close = open === -1 ? -1 : rawText.indexOf('}', open + 1);
+    if (close === -1) {
+      text(rawText.slice(pos)); // no (more) closed block: the rest, `{` included, is plain text
+      break;
+    }
+    text(rawText.slice(pos, open));
+    const blk = parseBlock(rawText.slice(open, close + 1));
+    ops = ops.concat(blk.ops);
+    if (blk.drawing !== undefined) drawingScale = blk.drawing;
+    lineTags = mergeLineTags(lineTags, blk.line);
+    kara.apply(blk.kara);
+    unknownTags.push(...blk.unknown);
+    pos = close + 1;
   }
+  trimLines(fragments);
   return { fragments, lineTags, unknownTags };
 };

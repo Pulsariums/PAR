@@ -1,3 +1,5 @@
+import { findBlockOpen } from '../parser/textBlocks';
+
 import { parseDraw, printDraw, type Draw } from './drawModel';
 import { fmtNum, parseNum, type Num } from './num';
 import { matchTag, TAG_P, TAG_T, TAG_BY_ID, VERB_ID, type TagDef } from './tagTable';
@@ -175,7 +177,7 @@ export const parseTextModel = (text: string): Seg[] => {
     segs.push({ k: 'lit', s });
   };
   while (i < text.length) {
-    const open = text.indexOf('{', i);
+    const open = findBlockOpen(text, i);
     const close = open === -1 ? -1 : text.indexOf('}', open + 1);
     if (close === -1) {
       lit(text.slice(i));
