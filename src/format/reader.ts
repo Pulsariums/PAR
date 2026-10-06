@@ -157,6 +157,7 @@ export class XparFile {
 
   /** Dialogue lines (as decoded text) visible in [t0, t1), in file order, with their ordinals. */
   async readWindowLines(t0: number, t1: number, signal?: AbortSignal): Promise<Array<{ ordinal: number; fmt: number; line: string }>> {
+    throwIfAborted(signal);
     const picked: DecodedEvent[] = [];
     const a = t0 * 1000 - 1;
     const b = t1 * 1000 + 1;
