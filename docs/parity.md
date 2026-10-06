@@ -13,6 +13,7 @@ JASSUB code is used. Scope: logic and layout rules, not pixel-identical rasteris
 | Karaoke | `\k` without a number = 100 cs; continuation text (`{\kf100}Hel{\b1}lo`) has zero duration and flips when its syllable ends (no proportional split) |
 | Collisions | Same layer only; lines with `\pos`, `\move`, `\org` or any `\t` are neither shifted nor counted; bottom aligned move up, top and middle aligned move down (`\an4-6` now stack); the rectangle includes the outline. `Collisions: Reverse` is not implemented (libass has no such setting either) |
 | Text | Spaces at line start/end and around `\N` trimmed (NBSP kept); TAB = space; `\{` `\}` literal; breaks only at U+0020 (`overflow-wrap: normal`, `word-break: keep-all`, word joiner after hyphens/dashes/slashes/`!?|`); `Kerning:` header (default off = `font-kerning: none`) |
+| Parser limits | Event text is scanned in linear time (`{` x 80k and `{\b1}` x 80k parse in tens of ms); non-finite numbers never reach styles or SVG; drawing coordinates clamp to +-1e7 and a drawing keeps at most 100 000 points; `\blur` <= 100, `\be` <= 127 |
 
 ## Intentionally different
 

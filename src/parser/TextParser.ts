@@ -47,11 +47,11 @@ export const parseText = (rawText: string): ParsedText => {
     }
     text(rawText.slice(pos, open));
     const blk = parseBlock(rawText.slice(open, close + 1));
-    ops = ops.concat(blk.ops);
+    for (const op of blk.ops) ops.push(op); // push, never concat: `{\b1}` x 80 000 must stay linear
     if (blk.drawing !== undefined) drawingScale = blk.drawing;
     lineTags = mergeLineTags(lineTags, blk.line);
     kara.apply(blk.kara);
-    unknownTags.push(...blk.unknown);
+    for (const u of blk.unknown) unknownTags.push(u);
     pos = close + 1;
   }
   trimLines(fragments);
