@@ -1,15 +1,11 @@
+import { parseDraw, printDraw, type Draw } from './drawModel';
 import { fmtNum, parseNum, type Num } from './num';
 import { matchTag, TAG_P, TAG_T, TAG_BY_ID, VERB_ID, type TagDef } from './tagTable';
 
 /** Lossless structured view of an event's Text field. `printText(parseText(s)) === s` is enforced, never assumed. */
-export interface DrawGroup {
-  cmd: string;
-  nums: Num[];
-}
-export interface Draw {
-  groups: DrawGroup[];
-  trail: boolean;
-}
+export { parseDraw, printDraw };
+export type { Draw, DrawGroup } from './drawModel';
+
 export type Tag =
   | { k: 'v'; raw: string }
   | { k: 'n'; id: number; nums: Num[] }
@@ -23,33 +19,6 @@ export type Seg =
   | { k: 'blk'; pre: string; tags: Tag[] };
 
 const MAX_DEPTH = 3;
-const CMDS = 'mnlbspc';
-
-export const parseDraw = (s: string): Draw | null => {
-  const trail = s.endsWith(' ');
-  const core = trail ? s.slice(0, -1) : s;
-  if (core === '') return null;
-  const groups: DrawGroup[] = [];
-  for (const tok of core.split(' ')) {
-    if (tok.length === 1 && CMDS.includes(tok)) {
-      groups.push({ cmd: tok, nums: [] });
-      continue;
-    }
-    const n = parseNum(tok);
-    if (!n || groups.length === 0) return null;
-    groups[groups.length - 1].nums.push(n);
-  }
-  return { groups, trail };
-};
-
-export const printDraw = (d: Draw): string => {
-  const parts: string[] = [];
-  for (const g of d.groups) {
-    parts.push(g.cmd);
-    for (const n of g.nums) parts.push(fmtNum(n));
-  }
-  return parts.join(' ') + (d.trail ? ' ' : '');
-};
 
 /** Splits `\a\b(\c)` at depth-0 backslashes; the pieces concatenate back to the input. */
 const splitPieces = (s: string): string[] => {

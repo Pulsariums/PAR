@@ -1,5 +1,5 @@
 import { Baker } from '../../src/format/bake';
-import { pump } from '../../src/format/encoder';
+import { pump } from '../../src/format/pump';
 
 import { fileSize, mb, openOut, readChunks } from './node-io';
 

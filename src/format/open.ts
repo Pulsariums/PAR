@@ -1,9 +1,10 @@
 import { decodeBlock } from './codec';
 import { FLAG_LOSSY, FLAG_STORED, FOOTER_SIZE, HEADER_SIZE, MAGIC, readFooter, readHeader, type BlockRef } from './container';
 import { crc32 } from './crc32';
-import { encodeContainer, readStored } from './encoder';
+import { encodeContainer, readStored } from './encodeApi';
 import { fail } from './errors';
-import { decodeIndex, decodeMeta } from './meta';
+import { decodeIndex } from './indexBlock';
+import { decodeMeta } from './meta';
 import { XparFile } from './reader';
 import { toHex } from './sha256';
 import { toSource, type ByteSource, type XparSource } from './source';

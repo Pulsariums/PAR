@@ -3,7 +3,8 @@ import { CODEC_DEFLATE, CODEC_IDS, CODEC_RCF, CODEC_STORED, encodeBlock, type Co
 import { crc32 } from './crc32';
 import { FLAG_LOSSY, writeFooter, writeHeader, type BlockRef } from './container';
 import { fail } from './errors';
-import { encodeIndex, encodeMeta, type ChunkRef, type FontRef, type Meta, type MiscLine, type Provenance } from './meta';
+import { encodeIndex, type ChunkRef } from './indexBlock';
+import { encodeMeta, type FontRef, type Meta, type MiscLine, type Provenance } from './meta';
 
 export interface EncodeOptions {
   /** Entropy coder: `'rc'` (own ASS-stream context-mixing range coder, default), `'deflate'` (CompressionStream), `'stored'`. */

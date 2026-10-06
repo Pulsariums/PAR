@@ -1,14 +1,10 @@
 import { modelFields, type ChunkEvent } from './chunk';
-import { fail, XparError } from './errors';
-import { FLAG_STORED, HEADER_SIZE, readHeader, writeHeader } from './container';
-import { crc32 } from './crc32';
+import { fail } from './errors';
 import { Sha256 } from './sha256';
 import { ENCODER_ID } from './version';
 import { LineSplitter } from './lines';
 import { LineScanner } from './scan';
-import { DEFAULTS, XparWriter, type EncodeOptions, type Sink } from './writer';
-
-export { HEADER_SIZE, readHeader };
+import { XparWriter, type EncodeOptions, type Sink } from './writer';
 
 const DEC = new TextDecoder('utf-8', { fatal: true });
 const join2 = (a: Uint8Array, b: Uint8Array): Uint8Array => {
@@ -115,105 +111,3 @@ export class XparEncoder {
     });
   }
 }
-
-export type XparInput = string | Uint8Array | Blob | ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>;
-const SLICE = 1 << 20;
-
-/** Feeds any input shape into an encoder in bounded slices. */
-export const pump = async (input: XparInput, push: (b: Uint8Array) => Promise<void>): Promise<void> => {
-  if (typeof input === 'string') input = new TextEncoder().encode(input);
-  if (input instanceof Uint8Array) {
-    for (let p = 0; p < input.length; p += SLICE) await push(input.subarray(p, Math.min(input.length, p + SLICE)));
-    return;
-  }
-  if (typeof Blob !== 'undefined' && input instanceof Blob) input = input.stream();
-  if (typeof (input as ReadableStream<Uint8Array>).getReader === 'function') {
-    const reader = (input as ReadableStream<Uint8Array>).getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) return;
-      await push(value);
-    }
-  }
-  if (Symbol.asyncIterator in (input as object)) {
-    for await (const b of input as AsyncIterable<Uint8Array>) await push(b);
-    return;
-  }
-  fail('INVALID_INPUT', 'unsupported input type');
-};
-
-const collect = (): { sink: Sink; result: () => Uint8Array } => {
-  const parts: Uint8Array[] = [];
-  let total = 0;
-  return {
-    sink: (b) => {
-      parts.push(b);
-      total += b.length;
-    },
-    result: () => {
-      const out = new Uint8Array(total);
-      let p = 0;
-      for (const c of parts) {
-        out.set(c, p);
-        p += c.length;
-      }
-      return out;
-    },
-  };
-};
-
-/** Container encode without the "never larger than the input" fallback. */
-export const encodeContainer = async (input: XparInput, opts: EncodeOptions = {}): Promise<Uint8Array> => {
-  const c = collect();
-  const enc = new XparEncoder(c.sink, { totalBytes: knownSize(input), ...opts });
-  await pump(input, (b) => enc.push(b));
-  await enc.finish();
-  return c.result();
-};
-
-const knownSize = (i: XparInput): number | undefined =>
-  typeof i === 'string' ? undefined : i instanceof Uint8Array ? i.length : typeof Blob !== 'undefined' && i instanceof Blob ? i.size : undefined;
-
-/** Stored form: header + the ASS bytes + CRC-32. Output is input + 20 bytes at worst. */
-export const storedForm = (input: Uint8Array): Uint8Array => {
-  const out = new Uint8Array(HEADER_SIZE + input.length + 4);
-  out.set(writeHeader(FLAG_STORED));
-  out.set(input, HEADER_SIZE);
-  new DataView(out.buffer).setUint32(out.length - 4, crc32(input), true);
-  return out;
-};
-
-export const readStored = (file: Uint8Array): Uint8Array => {
-  const h = readHeader(file);
-  if (!(h.flags & FLAG_STORED)) fail('INVALID_INPUT', 'not a stored-form file');
-  if (file.length < HEADER_SIZE + 4) throw new XparError('TRUNCATED', 'stored file is truncated');
-  const body = file.subarray(HEADER_SIZE, file.length - 4);
-  if (crc32(body) !== new DataView(file.buffer, file.byteOffset, file.length).getUint32(file.length - 4, true)) fail('CHECKSUM', 'stored payload is corrupt');
-  return body;
-};
-
-const KEEP_LIMIT = 8 * 1024 * 1024;
-
-/**
- * Encodes a whole input. The result is NEVER larger than input + 20 bytes: when modelling does not pay (tiny or
- * incompressible files) the stored form is emitted instead. Streams are never held whole: only inputs up to 8 MiB are kept for that check.
- */
-export const encodeXpar = async (input: XparInput, opts: EncodeOptions = {}): Promise<Uint8Array> => {
-  let keep: Uint8Array | null = null;
-  if (typeof input === 'string') keep = new TextEncoder().encode(input);
-  else if (input instanceof Uint8Array) keep = input;
-  else if (typeof Blob !== 'undefined' && input instanceof Blob && input.size <= KEEP_LIMIT) keep = new Uint8Array(await input.arrayBuffer());
-  const x = await encodeContainer(keep ?? input, opts);
-  return keep && x.length > keep.length + 20 ? storedForm(keep) : x;
-};
-
-/** Streaming variant: output goes to `sink` as chunks complete (small known inputs go through `encodeXpar` and its stored fallback). */
-export const encodeXparTo = async (input: XparInput, sink: Sink, opts: EncodeOptions = {}): Promise<void> => {
-  const size = typeof input === 'string' ? input.length : knownSize(input);
-  if (size !== undefined && size <= KEEP_LIMIT / 2) return void (await sink(await encodeXpar(input, opts)));
-  const enc = new XparEncoder(sink, { totalBytes: size, ...opts });
-  await pump(input, (b) => enc.push(b));
-  await enc.finish();
-};
-
-export { DEFAULTS };

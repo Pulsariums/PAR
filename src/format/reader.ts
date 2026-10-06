@@ -12,7 +12,8 @@ import { FLAG_LOSSY } from './container';
 import { crc32 } from './crc32';
 import { fromUtf8 } from './bytes';
 import { fail } from './errors';
-import type { ChunkRef, FontRef, Meta, Provenance } from './meta';
+import type { ChunkRef } from './indexBlock';
+import type { FontRef, Meta, Provenance } from './meta';
 import type { ByteSource } from './source';
 
 const KEPT_SECTIONS = new Set(['script info', 'v4+ styles', 'v4 styles', 'v4 styles+', 'events']);

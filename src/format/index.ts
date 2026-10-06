@@ -1,5 +1,7 @@
 export { XparError, type XparErrorCode } from './errors';
-export { encodeXpar, encodeXparTo, XparEncoder, type XparInput } from './encoder';
+export { encodeXpar, encodeXparTo } from './encodeApi';
+export { XparEncoder } from './encoder';
+export type { XparInput } from './pump';
 export type { EncodeOptions, Sink, Progress } from './writer';
 export { XparFile, type XparFont } from './reader';
 export { openXpar, openPar, parHeader, sniff, parFileName, FILE_TYPES, type ParHeader, type SniffKind } from './open';

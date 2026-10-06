@@ -3,7 +3,7 @@ import { gzipSync } from 'node:zlib';
 
 import { decodeXparTo, encodeXparTo, indexAss, openXpar, type EncodeOptions } from '../../src/format';
 import { Baker } from '../../src/format/bake';
-import { pump } from '../../src/format/encoder';
+import { pump } from '../../src/format/pump';
 
 import { baselines } from './bench-base';
 import { fileSize, mb, newHash, readChunks } from './node-io';

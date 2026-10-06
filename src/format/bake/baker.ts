@@ -12,6 +12,7 @@ import { bakeText } from './textBake';
 import { defaultParams, frameAtOrAfter, frameTime, gridCs, quanta, type BakeParams, type Quanta } from './params';
 
 const DEC = new TextDecoder('utf-8');
+const PENDING_CAP = 20000;
 const ORDER = ['script info', 'v4+ styles', 'v4 styles', 'v4 styles+', 'events'];
 
 export interface BakeStats {
@@ -74,14 +75,14 @@ export class Baker {
     return this.q;
   }
 
+  /** Writes out pending merge candidates from the oldest end: those that can no longer be extended, or any beyond the cap. */
   private flushPending(all: boolean): void {
     const limit = this.maxStart - 200;
     for (const [k, e] of this.pending) {
-      if (all || e.m!.endCs < limit) {
-        this.writer.addEvent(e, 120 + e.m!.text.length);
-        this.stats.eventsOut++;
-        this.pending.delete(k);
-      }
+      if (!all && e.m!.endCs >= limit && this.pending.size <= PENDING_CAP) break;
+      this.writer.addEvent(e, 120 + e.m!.text.length);
+      this.stats.eventsOut++;
+      this.pending.delete(k);
     }
   }
 
@@ -137,7 +138,7 @@ export class Baker {
       this.writer.addEvent(ev, 120 + out.text.length);
       this.stats.eventsOut++;
     }
-    if (this.pending.size > 20000 || this.stats.eventsIn % 4096 === 0) this.flushPending(false);
+    if (this.pending.size > PENDING_CAP || this.stats.eventsIn % 1024 === 0) this.flushPending(false);
   }
 
   private flushKey(key: string): void {
