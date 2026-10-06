@@ -1,3 +1,4 @@
+import { initConvert } from './convert';
 import { initHero } from './hero';
 import { initI18n, onLang, t } from './i18n/i18n';
 import type { Dict } from './i18n/en';
@@ -18,6 +19,7 @@ const renderFeatures = () => {
 };
 
 initTheme();
+initConvert(document.getElementById('convert-root') as HTMLElement);
 initPlayground(document.getElementById('playground') as HTMLElement);
 initStudio(document.getElementById('studio-root') as HTMLElement);
 initLab(document.getElementById('lab-root') as HTMLElement);

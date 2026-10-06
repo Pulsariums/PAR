@@ -1,3 +1,4 @@
+import { convertTr } from './convertTr';
 import { libTr } from './libTr';
 import { labTr } from './labTr';
 import { studioTr } from './studioTr';
@@ -55,5 +56,6 @@ export const tr: Dict = {
   'foot.note': 'Bu depodaki yerel PAR kaynağıyla çizilir.',
   ...libTr,
   ...labTr,
+  ...convertTr,
   ...studioTr,
 };

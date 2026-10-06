@@ -15,7 +15,7 @@ export const classifyFiles = (files: readonly File[], subFile: RegExp = SUB_DEFA
 });
 
 /** File drag and drop on `zone`: dashed outline while dragging, `onFiles` gets every dropped file. */
-const watchDrop = (zone: HTMLElement, onFiles: (files: File[]) => void): void => {
+export const watchDrop = (zone: HTMLElement, onFiles: (files: File[]) => void): void => {
   const isFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files') ?? false;
   zone.addEventListener('dragover', (e) => {
     if (!isFiles(e)) return;

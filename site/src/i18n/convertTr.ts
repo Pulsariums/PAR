@@ -1,0 +1,18 @@
+export const convertTr = {
+  'nav.convert': 'Dönüştür',
+  'cv.title': 'Hızlı dönüştürücü', 'cv.sub': 'ASS dosyasını XPAR veya PAR yap, ya da geri çevir. Tarayıcında çalışır; dosya cihazından çıkmaz.',
+  'cv.drop': '.ass, .ssa, .xpar veya .par dosyalarını buraya bırak, ya da', 'cv.pick': 'Dosya seç',
+  'cv.fps': 'PAR kare hızı', 'cv.fpsCustom': 'özel', 'cv.fpsCustomLabel': 'Özel kare hızı', 'cv.fpsBad': '1 ile 1000 arasında bir sayı gir.',
+  'cv.verify': 'Gidiş dönüşü doğrula (SHA-256)', 'cv.verifyHint': 'XPAR yeniden çözülüp girdiyle karşılaştırılır. 20 MB üstü dosyalarda, kutuyu kendin işaretlemedikçe atlanır.',
+  'cv.k.ass': 'ASS', 'cv.k.xpar': 'XPAR (kayıpsız)', 'cv.k.par': 'PAR (kayıplı)',
+  'cv.toXpar': 'XPAR\'a çevir (kayıpsız)', 'cv.toPar': 'PAR\'a çevir (kayıplı)', 'cv.toAss': 'ASS\'ye çevir',
+  'cv.cancel': 'İptal', 'cv.remove': 'Kaldır', 'cv.removeLabel': '{name} dosyasını listeden kaldır', 'cv.download': 'İndir', 'cv.downloadLabel': '{name} dosyasını indir',
+  'cv.ph.queued': 'Sırada', 'cv.ph.encode': 'Dönüştürülüyor', 'cv.ph.verify': 'Doğrulanıyor', 'cv.busy': '{phase} %{pct}', 'cv.busyNoPct': '{phase}...',
+  'cv.done': '{input} → {output} ({ratio}), {s} sn',
+  'cv.verified': 'Gidiş dönüş doğrulandı: çözülen metnin SHA-256 değeri girdiyle aynı.', 'cv.checked': 'Dosyada saklanan SHA-256 ile eşleşiyor: birebir özgün dosya.',
+  'cv.parNote': 'PAR kayıplıdır: bu, pişirilmiş ASS\'dir, özgün dosyan DEĞİL. Özgün ASS\'yi veya bir XPAR\'ı sakla.',
+  'cv.parOut': 'PAR kayıplıdır, özgün ASS geri kurulamaz ({fps} fps). Birleşen kare {m}, atılan olay {d}, düzleştirilen animasyon {c}.',
+  'cv.err.unknown': 'ASS, SSA, XPAR veya PAR dosyası değil (uzantıya değil, içeriğe bakılarak anlaşıldı).', 'cv.err.empty': 'Dosya boş.',
+  'cv.err.read': 'Dosya okunamadı: {error}', 'cv.err.fail': 'Başarısız: {error}',
+  'cv.live.done': '{name} tamamlandı', 'cv.live.fail': '{name} başarısız',
+};

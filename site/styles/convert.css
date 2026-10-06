@@ -1,0 +1,36 @@
+/* Quick converter card: compact, dense, every control always visible (no hover-only). */
+#convert-root.wrap { padding-block: 0 20px; }
+.cv { padding: 12px 14px; display: grid; gap: 8px; }
+.cv-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.cv-top h2 { font-size: 16px; margin: 0; }
+.cv-sub { margin: 0; font-size: 12px; line-height: 1.4; }
+.cv-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; border: 2px dashed var(--line); border-radius: 10px; background: var(--bg-2); font-size: 13px; }
+.cv.dragging { outline: 2px dashed var(--accent); outline-offset: 3px; }
+.cv.dragging .cv-drop { border-color: var(--accent); background: var(--accent-soft); }
+.cv-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 12.5px; }
+.cv-opt { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; }
+.cv-opt select, .cv-custom { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 8px; min-height: 34px; padding: 2px 8px; }
+.cv-custom { width: 7.5em; }
+.cv-custom.bad { border-color: var(--bad); }
+.cv-opt input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+.cv-hint { margin: 0; line-height: 1.4; }
+.cv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cv-list:empty { display: none; }
+.cv-row { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--bg); display: grid; gap: 6px; min-width: 0; }
+.cv-head { display: flex; align-items: center; gap: 4px 10px; min-width: 0; font-size: 13px; }
+.cv-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-meta { font-size: 12px; white-space: nowrap; margin-right: auto; }
+.cv-rm { flex: none; }
+.cv-acts .btn.on { border-color: var(--accent); color: var(--accent); }
+.cv-acts, .cv-busy, .cv-out { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.cv-row [hidden] { display: none !important; }
+.cv-bar { flex: 1 1 140px; height: 8px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.cv-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s linear; }
+.cv-bar.indet i { animation: cv-slide 1.2s ease-in-out infinite alternate; width: 35% !important; }
+@keyframes cv-slide { from { margin-left: 0; } to { margin-left: 65%; } }
+@media (prefers-reduced-motion: reduce) { .cv-bar.indet i { animation: none; } }
+.cv-btext, .cv-otext { font-size: 12px; color: var(--muted); }
+.cv-note { margin: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.cv-note.warn { color: var(--warn); }
+.cv .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 480px) { .cv { padding: 10px; } .cv-acts .btn, .cv-out .btn { flex: 1 1 100%; } .cv-out .btn { white-space: normal; text-align: center; overflow-wrap: anywhere; } }
