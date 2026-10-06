@@ -1,0 +1,12 @@
+export { XparError, type XparErrorCode } from './errors';
+export { encodeXpar, encodeXparTo, XparEncoder, type XparInput } from './encoder';
+export type { EncodeOptions, Sink, Progress } from './writer';
+export { XparFile, type XparFont } from './reader';
+export { openXpar, openPar, parHeader, sniff, parFileName, FILE_TYPES, type ParHeader, type SniffKind } from './open';
+export type { Provenance } from './meta';
+export { Sha256, toHex } from './sha256';
+export { ENCODER_ID, FORMAT_VERSION } from './version';
+export { decodeXpar, decodeXparTo } from './fullDecode';
+export { bytesSource, blobSource, urlSource, type ByteSource, type XparSource } from './source';
+export { indexAss, AssIndex, type AssIndexData, type AssIndexOptions, type AssRange } from './assIndex';
+export * from './bake';
