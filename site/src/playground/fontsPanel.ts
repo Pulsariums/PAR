@@ -3,18 +3,11 @@ import { t } from '../i18n/i18n';
 import type { Dict } from '../i18n/en';
 import { TEST_FAMILY, testFontBytes } from '../presets/fonts';
 
+import { $, el } from './dom';
 import type { Player } from './player';
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const KEY: Record<FontStatus, keyof Dict> = { embedded: 'st.embedded', user: 'st.user', local: 'st.local', system: 'st.system', missing: 'st.missing' };
-const CLASS: Record<FontStatus, string> = { embedded: 'rendered', user: 'rendered', local: 'rendered', system: 'system', missing: 'unsupported' };
-
-const el = (tag: string, cls = '', text = ''): HTMLElement => {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text) n.textContent = text;
-  return n;
-};
+const KEY: Record<FontStatus, keyof Dict> = { embedded: 'st.embedded', user: 'st.user', provider: 'st.provider', local: 'st.local', system: 'st.system', missing: 'st.missing' };
+const CLASS: Record<FontStatus, string> = { embedded: 'rendered', user: 'rendered', provider: 'rendered', local: 'rendered', system: 'system', missing: 'unsupported' };
 const chip = (s: FontStatus): HTMLElement => el('span', `status ${CLASS[s]}`, t(KEY[s]));
 
 /** Notes under a used font: synthetic bold/italic, unverifiable probe, size factor. Names come from files: textContent only. */
@@ -30,6 +23,7 @@ const notes = (f: FontReportEntry): string => {
 
 const usedRow = (f: FontReportEntry): HTMLElement => {
   const li = el('li');
+  li.dataset.name = f.name;
   li.append(chip(f.status), el('b', 'fname', f.name), el('span', 'fnote', notes(f)));
   return li;
 };
@@ -53,6 +47,19 @@ export const initFonts = (player: Player) => {
     return li;
   };
 
+  let gen = 0;
+  /** Adds "lacks N characters used here" to used fonts whose loaded face has no glyph for them (needs the preflight report). */
+  const annotate = (): void => {
+    const mine = ++gen;
+    void par.preflight().then((r) => {
+      if (mine !== gen) return;
+      for (const e of r.resolved) {
+        const li = e.missingGlyphs ? $('fontUsed').querySelector(`li[data-name="${CSS.escape(e.name)}"]`) : null;
+        if (li && e.missingGlyphs) li.append(el('span', 'fnote err', t('fonts.glyphs', { n: e.missingGlyphs.count, list: e.missingGlyphs.sample.slice(0, 12).map((c) => String.fromCodePoint(c)).join(' ') })));
+      }
+    });
+  };
+
   const draw = () => {
     const report = par.getFontReport();
     const used = $('fontUsed');
@@ -60,6 +67,7 @@ export const initFonts = (player: Player) => {
     const loaded = par.listFonts();
     $('fontLoaded').replaceChildren(...(loaded.length ? loaded.map(loadedRow) : [el('li', 'muted', t('fonts.noneLoaded'))]));
     $('fontMissing').textContent = report.missing.length ? t('fonts.missing', { names: report.missing.join(', ') }) : '';
+    annotate();
     if (report.pending) say(t('fonts.loading'));
     else if (status.textContent === t('fonts.loading')) say('');
   };

@@ -14,6 +14,8 @@ export interface PoolFace {
   boldFlag: boolean;
   ratio: number | null;
   source: FontSourceKind;
+  /** Mapped code points (see `coverage.ts`), null when unknown. */
+  coverage?: Uint32Array | null;
 }
 
 export interface Resolved {
@@ -40,7 +42,7 @@ export interface ResolveEnv {
   probe: FontProbe;
 }
 
-const PRIORITY: Record<FontSourceKind, number> = { user: 0, embedded: 1, local: 2 };
+const PRIORITY: Record<FontSourceKind, number> = { user: 0, embedded: 1, provider: 2, local: 3 };
 
 /** ASS name as written, minus surrounding spaces and the leading `@` (vertical writing). */
 export const cleanName = (fn: string): string => fn.trim().replace(/^@/, '').trim();
@@ -64,8 +66,9 @@ export const fontFamilyCss = (fn: string, fontMap: Record<string, string>): stri
 const score = (f: PoolFace, weight: number, italic: boolean): number =>
   (f.italic === italic ? 0 : 10000) + Math.abs(f.weight - weight) + PRIORITY[f.source] / 10;
 
-const byName = (faces: readonly PoolFace[], key: string, local: boolean): { hits: PoolFace[]; viaFamily: boolean } | null => {
-  const pool = faces.filter((f) => (f.source === 'local') === local);
+/** `late` = the provider / local tier (consulted after `fontMap`), otherwise the user / embedded tier. */
+const byName = (faces: readonly PoolFace[], key: string, late: boolean): { hits: PoolFace[]; viaFamily: boolean } | null => {
+  const pool = faces.filter((f) => (f.source === 'local' || f.source === 'provider') === late);
   const fam = pool.filter((f) => f.families.includes(key));
   if (fam.length) return { hits: fam, viaFamily: true };
   const full = pool.filter((f) => f.fullNames.includes(key));
@@ -89,8 +92,9 @@ const fromFace = (hit: { hits: PoolFace[]; viaFamily: boolean }, b: number, want
 };
 
 /**
- * ASS font name => rendering recipe. Order: loaded face (user > embedded) => `fontMap` => local-font face =>
- * installed system font => generic fallback (status `missing`). Pure: all state comes in through `env`.
+ * ASS font name => rendering recipe. Order: loaded face (user > embedded) => `fontMap` => provider face (font library,
+ * URL provider) => local-font face => installed system font => generic fallback (status `missing`).
+ * Pure: all state comes in through `env`.
  */
 export const resolveFont = (env: ResolveEnv, fn: string, b: number, italic: boolean): Resolved => {
   const key = normalizeName(fn);

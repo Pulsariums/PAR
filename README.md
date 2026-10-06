@@ -102,6 +102,9 @@ The video's parent needs to be the element the overlay can sit on (it becomes `p
 | `fonts` | `FontSpec[]` | `[]` | Fonts to load at creation (File, Blob, bytes, URL or `{ source, family }`). See [Fonts](#fonts). |
 | `useLocalFonts` | `boolean` | `false` | Use installed fonts via the Local Font Access API (Chromium, needs permission). Never required. |
 | `embeddedFonts` | `boolean` | `true` | Load the script's `[Fonts]` section. |
+| `fontProviders` | `FontProvider[]` | `[]` | Async font sources (font library, URL map, your own), asked in order for families nothing earlier covers. See [Fonts](#fonts). |
+| `providerTimeout` | `number` | `5000` | Per provider call, ms. A silent provider counts as "not found". |
+| `onMissingFonts` | `(report, ctrl) => 'continue' \| 'wait' \| Promise` | none | Decides what happens when fonts are missing. Default: continue with fallback fonts. |
 | `zIndex` | `number` | `1` | z-index of the overlay. |
 
 Invalid values throw (`fps: 5` gives a `RangeError`, a zero-size region a `TypeError`).
@@ -134,13 +137,13 @@ nothing runs until you call `renderAt()`. The overlay uses `pointer-events: none
 
 ## Fonts
 
-Scripts name fonts; PAR makes the browser use them. Resolution order for an ASS font name (leading `@` removed, case-insensitive): **loaded face** (user-supplied, then embedded) -> `fontMap` -> **installed font from `useLocalFonts`** -> system font -> generic `sans-serif` fallback (reported as `missing`). Bold/italic pick the real face when one is loaded; otherwise the browser draws it synthetically and the report says so (libass rule: weight asked > face weight + 150).
+Scripts name fonts; PAR makes the browser use them. Resolution order for an ASS font name (leading `@` removed, case-insensitive): **loaded face** (user-supplied, then embedded) -> `fontMap` -> **provider face** (`fontProviders`) -> **installed font from `useLocalFonts`** -> system font -> generic `sans-serif` fallback (reported as `missing`). Bold/italic pick the real face when one is loaded; otherwise the browser draws it synthetically and the report says so (libass rule: weight asked > face weight + 150).
 
 ```ts
 const par = create({ video, subtitle, fonts: [fontFile] });   // File | Blob | ArrayBuffer | URL | .zip
 await par.addFonts(input.files);     // many at once; family names are read from the fonts' `name` table (TTF, OTF, TTC, WOFF, WOFF2*)
 await par.ready;                     // all font loads finished and the re-layout ran
-par.getFontReport();                 // { fonts: [{ name, status: 'embedded'|'user'|'local'|'system'|'missing', styles, lines, ... }], missing, pending, warnings }
+par.getFontReport();                 // { fonts: [{ name, status: 'embedded'|'user'|'provider'|'local'|'system'|'missing', styles, lines, ... }], missing, pending, warnings }
 par.listFonts(); par.removeFont(id); par.onFontsChange(fn);
 await par.loadLocalFonts();          // call from a click: Local Font Access API, false when unsupported or denied
 ```
@@ -149,6 +152,36 @@ await par.loadLocalFonts();          // call from a click: Local Font Access API
 - **Load timing**: while the script's fonts load, nothing is drawn, then lines are rebuilt and measured with the right font (no per-frame waiting).
 - **Font metrics**: libass sizes `\fs` so that `usWinAscent + usWinDescent` equals it (read from libass `ass_font.c`, `set_font_metrics` / `ass_face_set_size`). PAR uses `font-size = fs * unitsPerEm / (winAscent + winDescent)` for loaded fonts (fallbacks hhea, typo, bbox as in libass). For system fonts the browser's canvas `fontBoundingBox` ascent + descent is measured instead (usually hhea based, so it can differ from libass for fonts whose win and hhea metrics differ); unknown metrics keep the old factor 0.9. Not compared pixel by pixel against a libass build.
 - **Limits**: PAR distributes no fonts and does no subsetting; embedded fonts come from the script author, so mind their licenses. `[Graphics]` is ignored. Browsers load only the first face of a TTC, so PAR extracts each member. WOFF2 name detection needs `DecompressionStream('brotli')` (else the file name is used as family; pass `{ family }`). A font is global to the page: two different fonts with the same family, weight and style conflict. `queryLocalFonts` is Chromium-only and untested in headless runs. `\fe` and font encodings are ignored.
+
+### Font providers, preflight and the "font is missing" flow
+
+**Resolution order** (leading `@` removed, case-insensitive): user-supplied face -> embedded `[Fonts]` face -> `fontMap` -> **`fontProviders` (array order)** -> installed font from `useLocalFonts` -> system font -> generic fallback (`missing`). A provider face is only used when nothing before it covers the name; asking for bold when a provider face is regular makes PAR ask the provider for the bold variant.
+
+```ts
+import { create, createUrlProvider, preflightScript, createMissingFontsPrompt } from 'pulsar-ass-renderer';
+import { FontLibrary } from 'pulsar-ass-renderer/fontlib';
+
+const library = await FontLibrary.open();                       // the user's own persistent font store (IndexedDB)
+const par = create({
+  video, subtitle,
+  fontProviders: [library.asProvider(), createUrlProvider('cdn', { 'Open Sans': 'https://example.com/OpenSans.woff2' })],
+  onMissingFonts: () => 'continue',                             // or 'wait' / a Promise (see below)
+});
+par.on('missingfonts', (report) => showPrompt(report));          // fires again when the missing set changes (also to ok: true)
+
+const report = await preflightScript(assText, { fontProviders: [library.asProvider()] });   // no renderer, no DOM needed
+// { ok, resolved[], missing[], synthetic[], providerHits, missingGlyphs, warnings, stats }
+await par.preflight();                  // same for the loaded script (waits for font work); par.preflight(otherText) preloads providers' fonts for it
+```
+
+- **Provider**: `{ name, has?(family), get(family, { weight, italic }) -> bytes | Blob | URL | zip | null, subscribe?(fn) }`. A throwing, slow (`providerTimeout`) or corrupt provider only produces a warning. `subscribe` lets a provider tell PAR it got new fonts; otherwise call `par.refreshProviders()`. `createUrlProvider(name, urlMap | { manifest })` downloads lazily, once per URL (CORS applies).
+- **Preflight** scans the Style section and every `{...}` block (`\fn`, `\b`, `\i`, `\r`, `\p`; `\t(...)` cannot change fonts) with the same lexer the renderer uses, without building events: memory does not grow with the script. Accepts a string, an iterable / async iterable of lines, or `linesFromChunks(stream)` for a download in progress; or only `usedFonts: ['Arial', { family, bold, italic }]` when something else already knows them (`signal` and `onProgress` for huge files). Styles must come before events when streaming (a warning says so). `synthetic` lists fonts where bold/italic would be faked; `missing` lists fonts nothing serves.
+- **Missing glyphs**: for fonts PAR holds as a face (user, embedded, provider, local) the used characters (`usedCharacters(text)`: no tags, no `\N` `\h`, no drawings) are checked against the font's `cmap` (formats 4 and 12): `report.missingGlyphs[family] = { count, sample }` (sample capped at 64 code points). System fonts cannot be inspected. This is a warning, `ok` stays true.
+- **Decision**: when a script's fonts have settled and some are missing, `onMissingFonts(report, ctrl)` is called once per script. `'continue'` (default) draws fallback fonts. `'wait'`, or a pending Promise, holds back every event that uses a missing family (other events draw normally) until `ctrl.continue()` / `par.continueWithMissing()` or until the fonts arrive. Throwing or rejecting means continue. `par.ready` resolves when all font work is done and the hook was *called*; it never waits for a person.
+- **Prompt helper** (optional, no CSS, no modal): `createMissingFontsPrompt(container, report, { onContinue, onAddFonts, texts })` renders "Font X is missing. Continue anyway? [Continue] [Add font]" as an `alertdialog` with real, always visible buttons; Escape closes it; texts are yours (i18n).
+- **Font library** (`pulsar-ass-renderer/fontlib`, own ~11 kB gzip entry, never imported by the core): `FontLibrary.open(name = 'par-fonts')`, `add(files | zip)` (SHA-256 dedupe), `list()` (metadata only, bytes load lazily), `lookup(name)` / `find(name, weight, italic)` by family, full name, PostScript name or alias (case-insensitive, `@` ignored), `remove(ids)`, `setAliases(id, names)`, `coverage(id)`, `usage()` + `requestPersistence()` (`navigator.storage`), `exportZip()`, `repair()`, `onChange(fn)`, `asProvider()`. Helpers for UIs: `scriptBadges` (Latin, Latin Extended incl. Turkish / Azerbaijani, Cyrillic, Greek, Hiragana, Katakana, Kanji sample, symbols), `blockStats`, `sliceCps`. The playground's Fonts tab is a complete example (previews, paged character grid, grouping, search, bulk delete).
+- **Legal / product note**: PAR does not host or distribute fonts and has no shared font hosting. The library is the user's own local store; fonts never leave the device unless the host app does that itself. Respect font licenses.
+- **Limits**: provider faces stay registered until the provider list changes or the renderer is destroyed; the schema has one version (migration machinery exists, no migration yet); `exportZip` is uncompressed and does not round-trip aliases; Safari may evict IndexedDB without `persist()`; glyph checks use `cmap` only (no GSUB / fallback shaping); WOFF2 needs Brotli for names.
 
 ## Supported tags
 

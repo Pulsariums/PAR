@@ -4,11 +4,12 @@ import type { AssStyle } from '../types/script';
 import { inflate, type Inflater } from './bytes';
 import type { FontEnv } from './env';
 import { readInputs } from './input';
-import { localMatches, queryLocal, type LocalFontData } from './local';
+import { ExternalFonts } from './external';
 import { parseAll, parseFont, type ParsedFace } from './loader';
 import { createProbe, type FontProbe } from './probe';
 import { defaultRegistry, type FontRegistry, type RegisteredFace } from './registry';
 import { addMany, lowerKeys, toLoadedFont, toPoolFace, type Loaded } from './pool';
+import type { FontProvider } from './provider';
 import { resolveFont, type PoolFace, type Resolved } from './resolver';
 import type { AddFontOptions, AddFontsEntry, FontInput, FontSourceKind, FontSpec, LoadedFont } from './types';
 import { collectUsage, type FontUse } from './usage';
@@ -29,17 +30,15 @@ export interface FontManagerOptions {
  */
 export class FontManager implements FontEnv {
   private readonly registry: FontRegistry;
-  private readonly probe: FontProbe;
-  private readonly inf: Inflater;
+  readonly probe: FontProbe;
+  readonly inf: Inflater;
   private readonly loaded = new Map<string, Loaded>();
   private readonly work = new WorkSet(() => this.schedule());
   private readonly cache = new Map<string, Resolved>();
   private readonly warns = new Set<string>();
-  private readonly localTried = new Set<string>();
-  private fontMap: Record<string, string> = {};
-  private embedded = true;
-  private local: LocalFontData[] | null = null;
-  private localAsked = false;
+  fontMap: Record<string, string> = {};
+  embedded = true;
+  readonly ext: ExternalFonts;
   private usage = new Map<string, FontUse>();
   private gate = 0;
   private gen = 0;
@@ -50,14 +49,20 @@ export class FontManager implements FontEnv {
   constructor(private readonly opts: FontManagerOptions) {
     this.registry = opts.registry ?? defaultRegistry;
     [this.probe, this.inf] = [opts.probe ?? createProbe(), opts.inflater ?? inflate];
+    this.ext = new ExternalFonts({
+      usage: () => this.usage, resolve: (n, b, i) => this.resolve(n, b, i), hasMap: (k) => !!this.fontMap[k], register: (p, s) => this.register(p, s),
+      dropProvided: () => this.dropStale('provider', new Set()), work: this.work, gate: (d) => { this.gate += d; }, schedule: () => this.schedule(), warn: this.warn, inf: this.inf,
+    });
   }
 
-  configure(cfg: { fontMap?: Record<string, string>; embedded?: boolean; useLocalFonts?: boolean }): void {
+  configure(cfg: { fontMap?: Record<string, string>; embedded?: boolean; useLocalFonts?: boolean; providers?: readonly FontProvider[]; providerTimeout?: number }): void {
     const map = cfg.fontMap ? lowerKeys(cfg.fontMap) : this.fontMap;
     const embedded = cfg.embedded ?? this.embedded;
     const changed = embedded !== this.embedded || JSON.stringify(map) !== JSON.stringify(this.fontMap);
     [this.fontMap, this.embedded] = [map, embedded];
-    if (cfg.useLocalFonts && !this.localAsked) void this.loadLocal();
+    if (cfg.useLocalFonts && !this.ext.asked) void this.loadLocal();
+    const provChanged = cfg.providers ? this.ext.setProviders(cfg.providers, cfg.providerTimeout ?? this.ext.timeoutMs) : false;
+    if (provChanged) this.ext.refresh();
     if (changed) this.schedule();
   }
 
@@ -67,16 +72,15 @@ export class FontManager implements FontEnv {
     this.warns.clear();
     this.usage = collectUsage(lines, styles);
     const files = this.embedded && text ? extractEmbeddedFiles(text) : [];
-    if (files.length === 0) this.dropStale('embedded', new Set());
-    else {
+    if (files.length === 0) { this.dropStale('embedded', new Set()); this.ext.refresh(); } else {
       this.gate++;
       this.work.track(parseAll(files, 'embedded font', this.warn, this.inf).then(async (parsed) => {
         const fresh = parsed.map((p) => this.register(p, 'embedded'));
         await Promise.all(fresh.map((f) => f.loaded));
-        if (gen === this.gen) this.dropStale('embedded', new Set(parsed.map((p) => p.key)));
+        if (gen === this.gen) { this.dropStale('embedded', new Set(parsed.map((p) => p.key))); this.ext.refresh(); }
       }).finally(() => { this.gate--; }));
     }
-    this.ensureLocal();
+    this.ext.ensureLocal();
     this.schedule();
   }
 
@@ -100,6 +104,7 @@ export class FontManager implements FontEnv {
     if (!l?.sources.delete('user')) return false;
     if (l.sources.size === 0) this.discard(id);
     this.schedule();
+    this.ext.refresh();
     return true;
   }
 
@@ -108,11 +113,14 @@ export class FontManager implements FontEnv {
   }
 
   /** Installed fonts via the Local Font Access API (needs a user gesture); false when unavailable or denied. */
-  async loadLocal(): Promise<boolean> {
-    this.localAsked = true;
-    const all = await queryLocal();
-    if (all) { this.local = all; this.ensureLocal(); }
-    return all !== null;
+  loadLocal(): Promise<boolean> {
+    return this.ext.loadLocal();
+  }
+
+  /** Forget "provider has no such font" answers and ask again for what is still missing (e.g. after the font library changed). */
+  refreshProviders(): void {
+    this.ext.tried.clear();
+    this.ext.refresh();
   }
 
   resolve(fn: string, bold: number, italic: boolean): Resolved {
@@ -137,14 +145,15 @@ export class FontManager implements FontEnv {
 
   dispose(): void {
     this.disposed = true;
+    this.ext.dispose();
     [...this.loaded.keys()].forEach((k) => this.discard(k));
   }
 
-  private pool(): PoolFace[] {
+  pool(): PoolFace[] {
     return (this.faces ??= [...this.loaded.values()].filter((l) => l.face.state !== 'failed').map(toPoolFace));
   }
 
-  private register(p: ParsedFace, source: FontSourceKind): RegisteredFace {
+  register(p: ParsedFace, source: FontSourceKind): RegisteredFace {
     const face = this.registry.acquire(this, p);
     const l = this.loaded.get(p.key) ?? { face, sources: new Set<FontSourceKind>(), label: p.label };
     l.sources.add(source);
@@ -170,18 +179,6 @@ export class FontManager implements FontEnv {
       if (l.sources.size === 0) this.discard(k);
     }
     this.schedule();
-  }
-
-  /** Order: loaded face => fontMap => local face; only names the first two leave open are looked up locally. */
-  private ensureLocal(): void {
-    const covered = (key: string, use: { name: string }): boolean =>
-      !!this.fontMap[key] || ['user', 'embedded', 'local'].includes(this.resolve(use.name, 0, false).status);
-    for (const hits of this.local ? localMatches(this.usage, this.local, covered, this.localTried) : []) {
-      this.gate++;
-      const files = hits.map(async (h) => ({ name: h.fullName, data: new Uint8Array(await (await h.blob()).arrayBuffer()) }));
-      this.work.track(Promise.allSettled(files).then((r) => parseAll(r.flatMap((x) => (x.status === 'fulfilled' ? [x.value] : [])), 'local font', this.warn, this.inf))
-        .then((parsed) => { parsed.forEach((p) => this.register(p, 'local')); }).finally(() => { this.gate--; }));
-    }
   }
 
   private warn = (m: string): void => { this.warns.add(m); };

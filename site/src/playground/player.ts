@@ -10,6 +10,8 @@ export class Player {
   readonly par: PARRenderer;
   transport: Transport = this.card;
   hasVideo = false;
+  /** The subtitle text last given to PAR (the "characters this subtitle uses" check scans it). */
+  text = '';
   private readonly videoTransport: VideoTransport;
   private lastDrawn = NaN;
 
@@ -20,12 +22,14 @@ export class Player {
     subtitle: string,
   ) {
     this.videoTransport = new VideoTransport(video);
+    this.text = subtitle;
     this.par = create({ container: stage, clock: () => this.card.time, subtitle });
     this.fitDuration();
   }
 
   /** Sets the subtitle and sizes the card timeline to the last event end. */
   setSubtitle(text: string): void {
+    this.text = text;
     this.par.setSubtitle(text);
     this.fitDuration();
   }

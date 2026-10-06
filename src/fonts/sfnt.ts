@@ -1,13 +1,13 @@
 import { inflate, tag, u16, u32, type Inflater } from './bytes';
 
-/** The four tables PAR reads, plus (for TTC members) the face re-packed as a standalone sfnt. */
+/** The tables PAR reads (name, head, hhea, OS/2, cmap), plus (for TTC members) the face re-packed as a standalone sfnt. */
 export interface RawFace {
   tables: Map<string, Uint8Array>;
   /** Only for TTC members: browsers load a collection's first face only, so each member is extracted. */
   standalone?: Uint8Array;
 }
 
-const NEEDED = new Set(['name', 'head', 'hhea', 'OS/2']);
+const NEEDED = new Set(['name', 'head', 'hhea', 'OS/2', 'cmap']);
 const MAX_FACES = 64;
 
 /** WOFF2 known-tag table (W3C WOFF2 spec, section 5.1); index 63 means an explicit 4-byte tag follows. */

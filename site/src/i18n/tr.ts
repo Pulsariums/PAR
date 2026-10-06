@@ -1,3 +1,5 @@
+import { libTr } from './libTr';
+
 import type { Dict } from './en';
 
 export const tr: Dict = {
@@ -49,4 +51,5 @@ export const tr: Dict = {
   'st.embedded': 'Gömülü', 'st.user': 'Kullanıcı', 'st.local': 'Yüklü', 'st.system': 'Sistem', 'st.missing': 'Eksik',
   'docs.title': 'Belgeler', 'docs.install': 'Kurulum', 'docs.use': 'Kullanım', 'docs.read': 'Daha fazlası', 'docs.issues': 'Sorun bildir',
   'foot.note': 'Bu depodaki yerel PAR kaynağıyla çizilir.',
+  ...libTr,
 };

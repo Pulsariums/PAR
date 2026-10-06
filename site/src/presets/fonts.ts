@@ -21,3 +21,11 @@ const fontsSection = (): string => ['[Fonts]', `fontname: ${TEST_FAMILY}_0.ttf`,
 
 export const fontsEmbedded: Preset = { id: 'fontsEmbedded', title: '[Fonts] embedded', ass: `${script(EVENTS, 0, 'Embedded font')}\n${fontsSection()}` };
 export const fontsUser: Preset = { id: 'fontsUser', title: 'Fonts: user-supplied', ass: script(EVENTS, 0, 'User-supplied font') };
+
+const LIB_EVENTS = [
+  ev(0, 8, `{\\an5\\pos(640,200)\\fn${TEST_FAMILY}\\fs72}Library font line`),
+  ev(0, 8, `{\\an5\\pos(640,380)\\fn${TEST_FAMILY}\\fs72\\b1}Bold: synthetic`),
+  ev(0, 8, `{\\an5\\pos(640,560)\\fn${TEST_FAMILY}\\fs72}Привет, мир (no Cyrillic glyphs)`),
+];
+
+export const fontsLibrary: Preset = { id: 'fontsLibrary', title: 'Fonts: font library', ass: script(LIB_EVENTS, 0, 'Font library') };

@@ -1,4 +1,5 @@
 import { i16, macRoman, u16, utf16be } from './bytes';
+import { readCmap } from './coverage';
 import type { RawFace } from './sfnt';
 import type { FaceInfo, FaceMetrics } from './types';
 
@@ -74,5 +75,6 @@ export const readFaceInfo = (face: RawFace): FaceInfo => {
     italic,
     boldFlag,
     metrics: readMetrics(face),
+    coverage: face.tables.has('cmap') ? readCmap(face.tables.get('cmap')!) : null,
   };
 };

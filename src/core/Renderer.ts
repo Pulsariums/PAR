@@ -1,6 +1,7 @@
 import { Scheduler } from '../clock/Scheduler';
 import { bindVideoEvents, isPlaying } from '../clock/videoEvents';
 import { parseScript } from '../parser/ScriptParser';
+import { preflightScript } from '../preflight/preflight';
 import type { LineEnv } from '../render/LineView';
 import { Overlay } from '../render/Overlay';
 import type { PARMetrics, PAROptions, Rect, ResolvedOptions } from '../types/options';
@@ -14,6 +15,8 @@ import { Scene } from './Scene';
 
 /** The PAR renderer instance. Create it with `PAR.create(options)` or `new PARRenderer(options)`. */
 export class PARRenderer extends FontApi {
+  /** Font check without an instance or a DOM: `PARRenderer.preflightScript(text, options)`. */
+  static readonly preflightScript = preflightScript;
   private opts: ResolvedOptions;
   private overlay!: Overlay;
   private scene!: Scene;
@@ -35,7 +38,7 @@ export class PARRenderer extends FontApi {
     this.opts = resolveOptions(options);
     this.scheduler = new Scheduler((mediaTime) => this.frame(mediaTime));
     this.mount();
-    this.configureFonts();
+    this.configureFonts(this.opts);
     if (options.fonts) void this.fonts.addMany(options.fonts);
     if (options.subtitle !== undefined) this.setSubtitle(options.subtitle);
   }
@@ -57,6 +60,7 @@ export class PARRenderer extends FontApi {
     const styles = this.parsed?.styles ?? new Map();
     this.env = { ...this.env, styles };
     this.scene.setScript(this.parsed);
+    this.resetMissing();
     this.fonts.setScript(text, this.scene.prepared, styles);
     this.invalidate();
   }
@@ -74,7 +78,7 @@ export class PARRenderer extends FontApi {
     if (patch.subtitle !== undefined) this.setSubtitle(patch.subtitle);
     this.scheduler.configure(this.opts.fps, this.opts.video);
     this.syncLoop();
-    this.configureFonts();
+    this.configureFonts(this.opts);
     if (patch.fonts) void this.fonts.addMany(patch.fonts);
     this.invalidate();
   }
@@ -103,7 +107,7 @@ export class PARRenderer extends FontApi {
   destroy(): void {
     if (this.destroyed) return;
     this.unmount();
-    this.fonts.dispose();
+    this.disposeFonts();
     this.destroyed = true;
     this.parsed = null;
   }
@@ -111,13 +115,9 @@ export class PARRenderer extends FontApi {
   /** Fonts changed: measured boxes (collisions) are stale, so rebuild every visible line. */
   protected onFontsChanged(): void {
     if (this.destroyed) return;
+    this.scene.hold = this.missing.hold;
     this.scene.clear();
     this.invalidate();
-  }
-
-  private configureFonts(): void {
-    const { fontMap, embeddedFonts, useLocalFonts } = this.opts;
-    this.fonts.configure({ fontMap, embedded: embeddedFonts, useLocalFonts });
   }
 
   private mount(): void {

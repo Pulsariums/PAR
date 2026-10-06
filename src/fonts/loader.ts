@@ -30,7 +30,7 @@ export const contentKey = (data: Uint8Array): string => {
 export const familyFromFileName = (name: string): string =>
   name.replace(/^.*[\\/]/, '').replace(/\.(ttf|otf|ttc|otc|woff2?)$/i, '').replace(/_\d+$/, '').trim();
 
-const emptyInfo = (family: string): FaceInfo => ({ family, families: family ? [family] : [], fullNames: [], weight: 400, italic: false, boldFlag: false, metrics: null });
+const emptyInfo = (family: string): FaceInfo => ({ family, families: family ? [family] : [], fullNames: [], weight: 400, italic: false, boldFlag: false, metrics: null, coverage: null });
 
 /**
  * Parses a font file into registrable faces (one per TTC member). `family` overrides the detected name.

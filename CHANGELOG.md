@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Font providers: `fontProviders` / `providerTimeout` options, `FontProvider` interface (`has`, `get`, `subscribe`), `createUrlProvider` (URL map or manifest), `refreshProviders()`. Resolution order: user > embedded > `fontMap` > providers > local > system > generic.
+- Preflight: `par.preflight(text?)`, `preflightScript(input, options)` (also `PARRenderer.preflightScript`): streaming scan (strings, line iterables, `linesFromChunks`), `usedFonts` input, `{ ok, resolved, missing, synthetic, providerHits, missingGlyphs, warnings, stats }`; `usedCharacters()`.
+- Missing fonts: `onMissingFonts(report, ctrl)` ('continue' | 'wait' | Promise), `par.on('missingfonts')`, `continueWithMissing()`, `missingFonts`; `createMissingFontsPrompt()` helper (accessible, no CSS).
+- Glyph coverage: `cmap` (formats 4, 12) read for every parsed face (`FaceInfo.coverage`, `hasCp`, `readCmap`), `missingGlyphs` in preflight.
+- `pulsar-ass-renderer/fontlib`: IndexedDB font library (dedupe, name / alias index, quota and persistence helpers, zip export, repair, `asProvider()`), script badges, Unicode block helpers.
+- Playground: font library section (list, search, family grouping, bulk delete, names, previews with tofu boxes, paged character grid, used-character check), missing-font prompt, `Fonts: font library` preset; TR / RU / EN.
+- docs/host-integration.md.
 - Fonts: embedded `[Fonts]` decoding, `addFont`/`addFonts`/`removeFont`/`listFonts`, `fonts`/`useLocalFonts`/`embeddedFonts` options, `getFontReport()`, `ready`, `onFontsChange`, content-addressed ref-counted registry, name-table parsing (TTF/OTF/TTC/WOFF/WOFF2), zip input, Local Font Access, playground Fonts tab and two font presets.
 
 ### Changed

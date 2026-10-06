@@ -48,6 +48,9 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     fontMap: { ...(patch.fontMap ?? prev?.fontMap ?? {}) },
     useLocalFonts: patch.useLocalFonts ?? prev?.useLocalFonts ?? false,
     embeddedFonts: patch.embeddedFonts ?? prev?.embeddedFonts ?? true,
+    fontProviders: [...(patch.fontProviders ?? prev?.fontProviders ?? [])],
+    providerTimeout: patch.providerTimeout ?? prev?.providerTimeout ?? 5000,
+    onMissingFonts: patch.onMissingFonts !== undefined ? patch.onMissingFonts : prev?.onMissingFonts ?? null,
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
   };
 };

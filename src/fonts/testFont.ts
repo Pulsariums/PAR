@@ -19,6 +19,8 @@ export interface TestFontSpec {
   typo?: [number, number];
   /** Also write Macintosh (platform 1) name records. */
   mac?: boolean;
+  /** Code point ranges the cmap maps (all to one glyph), written as `format` 4 (BMP only) or 12. Default: ASCII 0x20..0x7E as format 4. */
+  cmap?: { format: 4 | 12; ranges: Array<[number, number]> };
 }
 
 const be = (n: number, size: 2 | 4): number[] => (size === 2 ? [(n >> 8) & 255, n & 255] : [(n >>> 24) & 255, (n >> 16) & 255, (n >> 8) & 255, n & 255]);
@@ -66,6 +68,19 @@ const checksum = (a: number[]): number => {
   return sum;
 };
 
+/** A cmap with one Windows Unicode subtable (format 4 or 12) mapping every listed code point to glyph 2 (one segment / group each: always valid). */
+export const customCmap = (format: 4 | 12, ranges: Array<[number, number]>): number[] => {
+  const cps = ranges.flatMap(([a, b]) => Array.from({ length: Math.min(b - a + 1, 4096) }, (_, i) => a + i));
+  if (format === 12) {
+    const body = cps.flatMap((c) => cat(be(c, 4), be(c, 4), be(2, 4)));
+    return cat(be(0, 2), be(1, 2), be(3, 2), be(10, 2), be(12, 4), be(12, 2), be(0, 2), be(16 + body.length, 4), be(0, 4), be(cps.length, 4), body);
+  }
+  const n = cps.length + 1;
+  return cat(be(0, 2), be(1, 2), be(3, 2), be(1, 2), be(12, 4), be(4, 2), be(16 + n * 8, 2), be(0, 2), be(n * 2, 2), be(0, 2), be(0, 2), be(0, 2),
+    [...cps, 0xffff].flatMap((c) => be(c, 2)), be(0, 2), [...cps, 0xffff].flatMap((c) => be(c, 2)),
+    [...cps, 0xffff].flatMap((c) => be(c === 0xffff ? 1 : (2 - c) & 0xffff, 2)), [...cps, 0xffff].flatMap(() => be(0, 2)));
+};
+
 /** Raw table bytes by tag (not yet padded). */
 export const testFontTables = (s: TestFontSpec): Array<[string, number[]]> => {
   const upem = s.unitsPerEm ?? 1000;
@@ -85,7 +100,7 @@ export const testFontTables = (s: TestFontSpec): Array<[string, number[]]> => {
   const os2 = cat(be(3, 2), be(ADVANCE, 2), be(weight, 2), be(5, 2), be(0, 2), new Array(20).fill(0), be(0, 2), new Array(10).fill(0), new Array(16).fill(0),
     [...'PAR '].map((c) => c.charCodeAt(0)), be(sel, 2), be(0x20, 2), be(0x7e, 2), be(typo[0], 2), be(-typo[1] & 0xffff, 2), be(0, 2), be(win[0], 2), be(win[1], 2),
     new Array(8).fill(0), be(0, 2), be(0, 2), be(0, 2), be(0x20, 2), be(0, 2));
-  const cmap = cat(be(0, 2), be(1, 2), be(3, 2), be(1, 2), be(12, 4), be(4, 2), be(32, 2), be(0, 2), be(4, 2), be(4, 2), be(1, 2), be(0, 2),
+  const cmap = s.cmap ? customCmap(s.cmap.format, s.cmap.ranges) : cat(be(0, 2), be(1, 2), be(3, 2), be(1, 2), be(12, 4), be(4, 2), be(32, 2), be(0, 2), be(4, 2), be(4, 2), be(1, 2), be(0, 2),
     be(0x7e, 2), be(0xffff, 2), be(0, 2), be(0x20, 2), be(0xffff, 2), be((1 - 0x20) & 0xffff, 2), be(1, 2), be(0, 2), be(0, 2));
   const post = cat(be(0x00030000, 4), new Array(28).fill(0));
   return [['OS/2', os2], ['cmap', cmap], ['glyf', g.glyf], ['head', head], ['hhea', hheaT], ['hmtx', hmtx], ['loca', g.loca], ['maxp', maxp], ['name', nameTable(s)], ['post', post]];

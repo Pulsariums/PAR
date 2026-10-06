@@ -102,6 +102,9 @@ Katman, videonun ebeveyn elemanına eklenir (eleman `position: static` ise `rela
 | `fonts` | `FontSpec[]` | `[]` | Oluşturulurken yüklenecek fontlar (File, Blob, bayt, URL ya da `{ source, family }`). Bkz. [Fontlar](#fontlar). |
 | `useLocalFonts` | `boolean` | `false` | Yüklü fontları Local Font Access API ile kullanır (Chromium, izin ister). Hiçbir zaman zorunlu değildir. |
 | `embeddedFonts` | `boolean` | `true` | Betiğin `[Fonts]` bölümünü yükler. |
+| `fontProviders` | `FontProvider[]` | `[]` | Eşzamansız font kaynakları (font kütüphanesi, URL tablosu, kendinizinki); önceki hiçbir şeyin karşılamadığı aileler için sırayla sorulur. Bkz. [Fontlar](#fontlar). |
+| `providerTimeout` | `number` | `5000` | Sağlayıcı çağrısı başına ms. Susan sağlayıcı "bulunamadı" sayılır. |
+| `onMissingFonts` | `(report, ctrl) => 'continue' \| 'wait' \| Promise` | yok | Font eksikse ne olacağına karar verir. Varsayılan: yedek fontla devam. |
 | `zIndex` | `number` | `1` | Katmanın z-index değeri. |
 
 Geçersiz değerler hata fırlatır (`fps: 5` -> `RangeError`, sıfır boyutlu bölge -> `TypeError`).
@@ -134,13 +137,13 @@ Katman `pointer-events: none` kullanır, video kontrollerini engellemez.
 
 ## Fontlar
 
-Betikler font adı verir; PAR tarayıcıya bu fontları kullandırır. ASS font adı (baştaki `@` atılır, büyük/küçük harf duyarsız) şu sırayla çözülür: **yüklü yüz** (önce kullanıcı, sonra gömülü) -> `fontMap` -> **`useLocalFonts` ile yüklü font** -> sistem fontu -> genel `sans-serif` yedeği (`missing` diye raporlanır). Kalın/italik için gerçek yüz yüklüyse o seçilir; yoksa tarayıcı yapay çizer ve rapor bunu belirtir (libass kuralı: istenen ağırlık > yüz ağırlığı + 150).
+Betikler font adı verir; PAR tarayıcıya bu fontları kullandırır. ASS font adı (baştaki `@` atılır, büyük/küçük harf duyarsız) şu sırayla çözülür: **yüklü yüz** (önce kullanıcı, sonra gömülü) -> `fontMap` -> **sağlayıcı yüzü** (`fontProviders`) -> **`useLocalFonts` ile yüklü font** -> sistem fontu -> genel `sans-serif` yedeği (`missing` diye raporlanır). Kalın/italik için gerçek yüz yüklüyse o seçilir; yoksa tarayıcı yapay çizer ve rapor bunu belirtir (libass kuralı: istenen ağırlık > yüz ağırlığı + 150).
 
 ```ts
 const par = create({ video, subtitle, fonts: [fontFile] });   // File | Blob | ArrayBuffer | URL | .zip
 await par.addFonts(input.files);     // toplu; aile adı fontun `name` tablosundan okunur (TTF, OTF, TTC, WOFF, WOFF2*)
 await par.ready;                     // tüm font yüklemeleri bitti ve yeniden yerleşim yapıldı
-par.getFontReport();                 // { fonts: [{ name, status: 'embedded'|'user'|'local'|'system'|'missing', styles, lines, ... }], missing, pending, warnings }
+par.getFontReport();                 // { fonts: [{ name, status: 'embedded'|'user'|'provider'|'local'|'system'|'missing', styles, lines, ... }], missing, pending, warnings }
 par.listFonts(); par.removeFont(id); par.onFontsChange(fn);
 await par.loadLocalFonts();          // tıklamadan çağırın: Local Font Access API, desteklenmiyorsa/reddedilirse false
 ```
@@ -149,6 +152,36 @@ await par.loadLocalFonts();          // tıklamadan çağırın: Local Font Acce
 - **Yükleme zamanı**: betiğin fontları yüklenirken metin çizilmez; sonra satırlar doğru fontla kurulup ölçülür (karede bekleme yok).
 - **Font ölçüsü**: libass `\fs` değerini `usWinAscent + usWinDescent` toplamına eşitler (libass `ass_font.c`, `set_font_metrics` / `ass_face_set_size`'tan okundu). Yüklü fontlarda PAR `font-size = fs * unitsPerEm / (winAscent + winDescent)` kullanır (yedek: hhea, typo, bbox; libass sırası). Sistem fontlarında tarayıcının canvas `fontBoundingBox` ascent + descent değeri ölçülür (çoğunlukla hhea tabanlı; win ile hhea farklı fontlarda libass'tan sapabilir); metrik yoksa eski 0.9 çarpanı kalır. Gerçek libass çıktısıyla piksel piksel karşılaştırılmadı.
 - **Sınırlar**: PAR font dağıtmaz ve alt kümeleme yapmaz; gömülü fontlar betik yazarından gelir, lisanslarına dikkat edin. `[Graphics]` yok sayılır. Tarayıcılar TTC'nin yalnız ilk yüzünü yükler, PAR her üyeyi ayıklar. WOFF2 adı için `DecompressionStream('brotli')` gerekir (yoksa dosya adı aile olur; `{ family }` verin). Font sayfa geneline kaydolur: aynı aile/ağırlık/stilde farklı iki font çakışır. `queryLocalFonts` yalnız Chromium'da var ve headless'ta denenmedi. `\fe` ve font kodlamaları yok sayılır.
+
+### Font sağlayıcıları, ön kontrol (preflight) ve "font eksik" akışı
+
+**Çözümleme sırası** (baştaki `@` atılır, büyük/küçük harf fark etmez): kullanıcı yüzü -> gömülü `[Fonts]` yüzü -> `fontMap` -> **`fontProviders` (dizi sırası)** -> `useLocalFonts` ile yüklü font -> sistem fontu -> genel yedek (`missing`). Sağlayıcı yüzü yalnız öncesindeki hiçbir şey adı karşılamıyorsa kullanılır; kalın istenip sağlayıcı yüzü normalse PAR sağlayıcıdan kalın varyantı da ister.
+
+```ts
+import { create, createUrlProvider, preflightScript, createMissingFontsPrompt } from 'pulsar-ass-renderer';
+import { FontLibrary } from 'pulsar-ass-renderer/fontlib';
+
+const library = await FontLibrary.open();                       // kullanıcının kendi kalıcı font deposu (IndexedDB)
+const par = create({
+  video, subtitle,
+  fontProviders: [library.asProvider(), createUrlProvider('cdn', { 'Open Sans': 'https://example.com/OpenSans.woff2' })],
+  onMissingFonts: () => 'continue',                             // ya da 'wait' / Promise
+});
+par.on('missingfonts', (report) => showPrompt(report));          // eksik küme değişince yine tetiklenir (ok: true dahil)
+
+const report = await preflightScript(assText, { fontProviders: [library.asProvider()] });   // çizici ve DOM gerekmez
+// { ok, resolved[], missing[], synthetic[], providerHits, missingGlyphs, warnings, stats }
+await par.preflight();                  // yüklü betik için aynısı; par.preflight(baskaMetin) o betiğin fontlarını sağlayıcılardan önceden yükler
+```
+
+- **Sağlayıcı**: `{ name, has?(family), get(family, { weight, italic }) -> bayt | Blob | URL | zip | null, subscribe?(fn) }`. Hata veren, yavaş (`providerTimeout`) ya da bozuk sağlayıcı yalnız uyarı üretir. `subscribe` ile sağlayıcı yeni font geldiğini bildirir; yoksa `par.refreshProviders()` çağırın. `createUrlProvider(ad, urlTablosu | { manifest })` tembel indirir, URL başına bir kez (CORS geçerli).
+- **Preflight**, Style bölümünü ve her `{...}` bloğunu (`\fn`, `\b`, `\i`, `\r`, `\p`; `\t(...)` font değiştiremez) çizicinin kullandığı aynı ayrıştırıcıyla, olay nesnesi kurmadan tarar: bellek betik boyutuyla büyümez. Girdi: metin, satır iterable'ı / async iterable'ı, indirilen akış için `linesFromChunks(stream)`; ya da başka yerden biliniyorsa yalnız `usedFonts: ['Arial', { family, bold, italic }]` (dev dosyalar için `signal`, `onProgress`). Akışta Style bölümü olaylardan önce gelmelidir (yoksa uyarı verilir). `synthetic`: kalın/italiğin taklit edileceği fontlar; `missing`: hiçbir kaynağın karşılamadığı fontlar.
+- **Eksik glifler**: PAR'ın yüz olarak tuttuğu fontlar (kullanıcı, gömülü, sağlayıcı, yerel) için kullanılan karakterler (`usedCharacters(metin)`: etiket, `\N` `\h` ve çizim yok) fontun `cmap` tablosuyla (format 4 ve 12) karşılaştırılır: `report.missingGlyphs[family] = { count, sample }` (örnek en çok 64 kod noktası). Sistem fontları denetlenemez. Bu bir uyarıdır, `ok` true kalır.
+- **Karar**: betiğin fontları oturduğunda ve bazıları eksikse `onMissingFonts(report, ctrl)` betik başına bir kez çağrılır. `'continue'` (varsayılan) yedek fontla çizer. `'wait'` ya da bekleyen Promise, eksik aile kullanan her olayı (diğerleri normal çizilir) `ctrl.continue()` / `par.continueWithMissing()` çağrılana ya da fontlar gelene kadar tutar. Fırlatma / reddetme = devam. `par.ready`, tüm font işleri bitince ve kanca *çağrıldıktan* sonra çözülür; kullanıcıyı asla beklemez.
+- **Uyarı yardımcısı** (isteğe bağlı, CSS'siz, modal değil): `createMissingFontsPrompt(container, report, { onContinue, onAddFonts, texts })` "X fontu eksik. Yine de devam edilsin mi? [Devam et] [Font ekle]" iletisini `alertdialog` olarak, gerçek ve hep görünen düğmelerle çizer; Escape kapatır; metinler sizin (i18n).
+- **Font kütüphanesi** (`pulsar-ass-renderer/fontlib`, ayrı ~11 kB gzip giriş, çekirdek içe aktarmaz): `FontLibrary.open(ad = 'par-fonts')`, `add(dosyalar | zip)` (SHA-256 ile tekilleştirme), `list()` (yalnız üst veri, baytlar tembel yüklenir), `lookup(ad)` / `find(ad, weight, italic)` aile, tam ad, PostScript adı ya da alias ile (harf duyarsız, `@` yok sayılır), `remove(idler)`, `setAliases(id, adlar)`, `coverage(id)`, `usage()` + `requestPersistence()` (`navigator.storage`), `exportZip()`, `repair()`, `onChange(fn)`, `asProvider()`. Arayüz yardımcıları: `scriptBadges` (Latin, Türkçe/Azerice dahil Latin Genişletilmiş, Kiril, Yunanca, Hiragana, Katakana, Kanji örneklemi, semboller), `blockStats`, `sliceCps`. Playground'un Yazı tipleri sekmesi eksiksiz bir örnektir (önizleme, sayfalı karakter ızgarası, gruplama, arama, toplu silme).
+- **Hukuki / ürün notu**: PAR font barındırmaz ve dağıtmaz; ortak font barındırma özelliği yoktur. Kütüphane kullanıcının kendi yerel deposudur; font, ana uygulama kendisi yapmadıkça cihazdan çıkmaz. Font lisanslarına uyun.
+- **Sınırlar**: sağlayıcı yüzleri sağlayıcı listesi değişene ya da çizici yok edilene kadar kayıtlı kalır; şemanın tek sürümü var (göç altyapısı hazır, henüz göç yok); `exportZip` sıkıştırmaz ve alias'ları geri aktarmaz; Safari `persist()` olmadan IndexedDB'yi silebilir; glif denetimi yalnız `cmap` kullanır (GSUB / yedek şekillendirme yok); WOFF2 adlar için Brotli ister.
 
 ## Desteklenen etiketler
 

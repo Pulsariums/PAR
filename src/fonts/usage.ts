@@ -10,7 +10,17 @@ export interface FontUse {
   looks: Map<string, { b: number; i: boolean }>;
   styles: Set<string>;
   lines: Set<number>;
+  /** Code points drawn with this font (whitespace and controls left out): what the "does the font have these glyphs" check needs. */
+  chars: Set<number>;
 }
+
+/** Adds the visible code points of `text` (whitespace, controls and the soft-break marker are not glyphs). */
+export const addChars = (into: Set<number>, text: string): void => {
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (cp > 32 && cp !== 127 && !/\s/.test(ch)) into.add(cp);
+  }
+};
 
 /**
  * Which fonts a script really needs: the font of every non-empty text fragment, evaluated at t = 0 with the same
@@ -26,10 +36,11 @@ export const collectUsage = (lines: readonly PreparedLine[], styles: Map<string,
       const st = states[i];
       const key = normalizeName(st.fn);
       let use = out.get(key);
-      if (!use) out.set(key, (use = { name: cleanName(st.fn), looks: new Map(), styles: new Set(), lines: new Set() }));
+      if (!use) out.set(key, (use = { name: cleanName(st.fn), looks: new Map(), styles: new Set(), lines: new Set(), chars: new Set() }));
       use.looks.set(`${st.b}|${st.i}`, { b: st.b, i: st.i });
       use.styles.add(st.style.name);
       use.lines.add(line.event.index);
+      addChars(use.chars, frag.text);
     });
   }
   return out;

@@ -47,7 +47,8 @@ const FONTS = `
   <ul class="fontlist" id="fontUsed"></ul>
   <h3 class="sm" data-i18n="fonts.loaded"></h3>
   <ul class="fontlist" id="fontLoaded"></ul>
-  <p class="hint" data-i18n="fonts.how"></p>`;
+  <p class="hint" data-i18n="fonts.how"></p>
+  <section id="fontLib" class="fontlib"></section>`;
 
 const OPTIONS = `
   <div class="row">
@@ -98,6 +99,7 @@ export const PLAYGROUND_HTML = `
         <select id="speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select></label>
     </div>
     </div>
+    <div id="fontPrompt" class="fontprompt"></div>
     <dl class="metrics" id="metrics"></dl>
   </div>
   <div class="pg-side">

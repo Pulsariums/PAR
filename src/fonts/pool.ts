@@ -9,7 +9,7 @@ export interface Loaded {
   label: string;
 }
 
-const RANK: FontSourceKind[] = ['user', 'embedded', 'local'];
+const RANK: FontSourceKind[] = ['user', 'embedded', 'provider', 'local'];
 export const effective = (l: Loaded): FontSourceKind => RANK.find((s) => l.sources.has(s))!;
 
 /** `fontMap` with normalized (case-insensitive) keys. */
@@ -22,7 +22,7 @@ export const toPoolFace = (l: Loaded): PoolFace => {
   const { info } = face.parsed;
   return {
     id: face.key, family: face.family, families: info.families.map((s) => s.toLowerCase()), fullNames: info.fullNames.map((s) => s.toLowerCase()),
-    weight: face.weight, italic: face.italic, boldFlag: info.boldFlag, ratio: face.ratio, source: effective(l),
+    weight: face.weight, italic: face.italic, boldFlag: info.boldFlag, ratio: face.ratio, source: effective(l), coverage: info.coverage,
   };
 };
 

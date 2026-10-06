@@ -15,6 +15,8 @@ export class Scene {
   private timeline = new Timeline([]);
   private readonly views = new Map<string, LineView>();
   private readonly placed = new Map<string, Placed>();
+  /** Event indexes that must not be drawn (lines waiting for a missing font). */
+  hold: ReadonlySet<number> | null = null;
 
   constructor(private readonly overlay: Overlay) {}
 
@@ -36,7 +38,8 @@ export class Scene {
 
   /** Renders at `t` seconds. `force` re-applies static lines too (after layout/option changes). */
   render(t: number, env: LineEnv, force: boolean): void {
-    const visible = this.timeline.visibleAt(t);
+    const all = this.timeline.visibleAt(t);
+    const visible = this.hold ? all.filter((l) => !this.hold!.has(l.event.index)) : all;
     const ids = new Set(visible.map((l) => l.event.id));
     for (const [id, view] of this.views) {
       if (ids.has(id)) continue;

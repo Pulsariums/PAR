@@ -29,7 +29,9 @@ export type FpsOption = 'auto' | number;
 /** Returns the current media time in seconds. */
 export type ClockFn = () => number;
 
+import type { FontProvider } from '../fonts/provider';
 import type { FontSpec } from '../fonts/types';
+import type { MissingFontsHandler } from '../core/MissingFonts';
 
 export interface PAROptions {
   /** Video element to follow (time, play/pause/seek, size). */
@@ -58,6 +60,15 @@ export interface PAROptions {
   useLocalFonts?: boolean;
   /** Load fonts embedded in the script's `[Fonts]` section. Default true. Read when a script is loaded (`setSubtitle`). */
   embeddedFonts?: boolean;
+  /**
+   * Font providers (font library, URL map, host cache), asked in array order for families that user / embedded faces and
+   * `fontMap` do not cover, before installed fonts. Drawing waits for their answers, at most `providerTimeout` ms.
+   */
+  fontProviders?: FontProvider[];
+  /** Per provider call, ms (a provider that stays silent counts as "not found"). Default 5000. */
+  providerTimeout?: number;
+  /** Decides what happens when the script's fonts are missing. Default (not set): continue with fallback fonts. `null` clears it. */
+  onMissingFonts?: MissingFontsHandler | null;
   /** CSS z-index of the overlay. Default 1. */
   zIndex?: number;
 }
@@ -75,6 +86,9 @@ export interface ResolvedOptions {
   fontMap: Record<string, string>;
   useLocalFonts: boolean;
   embeddedFonts: boolean;
+  fontProviders: FontProvider[];
+  providerTimeout: number;
+  onMissingFonts: MissingFontsHandler | null;
   zIndex: number;
 }
 

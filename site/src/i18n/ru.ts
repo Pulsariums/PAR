@@ -1,3 +1,5 @@
+import { libRu } from './libRu';
+
 import type { Dict } from './en';
 
 export const ru: Dict = {
@@ -49,4 +51,5 @@ export const ru: Dict = {
   'st.embedded': 'Встроенный', 'st.user': 'Свой', 'st.local': 'Установлен', 'st.system': 'Системный', 'st.missing': 'Нет',
   'docs.title': 'Документация', 'docs.install': 'Установка', 'docs.use': 'Использование', 'docs.read': 'Читать дальше', 'docs.issues': 'Сообщить о проблеме',
   'foot.note': 'Отрисовано локальным исходником PAR из этого репозитория.',
+  ...libRu,
 };

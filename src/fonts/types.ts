@@ -1,7 +1,7 @@
 /** Public font types. */
 
-/** Where a loaded face came from. */
-export type FontSourceKind = 'embedded' | 'user' | 'local';
+/** Where a loaded face came from (`provider` = supplied by a `FontProvider`, e.g. the font library). */
+export type FontSourceKind = 'embedded' | 'user' | 'provider' | 'local';
 
 /** Result of resolving an ASS font name. `system` = found on the machine (or unverifiable), `missing` = probe says it is not installed. */
 export type FontStatus = FontSourceKind | 'system' | 'missing';
@@ -44,6 +44,8 @@ export interface FaceInfo {
   /** The face carries a bold style flag (OS/2 fsSelection bit 5 or head macStyle bit 0). */
   boldFlag: boolean;
   metrics: FaceMetrics | null;
+  /** Code points the font maps to a glyph (`cmap` formats 4 and 12), or null when the table is missing. See `hasCp`. */
+  coverage: Uint32Array | null;
 }
 
 /** A face PAR has loaded, as shown by `listFonts()`. */

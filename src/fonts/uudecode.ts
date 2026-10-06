@@ -54,7 +54,7 @@ export interface EmbeddedFile {
   data: Uint8Array;
 }
 
-const KNOWN_SECTIONS = new Set(['script info', 'v4+ styles', 'v4 styles', 'v4 styles+', 'events', 'fonts', 'graphics', 'aegisub project garbage', 'aegisub extradata']);
+export const KNOWN_SECTIONS = new Set(['script info', 'v4+ styles', 'v4 styles', 'v4 styles+', 'events', 'fonts', 'graphics', 'aegisub project garbage', 'aegisub extradata']);
 const FONT_LINE = /^fontname\s*:\s*(.+)$/i;
 
 /**

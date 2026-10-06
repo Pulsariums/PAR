@@ -1,3 +1,5 @@
+import { libEn } from './libEn';
+
 export const en = {
   'nav.skip': 'Skip to playground', 'nav.features': 'Features', 'nav.playground': 'Playground', 'nav.docs': 'Docs',
   'lang.label': 'Language', 'theme.toggle': 'Toggle light / dark theme',
@@ -47,5 +49,6 @@ export const en = {
   'st.embedded': 'Embedded', 'st.user': 'User', 'st.local': 'Installed', 'st.system': 'System', 'st.missing': 'Missing',
   'docs.title': 'Docs', 'docs.install': 'Install', 'docs.use': 'Use', 'docs.read': 'Read more', 'docs.issues': 'Report an issue',
   'foot.note': 'Rendered with the local PAR source from this repository.',
+  ...libEn,
 };
 export type Dict = Record<keyof typeof en, string>;
