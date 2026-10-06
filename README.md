@@ -9,7 +9,7 @@
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml/badge.svg" /></a>
   <img alt="Version" src="https://img.shields.io/github/package-json/v/Pulsariums/PAR?color=5b3df5" />
-  <img alt="Size: about 14 kB gzipped" src="https://img.shields.io/badge/gzip-~14%20kB-5b3df5" />
+  <img alt="Size: about 22 kB gzipped" src="https://img.shields.io/badge/gzip-~22%20kB-5b3df5" />
   <img alt="Zero dependencies" src="https://img.shields.io/badge/dependencies-0-brightgreen" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-typed-3178c6?logo=typescript&logoColor=white" />
 </p>
@@ -29,7 +29,7 @@ with a built-in test card, your own video file or a video URL, without installin
 
 | | |
 |---|---|
-| **Zero dependencies** | About 14 kB gzipped. Plain TypeScript, no runtime packages, no WASM download. |
+| **Zero dependencies** | About 22 kB gzipped. Plain TypeScript, no runtime packages, no WASM download. |
 | **DOM, SVG and CSS** | Text stays real text, drawings are SVG paths, the browser's own text engine does the shaping. |
 | **Plug and play** | `create({ video, subtitle })`. Letterbox, resize, play, pause and seek are tracked. |
 | **libass semantics** | Tag precedence, `\t` ordering, karaoke timing and PlayRes fallbacks follow libass. |
@@ -99,6 +99,9 @@ The video's parent needs to be the element the overlay can sit on (it becomes `p
 | `clock` | `() => number` | `video.currentTime` | Custom clock in seconds. |
 | `timeOffset` | `number` | `0` | Seconds added to the clock (subtitle delay). |
 | `fontMap` | `Record<string,string>` | `{}` | ASS font name to CSS `font-family`. Load the fonts yourself (`@font-face`). |
+| `fonts` | `FontSpec[]` | `[]` | Fonts to load at creation (File, Blob, bytes, URL or `{ source, family }`). See [Fonts](#fonts). |
+| `useLocalFonts` | `boolean` | `false` | Use installed fonts via the Local Font Access API (Chromium, needs permission). Never required. |
+| `embeddedFonts` | `boolean` | `true` | Load the script's `[Fonts]` section. |
 | `zIndex` | `number` | `1` | z-index of the overlay. |
 
 Invalid values throw (`fps: 5` gives a `RangeError`, a zero-size region a `TypeError`).
@@ -129,6 +132,24 @@ With a custom clock and no video the loop runs continuously (it skips work when 
 nothing runs until you call `renderAt()`. The overlay uses `pointer-events: none`, so video controls keep working.
 </details>
 
+## Fonts
+
+Scripts name fonts; PAR makes the browser use them. Resolution order for an ASS font name (leading `@` removed, case-insensitive): **loaded face** (user-supplied, then embedded) -> `fontMap` -> **installed font from `useLocalFonts`** -> system font -> generic `sans-serif` fallback (reported as `missing`). Bold/italic pick the real face when one is loaded; otherwise the browser draws it synthetically and the report says so (libass rule: weight asked > face weight + 150).
+
+```ts
+const par = create({ video, subtitle, fonts: [fontFile] });   // File | Blob | ArrayBuffer | URL | .zip
+await par.addFonts(input.files);     // many at once; family names are read from the fonts' `name` table (TTF, OTF, TTC, WOFF, WOFF2*)
+await par.ready;                     // all font loads finished and the re-layout ran
+par.getFontReport();                 // { fonts: [{ name, status: 'embedded'|'user'|'local'|'system'|'missing', styles, lines, ... }], missing, pending, warnings }
+par.listFonts(); par.removeFont(id); par.onFontsChange(fn);
+await par.loadLocalFonts();          // call from a click: Local Font Access API, false when unsupported or denied
+```
+
+- **Embedded fonts**: the `[Fonts]` section (SSA/ASS uuencode, several fonts, partial last lines) is decoded and registered with `document.fonts`. Identical bytes are registered once and ref-counted per renderer; `destroy()` releases them.
+- **Load timing**: while the script's fonts load, nothing is drawn, then lines are rebuilt and measured with the right font (no per-frame waiting).
+- **Font metrics**: libass sizes `\fs` so that `usWinAscent + usWinDescent` equals it (read from libass `ass_font.c`, `set_font_metrics` / `ass_face_set_size`). PAR uses `font-size = fs * unitsPerEm / (winAscent + winDescent)` for loaded fonts (fallbacks hhea, typo, bbox as in libass). For system fonts the browser's canvas `fontBoundingBox` ascent + descent is measured instead (usually hhea based, so it can differ from libass for fonts whose win and hhea metrics differ); unknown metrics keep the old factor 0.9. Not compared pixel by pixel against a libass build.
+- **Limits**: PAR distributes no fonts and does no subsetting; embedded fonts come from the script author, so mind their licenses. `[Graphics]` is ignored. Browsers load only the first face of a TTC, so PAR extracts each member. WOFF2 name detection needs `DecompressionStream('brotli')` (else the file name is used as family; pass `{ family }`). A font is global to the page: two different fonts with the same family, weight and style conflict. `queryLocalFonts` is Chromium-only and untested in headless runs. `\fe` and font encodings are ignored.
+
 ## Supported tags
 
 Statuses are kept in sync with the playground's feature test matrix, where every row loads a preset you can check by eye.
@@ -148,7 +169,7 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 | `\t([t1,t2,][accel,]tags)` | Rendered | Multiple tags, optional times, acceleration, source-order evaluation. |
 | `\k` `\K` `\kf` `\ko` `\kt` | Rendered | Colour switch, sweep, outline reveal. |
 | `\r` `\r<style>` | Rendered | Unknown style falls back to the line style. |
-| `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Rendered | Font family via `fontMap` or the name itself. |
+| `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Rendered | Loaded / embedded face, `fontMap`, or the name itself (see Fonts). |
 | `\fax` `\fay` | Rendered | Pivot is the text top-left. Per-fragment differences use the first fragment's value. |
 | `\b` `\i` `\u` `\s` | Rendered | |
 | `\bord` `\shad` `\xshad` `\yshad` | Rendered | CSS text stroke and shadow. |
@@ -164,7 +185,7 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 | `\fe` | Not supported | Parsed and ignored (no meaning for web fonts). |
 | Event `Effect` (`Banner;`, `Scroll up;`, `Scroll down;`) | Not supported | |
 | `\kf` sweep on drawings | Not supported | Drawings switch colour at the end. |
-| `[Fonts]` / `[Graphics]`, BorderStyle 4, LayoutResX/Y correction | Not supported | `LayoutResX/Y` is parsed, not used. |
+| `[Graphics]`, BorderStyle 4, LayoutResX/Y correction | Not supported | `LayoutResX/Y` is parsed, not used. |
 </details>
 
 <details>
@@ -189,11 +210,11 @@ PAR is a different trade-off: it does not embed libass, it renders with the brow
 |---|---|---|
 | Approach | DOM, SVG and CSS | libass compiled to WebAssembly |
 | WASM binary to ship | No | Yes (plus a worker script) |
-| Footprint | About 14 kB gzipped, zero dependencies | Larger: carries the compiled library |
+| Footprint | About 22 kB gzipped, zero dependencies | Larger: carries the compiled library |
 | Framework | None required, plain TypeScript | Plain JS, each with its own setup |
 | Output | Real DOM nodes and SVG | Pixels on a canvas |
 | Glyph-exact libass output | No (approximations are listed above) | Yes, that is the point of using libass |
-| Embedded fonts | Not supported | Supported by libass-based renderers |
+| Embedded fonts | Supported (`[Fonts]`) | Supported by libass-based renderers |
 
 Pick a libass-based renderer when pixel-faithful output and complete tag coverage matter most. Pick PAR when a small, WASM-free,
 inspectable DOM renderer is enough. Check each project's own documentation for current details.
@@ -238,9 +259,9 @@ Only the fullscreen element's subtree is displayed. Request fullscreen on the co
 </details>
 
 <details>
-<summary>Why are there no embedded fonts?</summary>
+<summary>How do embedded fonts work?</summary>
 
-Not implemented. Load fonts with `@font-face` and map ASS font names with `fontMap`.
+They are decoded from `[Fonts]` and registered with the browser. See [Fonts](#fonts).
 </details>
 
 ## Contributing

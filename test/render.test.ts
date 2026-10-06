@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { staticFontEnv } from '../src/fonts/env';
 import { stateFromStyle } from '../src/anim/State';
 import { DEFAULT_STYLE } from '../src/parser/StyleParser';
 import { cssColor } from '../src/render/color';
@@ -8,7 +9,8 @@ import { boxTransformCss, lineTransformCss } from '../src/render/LineView';
 import { fontCss, fontFamilyCss, paintCss, weightCss } from '../src/render/textCss';
 import { SOFT_BREAK } from '../src/types/script';
 
-const env = { borderScale: 1, fontMap: { 'My Font': '"Mapped", serif' } };
+const fontMap = { 'My Font': '"Mapped", serif' };
+const env = { borderScale: 1, fonts: staticFontEnv(fontMap) };
 
 describe('render CSS', () => {
   it('converts BGR + ASS alpha to rgba()', () => {
@@ -18,7 +20,7 @@ describe('render CSS', () => {
 
   it('maps fonts, weights and the soft break', () => {
     expect(fontFamilyCss('@Arial', {})).toBe('"Arial", sans-serif');
-    expect(fontFamilyCss('My Font', env.fontMap)).toBe('"Mapped", serif');
+    expect(fontFamilyCss('My Font', fontMap)).toBe('"Mapped", serif');
     expect([weightCss(0), weightCss(1), weightCss(-1), weightCss(300)]).toEqual(['400', '700', '700', '300']);
     expect(displayText(`a${SOFT_BREAK}b`, 2)).toBe('a\nb');
     expect(displayText(`a${SOFT_BREAK}b`, 0)).toBe('a b');

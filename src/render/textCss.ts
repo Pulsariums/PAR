@@ -1,37 +1,30 @@
 import type { KaraokePhase } from '../anim/Karaoke';
 import type { TextState } from '../anim/State';
 
+import type { FontEnv } from '../fonts/env';
+import { DEFAULT_RATIO } from '../fonts/ratio';
+import { fontFamilyCss, wantedWeight } from '../fonts/resolver';
+
 import { cssColor } from './color';
 
-/**
- * libass sizes fonts so that ascender + descender equals `\fs`; CSS sizes the em box.
- * For common fonts (ascent + descent ~ 1.11 em) this ratio maps one onto the other.
- */
-export const FONT_SIZE_RATIO = 0.9;
+/** Fallback `\fs` to CSS size factor when a font's metrics are unknown (see `fonts/ratio.ts` for the real rule). */
+export const FONT_SIZE_RATIO = DEFAULT_RATIO;
 
 export interface StyleEnv {
   /** Multiplier for border/shadow/blur (ScaledBorderAndShadow handling). */
   borderScale: number;
-  fontMap: Record<string, string>;
+  /** Font name => family, weight and size factor (loaded faces, `fontMap`, system probe). */
+  fonts: FontEnv;
 }
 
 export type Css = Record<string, string>;
 
 const px = (n: number): string => `${Math.round(n * 1000) / 1000}px`;
 
-export const fontFamilyCss = (fn: string, fontMap: Record<string, string>): string => {
-  const name = fn.replace(/^@/, '').trim();
-  const mapped = fontMap[name];
-  if (mapped) return mapped;
-  return `"${name.replace(/["\\]/g, '')}", sans-serif`;
-};
+export { fontFamilyCss };
 
 /** `\b` value => CSS font-weight (1/-1 bold, 0 normal, 100..900 explicit). */
-export const weightCss = (b: number): string => {
-  if (b === 0) return '400';
-  if (b >= 100 && b <= 900) return String(Math.round(b / 100) * 100);
-  return '700';
-};
+export const weightCss = (b: number): string => String(wantedWeight(b));
 
 /** Font size in layout px (vertical scale `\fscy` folded in). */
 export const fontPx = (st: TextState): number => (st.fs * st.fscy) / 100;
@@ -43,12 +36,13 @@ export const xRatio = (st: TextState): number => (st.fscy > 0 ? st.fscx / st.fsc
 export const fontCss = (st: TextState, env: StyleEnv): Css => {
   const size = fontPx(st);
   const deco = [st.u ? 'underline' : '', st.s ? 'line-through' : ''].filter(Boolean).join(' ');
+  const f = env.fonts.resolve(st.fn, st.b, st.i);
   return {
-    'font-family': fontFamilyCss(st.fn, env.fontMap),
-    'font-size': px(size * FONT_SIZE_RATIO),
+    'font-family': f.family,
+    'font-size': px(size * f.ratio),
     'line-height': px(size),
-    'font-weight': weightCss(st.b),
-    'font-style': st.i ? 'italic' : 'normal',
+    'font-weight': String(f.weight),
+    'font-style': f.italic ? 'italic' : 'normal',
     'letter-spacing': px((st.fsp * st.fscy) / 100),
     'text-decoration-line': deco || 'none',
   };

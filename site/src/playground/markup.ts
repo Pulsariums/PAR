@@ -31,6 +31,24 @@ const SUBS = `
   <div class="chips" id="presetList"></div>
   <p class="hint" id="presetHint"></p>`;
 
+const FONTS = `
+  <p class="hint" data-i18n="fonts.intro"></p>
+  <div class="row">
+    <label class="fld grow"><span data-i18n="fonts.pick"></span><input id="fontFiles" type="file" multiple accept=".ttf,.otf,.ttc,.otc,.woff,.woff2,.zip" /></label>
+  </div>
+  <div class="row">
+    <button type="button" class="btn sm" id="fontTestLoad" data-i18n="fonts.testLoad"></button>
+    <button type="button" class="btn sm" id="fontTestSave" data-i18n="fonts.testSave"></button>
+    <button type="button" class="btn sm" id="fontLocal" data-i18n="fonts.local" hidden></button>
+  </div>
+  <p class="hint" id="fontStatus" role="status"></p>
+  <p class="hint err" id="fontMissing" role="alert"></p>
+  <h3 class="sm" data-i18n="fonts.used"></h3>
+  <ul class="fontlist" id="fontUsed"></ul>
+  <h3 class="sm" data-i18n="fonts.loaded"></h3>
+  <ul class="fontlist" id="fontLoaded"></ul>
+  <p class="hint" data-i18n="fonts.how"></p>`;
+
 const OPTIONS = `
   <div class="row">
     <label class="fld grow"><span data-i18n="opt.region"></span>
@@ -84,9 +102,9 @@ export const PLAYGROUND_HTML = `
   </div>
   <div class="pg-side">
     <div role="tablist" class="tabs" data-i18n-attr="aria-label:pg.title">
-      ${tab('source', 'tab.source', true)}${tab('subs', 'tab.subs', false)}${tab('opts', 'tab.opts', false)}${tab('matrix', 'tab.matrix', false)}${tab('code', 'tab.code', false)}
+      ${tab('source', 'tab.source', true)}${tab('subs', 'tab.subs', false)}${tab('fonts', 'tab.fonts', false)}${tab('opts', 'tab.opts', false)}${tab('matrix', 'tab.matrix', false)}${tab('code', 'tab.code', false)}
     </div>
-    ${panel('source', SOURCE, true)}${panel('subs', SUBS, false)}${panel('opts', OPTIONS, false)}
+    ${panel('source', SOURCE, true)}${panel('subs', SUBS, false)}${panel('fonts', FONTS, false)}${panel('opts', OPTIONS, false)}
     ${panel('matrix', '<p class="hint" data-i18n="mx.intro"></p><ul class="matrix" id="matrix"></ul>', false)}
     ${panel('code', '<p class="hint" data-i18n="code.intro"></p><pre class="code"><code id="snippet"></code></pre><button type="button" class="btn primary" id="copy" data-i18n="code.copy"></button>', false)}
   </div>

@@ -9,7 +9,7 @@
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml/badge.svg" /></a>
   <img alt="Sürüm" src="https://img.shields.io/github/package-json/v/Pulsariums/PAR?color=5b3df5" />
-  <img alt="Boyut: gzip ile yaklaşık 14 kB" src="https://img.shields.io/badge/gzip-~14%20kB-5b3df5" />
+  <img alt="Boyut: gzip ile yaklaşık 22 kB" src="https://img.shields.io/badge/gzip-~22%20kB-5b3df5" />
   <img alt="Sıfır bağımlılık" src="https://img.shields.io/badge/dependencies-0-brightgreen" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-typed-3178c6?logo=typescript&logoColor=white" />
 </p>
@@ -29,7 +29,7 @@ bir video adresiyle her etiketi denemek için [deneme alanını](https://pulsari
 
 | | |
 |---|---|
-| **Sıfır bağımlılık** | Gzip ile yaklaşık 14 kB. Saf TypeScript; çalışma zamanında paket ya da WASM indirmesi yok. |
+| **Sıfır bağımlılık** | Gzip ile yaklaşık 22 kB. Saf TypeScript; çalışma zamanında paket ya da WASM indirmesi yok. |
 | **DOM, SVG ve CSS** | Metin gerçek metin olarak kalır, çizimler SVG yoludur, harfleri tarayıcının kendi yazı motoru şekillendirir. |
 | **Tak ve çalıştır** | `create({ video, subtitle })`. Letterbox, yeniden boyutlandırma, oynat, duraklat ve sarma izlenir. |
 | **libass kurallarına yakın** | Etiket önceliği, `\t` sırası, karaoke zamanlaması ve PlayRes yedekleri libass'teki gibidir. |
@@ -99,6 +99,9 @@ Katman, videonun ebeveyn elemanına eklenir (eleman `position: static` ise `rela
 | `clock` | `() => number` | `video.currentTime` | Özel saat (saniye). |
 | `timeOffset` | `number` | `0` | Saate eklenen saniye (altyazı gecikmesi). |
 | `fontMap` | `Record<string,string>` | `{}` | ASS yazı tipi adı -> CSS `font-family`. Yazı tiplerini `@font-face` ile siz yüklersiniz. |
+| `fonts` | `FontSpec[]` | `[]` | Oluşturulurken yüklenecek fontlar (File, Blob, bayt, URL ya da `{ source, family }`). Bkz. [Fontlar](#fontlar). |
+| `useLocalFonts` | `boolean` | `false` | Yüklü fontları Local Font Access API ile kullanır (Chromium, izin ister). Hiçbir zaman zorunlu değildir. |
+| `embeddedFonts` | `boolean` | `true` | Betiğin `[Fonts]` bölümünü yükler. |
 | `zIndex` | `number` | `1` | Katmanın z-index değeri. |
 
 Geçersiz değerler hata fırlatır (`fps: 5` -> `RangeError`, sıfır boyutlu bölge -> `TypeError`).
@@ -128,6 +131,24 @@ Saf (DOM'suz) yardımcılar da dışa aktarılır: `parseScript`, `parseText`, `
 Özel saat varsa ve video yoksa döngü sürekli çalışır (zaman değişmediyse iş yapmaz). İkisi de yoksa `renderAt()` çağırana kadar hiçbir şey çalışmaz.
 Katman `pointer-events: none` kullanır, video kontrollerini engellemez.
 </details>
+
+## Fontlar
+
+Betikler font adı verir; PAR tarayıcıya bu fontları kullandırır. ASS font adı (baştaki `@` atılır, büyük/küçük harf duyarsız) şu sırayla çözülür: **yüklü yüz** (önce kullanıcı, sonra gömülü) -> `fontMap` -> **`useLocalFonts` ile yüklü font** -> sistem fontu -> genel `sans-serif` yedeği (`missing` diye raporlanır). Kalın/italik için gerçek yüz yüklüyse o seçilir; yoksa tarayıcı yapay çizer ve rapor bunu belirtir (libass kuralı: istenen ağırlık > yüz ağırlığı + 150).
+
+```ts
+const par = create({ video, subtitle, fonts: [fontFile] });   // File | Blob | ArrayBuffer | URL | .zip
+await par.addFonts(input.files);     // toplu; aile adı fontun `name` tablosundan okunur (TTF, OTF, TTC, WOFF, WOFF2*)
+await par.ready;                     // tüm font yüklemeleri bitti ve yeniden yerleşim yapıldı
+par.getFontReport();                 // { fonts: [{ name, status: 'embedded'|'user'|'local'|'system'|'missing', styles, lines, ... }], missing, pending, warnings }
+par.listFonts(); par.removeFont(id); par.onFontsChange(fn);
+await par.loadLocalFonts();          // tıklamadan çağırın: Local Font Access API, desteklenmiyorsa/reddedilirse false
+```
+
+- **Gömülü fontlar**: `[Fonts]` bölümü (SSA/ASS uuencode, birden çok font, kısmi son satır) çözülür ve `document.fonts`'a kaydedilir. Aynı baytlar bir kez kaydedilir, çizici başına sayılır; `destroy()` bırakır.
+- **Yükleme zamanı**: betiğin fontları yüklenirken metin çizilmez; sonra satırlar doğru fontla kurulup ölçülür (karede bekleme yok).
+- **Font ölçüsü**: libass `\fs` değerini `usWinAscent + usWinDescent` toplamına eşitler (libass `ass_font.c`, `set_font_metrics` / `ass_face_set_size`'tan okundu). Yüklü fontlarda PAR `font-size = fs * unitsPerEm / (winAscent + winDescent)` kullanır (yedek: hhea, typo, bbox; libass sırası). Sistem fontlarında tarayıcının canvas `fontBoundingBox` ascent + descent değeri ölçülür (çoğunlukla hhea tabanlı; win ile hhea farklı fontlarda libass'tan sapabilir); metrik yoksa eski 0.9 çarpanı kalır. Gerçek libass çıktısıyla piksel piksel karşılaştırılmadı.
+- **Sınırlar**: PAR font dağıtmaz ve alt kümeleme yapmaz; gömülü fontlar betik yazarından gelir, lisanslarına dikkat edin. `[Graphics]` yok sayılır. Tarayıcılar TTC'nin yalnız ilk yüzünü yükler, PAR her üyeyi ayıklar. WOFF2 adı için `DecompressionStream('brotli')` gerekir (yoksa dosya adı aile olur; `{ family }` verin). Font sayfa geneline kaydolur: aynı aile/ağırlık/stilde farklı iki font çakışır. `queryLocalFonts` yalnız Chromium'da var ve headless'ta denenmedi. `\fe` ve font kodlamaları yok sayılır.
 
 ## Desteklenen etiketler
 
@@ -164,7 +185,7 @@ Durumlar, deneme alanındaki özellik test tablosuyla aynıdır; orada her satı
 | `\fe` | Desteklenmiyor | Ayrıştırılır ve yok sayılır (web yazı tipleri için anlamı yok). |
 | Olay `Effect` alanı (`Banner;`, `Scroll up;`, `Scroll down;`) | Desteklenmiyor | |
 | Çizimlerde `\kf` süpürmesi | Desteklenmiyor | Çizimler rengi sonda değiştirir. |
-| `[Fonts]` / `[Graphics]`, BorderStyle 4, LayoutResX/Y düzeltmesi | Desteklenmiyor | `LayoutResX/Y` ayrıştırılır ama kullanılmaz. |
+| `[Graphics]`, BorderStyle 4, LayoutResX/Y düzeltmesi | Desteklenmiyor | `LayoutResX/Y` ayrıştırılır ama kullanılmaz. |
 </details>
 
 <details>
@@ -189,11 +210,11 @@ PAR farklı bir denge seçer: libass'i içine gömmez, çizimi tarayıcıya bır
 |---|---|---|
 | Yaklaşım | DOM, SVG ve CSS | WebAssembly'ye derlenmiş libass |
 | Dağıtılacak WASM dosyası | Yok | Var (bir de worker betiği) |
-| Boyut | Gzip ile yaklaşık 14 kB, sıfır bağımlılık | Daha büyük: derlenmiş kütüphaneyi taşır |
+| Boyut | Gzip ile yaklaşık 22 kB, sıfır bağımlılık | Daha büyük: derlenmiş kütüphaneyi taşır |
 | Framework | Gerekmez, saf TypeScript | Düz JS, her birinin kendi kurulumu var |
 | Çıktı | Gerçek DOM düğümleri ve SVG | Canvas üzerinde pikseller |
 | Glifi libass ile birebir çıktı | Hayır (yaklaşımlar yukarıda listeli) | Evet, libass kullanmanın amacı bu |
-| Gömülü yazı tipleri | Desteklenmiyor | libass tabanlı çizicilerde destekleniyor |
+| Gömülü yazı tipleri | Destekleniyor (`[Fonts]`) | libass tabanlı çizicilerde destekleniyor |
 
 Piksel sadakati ve eksiksiz etiket desteği en önemliyse libass tabanlı bir çizici seçin. Küçük, WASM'siz ve incelenebilir bir
 DOM çizici yetiyorsa PAR'ı seçin. Güncel ayrıntılar için her projenin kendi belgelerine bakın.
@@ -238,9 +259,9 @@ Tam ekranda yalnız tam ekran elemanının alt ağacı gösterilir. Tam ekranı 
 </details>
 
 <details>
-<summary>Gömülü yazı tipleri neden yok?</summary>
+<summary>Gömülü yazı tipleri nasıl çalışır?</summary>
 
-Henüz uygulanmadı. Yazı tiplerini `@font-face` ile yükleyin ve ASS yazı tipi adlarını `fontMap` ile eşleyin.
+`[Fonts]` bölümünden çözülür ve tarayıcıya kaydedilir. Bkz. [Fontlar](#fontlar).
 </details>
 
 ## Katkı

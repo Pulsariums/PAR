@@ -1,4 +1,4 @@
-import { prepareLine } from '../anim/Prepared';
+import { prepareLine, type PreparedLine } from '../anim/Prepared';
 import { alignY } from '../layout/Anchor';
 import { collisionShift, type Placed } from '../layout/Collision';
 import { LineView, type LineEnv } from '../render/LineView';
@@ -23,6 +23,11 @@ export class Scene {
     this.timeline = script
       ? new Timeline(script.events.map((e) => prepareLine(e, script.styles, script.info)))
       : new Timeline([]);
+  }
+
+  /** Every prepared line of the loaded script (what the font layer scans). */
+  get prepared(): readonly PreparedLine[] {
+    return this.timeline.all;
   }
 
   get activeCount(): number {

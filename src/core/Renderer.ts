@@ -1,27 +1,27 @@
 import { Scheduler } from '../clock/Scheduler';
 import { bindVideoEvents, isPlaying } from '../clock/videoEvents';
-import { resolveLayoutSize, stageTransform } from '../layout/Layout';
-import { resolveRegion } from '../layout/Region';
 import { parseScript } from '../parser/ScriptParser';
 import type { LineEnv } from '../render/LineView';
 import { Overlay } from '../render/Overlay';
 import type { PARMetrics, PAROptions, Rect, ResolvedOptions } from '../types/options';
 import type { ParsedScript } from '../types/script';
 
-import { measureRegionInput } from './measure';
+import { FontApi } from './FontApi';
+import { observeSize } from './observe';
+import { computeStage } from './stage';
 import { resolveOptions, snapToFrame } from './options';
 import { Scene } from './Scene';
 
 /** The PAR renderer instance. Create it with `PAR.create(options)` or `new PARRenderer(options)`. */
-export class PARRenderer {
+export class PARRenderer extends FontApi {
   private opts: ResolvedOptions;
   private overlay!: Overlay;
   private scene!: Scene;
   private parsed: ParsedScript | null = null;
   private readonly scheduler: Scheduler;
-  private unbind: (() => void) | null = null;
-  private ro: ResizeObserver | null = null;
-  private env: LineEnv = { layout: { width: 384, height: 288 }, styles: new Map(), borderScale: 1, fontMap: {} };
+  /** Undo functions of everything `mount()` attached (size observer, video listeners). */
+  private teardown: Array<() => void> = [];
+  private env: LineEnv = { layout: { width: 384, height: 288 }, styles: new Map(), borderScale: 1, fonts: this.fonts };
   private region: Rect = { x: 0, y: 0, width: 0, height: 0 };
   private scale = { x: 0, y: 0 };
   private layoutDirty = true;
@@ -31,9 +31,12 @@ export class PARRenderer {
   private destroyed = false;
 
   constructor(options: PAROptions) {
+    super();
     this.opts = resolveOptions(options);
     this.scheduler = new Scheduler((mediaTime) => this.frame(mediaTime));
     this.mount();
+    this.configureFonts();
+    if (options.fonts) void this.fonts.addMany(options.fonts);
     if (options.subtitle !== undefined) this.setSubtitle(options.subtitle);
   }
 
@@ -51,8 +54,10 @@ export class PARRenderer {
   setSubtitle(text: string | null): void {
     this.assertAlive();
     this.parsed = text ? parseScript(text) : null;
-    this.env = { ...this.env, styles: this.parsed?.styles ?? new Map() };
+    const styles = this.parsed?.styles ?? new Map();
+    this.env = { ...this.env, styles };
     this.scene.setScript(this.parsed);
+    this.fonts.setScript(text, this.scene.prepared, styles);
     this.invalidate();
   }
 
@@ -69,7 +74,8 @@ export class PARRenderer {
     if (patch.subtitle !== undefined) this.setSubtitle(patch.subtitle);
     this.scheduler.configure(this.opts.fps, this.opts.video);
     this.syncLoop();
-    this.env = { ...this.env, fontMap: this.opts.fontMap };
+    this.configureFonts();
+    if (patch.fonts) void this.fonts.addMany(patch.fonts);
     this.invalidate();
   }
 
@@ -88,13 +94,8 @@ export class PARRenderer {
 
   getMetrics(): PARMetrics {
     return {
-      region: { ...this.region },
-      layout: { ...this.env.layout },
-      scaleX: this.scale.x,
-      scaleY: this.scale.y,
-      time: this.lastTime,
-      activeLines: this.scene.activeCount,
-      running: this.scheduler.isRunning,
+      region: { ...this.region }, layout: { ...this.env.layout }, scaleX: this.scale.x, scaleY: this.scale.y,
+      time: this.lastTime, activeLines: this.scene.activeCount, running: this.scheduler.isRunning,
     };
   }
 
@@ -102,27 +103,35 @@ export class PARRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.unmount();
+    this.fonts.dispose();
     this.destroyed = true;
     this.parsed = null;
+  }
+
+  /** Fonts changed: measured boxes (collisions) are stale, so rebuild every visible line. */
+  protected onFontsChanged(): void {
+    if (this.destroyed) return;
+    this.scene.clear();
+    this.invalidate();
+  }
+
+  private configureFonts(): void {
+    const { fontMap, embeddedFonts, useLocalFonts } = this.opts;
+    this.fonts.configure({ fontMap, embedded: embeddedFonts, useLocalFonts });
   }
 
   private mount(): void {
     const { container, video } = this.opts;
     this.overlay = new Overlay(container, this.opts.zIndex);
     this.scene = new Scene(this.overlay);
-    this.env = { ...this.env, fontMap: this.opts.fontMap };
-    if (typeof ResizeObserver === 'function') {
-      this.ro = new ResizeObserver(() => this.invalidate());
-      this.ro.observe(container);
-      if (video) this.ro.observe(video);
-    }
+    this.teardown.push(observeSize(container, video, () => this.invalidate()));
     if (video) {
-      this.unbind = bindVideoEvents(video, {
+      this.teardown.push(bindVideoEvents(video, {
         play: () => this.syncLoop(),
         pause: () => { this.syncLoop(); this.draw(this.now(), false); },
         seek: () => { if (!this.scheduler.isRunning) this.draw(this.now(), false); },
         resize: () => this.invalidate(),
-      });
+      }));
     }
     this.scheduler.configure(this.opts.fps, video);
     this.layoutDirty = true;
@@ -131,10 +140,8 @@ export class PARRenderer {
 
   private unmount(): void {
     this.scheduler.stop();
-    this.unbind?.();
-    this.unbind = null;
-    this.ro?.disconnect();
-    this.ro = null;
+    this.teardown.forEach((undo) => undo());
+    this.teardown = [];
     this.scene.clear();
     this.overlay.destroy();
   }
@@ -142,16 +149,13 @@ export class PARRenderer {
   /** Runs the loop only while something can change: a playing video, or a free-running custom clock. */
   private syncLoop(): void {
     const { video, clock } = this.opts;
-    const run = video ? isPlaying(video) : clock !== null;
-    if (run) this.scheduler.start();
+    if (video ? isPlaying(video) : clock !== null) this.scheduler.start();
     else this.scheduler.stop();
   }
 
   private now(): number {
     const { clock, video } = this.opts;
-    if (clock) return clock();
-    if (video) return video.currentTime;
-    return this.lastRaw;
+    return clock ? clock() : video ? video.currentTime : this.lastRaw;
   }
 
   private frame(mediaTime: number | null): void {
@@ -166,7 +170,7 @@ export class PARRenderer {
   }
 
   private draw(raw: number, force: boolean): void {
-    if (this.destroyed || !Number.isFinite(raw)) return;
+    if (this.destroyed || !Number.isFinite(raw) || this.fonts.blocking) return;
     const t = snapToFrame(raw + this.opts.timeOffset, this.opts.videoFps);
     if (this.layoutDirty) this.relayout();
     const forced = force || this.forceNext;
@@ -178,16 +182,14 @@ export class PARRenderer {
 
   private relayout(): void {
     this.layoutDirty = false;
-    const input = measureRegionInput(this.opts.container, this.opts.video);
-    this.region = resolveRegion(this.opts.region, input);
-    const layout = resolveLayoutSize(this.opts.layout, this.parsed?.info ?? null);
-    const st = stageTransform(this.region, layout, this.parsed?.info.scaledBorderAndShadow ?? true);
+    const { region, layout, transform: st } = computeStage(this.opts, this.parsed?.info ?? null);
     const prev = this.env;
     if (prev.layout.width !== layout.width || prev.layout.height !== layout.height) this.scene.clear();
     this.env = { ...prev, layout, borderScale: st.borderScale };
     if (st.borderScale !== prev.borderScale) this.forceNext = true;
+    this.region = region;
     this.scale = { x: st.scaleX, y: st.scaleY };
-    this.overlay.place(this.region, layout);
+    this.overlay.place(region, layout);
   }
 
   private assertAlive(): void {

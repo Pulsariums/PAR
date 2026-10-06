@@ -29,6 +29,8 @@ export type FpsOption = 'auto' | number;
 /** Returns the current media time in seconds. */
 export type ClockFn = () => number;
 
+import type { FontSpec } from '../fonts/types';
+
 export interface PAROptions {
   /** Video element to follow (time, play/pause/seek, size). */
   video?: HTMLVideoElement | null;
@@ -50,6 +52,12 @@ export interface PAROptions {
   timeOffset?: number;
   /** Maps ASS font names to CSS font-family values, e.g. `{ 'Open Sans Semibold': '"Open Sans", sans-serif' }`. */
   fontMap?: Record<string, string>;
+  /** Fonts to load now (File, Blob, bytes, URL, or `{ source, family }`). Same as calling `addFonts` after creating. */
+  fonts?: FontSpec[];
+  /** Ask the browser for installed fonts (Local Font Access API) and use them for names nothing else covers. Never required. */
+  useLocalFonts?: boolean;
+  /** Load fonts embedded in the script's `[Fonts]` section. Default true. Read when a script is loaded (`setSubtitle`). */
+  embeddedFonts?: boolean;
   /** CSS z-index of the overlay. Default 1. */
   zIndex?: number;
 }
@@ -65,6 +73,8 @@ export interface ResolvedOptions {
   clock: ClockFn | null;
   timeOffset: number;
   fontMap: Record<string, string>;
+  useLocalFonts: boolean;
+  embeddedFonts: boolean;
   zIndex: number;
 }
 

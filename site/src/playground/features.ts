@@ -33,6 +33,8 @@ export const FEATURES: readonly Feature[] = [
   { label: 'Layers', status: 'rendered', preset: 'layers' },
   { label: 'Collision stacking', status: 'rendered', preset: 'collision' },
   { label: 'Comments', status: 'rendered', preset: 'comments' },
+  { label: '[Fonts] embedded fonts', status: 'rendered', preset: 'fontsEmbedded' },
+  { label: 'addFont / addFonts, fontMap', status: 'rendered', preset: 'fontsUser' },
   { label: '\\fe', status: 'unsupported', preset: 'unsupported' },
   { label: 'Effect: Banner / Scroll', status: 'unsupported', preset: 'unsupported' },
   { label: '\\kf on drawings', status: 'unsupported', preset: 'unsupported' },

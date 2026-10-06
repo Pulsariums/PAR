@@ -12,6 +12,11 @@ export class Timeline {
     this.maxDuration = this.lines.reduce((m, l) => Math.max(m, l.event.end - l.event.start), 0);
   }
 
+  /** All lines, sorted by start. */
+  get all(): readonly PreparedLine[] {
+    return this.lines;
+  }
+
   get size(): number {
     return this.lines.length;
   }

@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Fonts: embedded `[Fonts]` decoding, `addFont`/`addFonts`/`removeFont`/`listFonts`, `fonts`/`useLocalFonts`/`embeddedFonts` options, `getFontReport()`, `ready`, `onFontsChange`, content-addressed ref-counted registry, name-table parsing (TTF/OTF/TTC/WOFF/WOFF2), zip input, Local Font Access, playground Fonts tab and two font presets.
+
+### Changed
+- `\\fs` to CSS size now uses real font metrics (`unitsPerEm / (winAscent + winDescent)`, as libass) instead of a fixed 0.9; 0.9 remains the fallback. Bundle grows to about 22 kB gzipped.
+
+### Added (earlier)
 - Static GitHub Pages site (`site/`, Vite): live hero, playground with test card / video file / video URL,
   one preset per feature, feature test matrix, option controls, metrics panel and copyable `create(...)` snippet. TR / RU / EN UI.
 - README in English, Turkish and Russian; CONTRIBUTING.md; SECURITY.md; animated SVG banner; favicon and social preview.

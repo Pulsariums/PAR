@@ -46,6 +46,8 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     clock: patch.clock !== undefined ? patch.clock : prev?.clock ?? null,
     timeOffset,
     fontMap: { ...(patch.fontMap ?? prev?.fontMap ?? {}) },
+    useLocalFonts: patch.useLocalFonts ?? prev?.useLocalFonts ?? false,
+    embeddedFonts: patch.embeddedFonts ?? prev?.embeddedFonts ?? true,
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
   };
 };

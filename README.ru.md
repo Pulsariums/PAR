@@ -9,7 +9,7 @@
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Pulsariums/PAR/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml"><img alt="Pages" src="https://github.com/Pulsariums/PAR/actions/workflows/pages.yml/badge.svg" /></a>
   <img alt="Версия" src="https://img.shields.io/github/package-json/v/Pulsariums/PAR?color=5b3df5" />
-  <img alt="Размер: около 14 КБ в gzip" src="https://img.shields.io/badge/gzip-~14%20kB-5b3df5" />
+  <img alt="Размер: около 22 КБ в gzip" src="https://img.shields.io/badge/gzip-~22%20kB-5b3df5" />
   <img alt="Без зависимостей" src="https://img.shields.io/badge/dependencies-0-brightgreen" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-typed-3178c6?logo=typescript&logoColor=white" />
 </p>
@@ -29,7 +29,7 @@ PAR (Pulsar ASS Renderer) рисует субтитры Advanced SubStation Alph
 
 | | |
 |---|---|
-| **Ноль зависимостей** | Около 14 КБ в gzip. Чистый TypeScript, никаких пакетов в рантайме и загрузки WASM. |
+| **Ноль зависимостей** | Около 22 КБ в gzip. Чистый TypeScript, никаких пакетов в рантайме и загрузки WASM. |
 | **DOM, SVG и CSS** | Текст остаётся настоящим текстом, рисунки это SVG-контуры, буквы формирует собственный текстовый движок браузера. |
 | **Подключил и работает** | `create({ video, subtitle })`. Letterbox, изменение размера, пауза и перемотка отслеживаются. |
 | **Поведение как у libass** | Приоритет тегов, порядок `\t`, тайминг караоке и значения PlayRes по умолчанию повторяют libass. |
@@ -99,6 +99,9 @@ still.renderAt(12.5); // секунды
 | `clock` | `() => number` | `video.currentTime` | Собственные часы в секундах. |
 | `timeOffset` | `number` | `0` | Секунды, добавляемые к часам (задержка субтитров). |
 | `fontMap` | `Record<string,string>` | `{}` | Имя шрифта ASS -> CSS `font-family`. Шрифты вы подключаете сами через `@font-face`. |
+| `fonts` | `FontSpec[]` | `[]` | Шрифты для загрузки при создании (File, Blob, байты, URL или `{ source, family }`). См. [Шрифты](#шрифты). |
+| `useLocalFonts` | `boolean` | `false` | Использовать установленные шрифты через Local Font Access API (Chromium, нужно разрешение). Не обязательно. |
+| `embeddedFonts` | `boolean` | `true` | Загружать раздел `[Fonts]` скрипта. |
 | `zIndex` | `number` | `1` | z-index слоя. |
 
 Недопустимые значения вызывают исключение (`fps: 5` даёт `RangeError`, область нулевого размера даёт `TypeError`).
@@ -128,6 +131,24 @@ still.renderAt(12.5); // секунды
 С собственными часами и без видео цикл идёт постоянно (если время не изменилось, работы он не делает). Если нет ни того ни другого,
 ничего не происходит, пока вы не вызовете `renderAt()`. Слой использует `pointer-events: none`, поэтому элементы управления видео работают.
 </details>
+
+## Шрифты
+
+Скрипты называют шрифты, PAR заставляет браузер их использовать. Порядок разрешения имени ASS (ведущий `@` отбрасывается, регистр не важен): **загруженная гарнитура** (сначала пользовательская, затем встроенная) -> `fontMap` -> **установленный шрифт через `useLocalFonts`** -> системный шрифт -> общий `sans-serif` (помечается `missing`). Для жирного/курсива берётся настоящая гарнитура, если она загружена; иначе браузер рисует синтетически, и отчёт это показывает (правило libass: запрошенный вес > вес гарнитуры + 150).
+
+```ts
+const par = create({ video, subtitle, fonts: [fontFile] });   // File | Blob | ArrayBuffer | URL | .zip
+await par.addFonts(input.files);     // пачкой; имя семейства читается из таблицы `name` (TTF, OTF, TTC, WOFF, WOFF2*)
+await par.ready;                     // все загрузки шрифтов завершены, раскладка пересчитана
+par.getFontReport();                 // { fonts: [{ name, status: 'embedded'|'user'|'local'|'system'|'missing', styles, lines, ... }], missing, pending, warnings }
+par.listFonts(); par.removeFont(id); par.onFontsChange(fn);
+await par.loadLocalFonts();          // вызывать из клика: Local Font Access API, false если недоступно или отклонено
+```
+
+- **Встроенные шрифты**: раздел `[Fonts]` (uuencode SSA/ASS, несколько шрифтов, неполная последняя строка) декодируется и регистрируется в `document.fonts`. Одинаковые байты регистрируются один раз, со счётчиком ссылок на рендерер; `destroy()` освобождает их.
+- **Время загрузки**: пока шрифты скрипта грузятся, текст не рисуется, затем строки пересобираются и измеряются с правильным шрифтом (без ожидания в каждом кадре).
+- **Метрики**: libass задаёт `\fs` так, что `usWinAscent + usWinDescent` равно ему (прочитано в libass `ass_font.c`, `set_font_metrics` / `ass_face_set_size`). Для загруженных шрифтов PAR использует `font-size = fs * unitsPerEm / (winAscent + winDescent)` (запасные: hhea, typo, bbox, как в libass). Для системных шрифтов измеряется сумма `fontBoundingBox` ascent + descent на canvas (обычно по hhea, у шрифтов с разными win и hhea может отличаться от libass); без метрик остаётся прежний коэффициент 0.9. Попиксельно с реальным libass не сравнивалось.
+- **Ограничения**: PAR не распространяет шрифты и не делает подмножества; встроенные шрифты приходят от автора скрипта, учитывайте лицензии. `[Graphics]` игнорируется. Браузеры грузят только первую гарнитуру TTC, поэтому PAR извлекает каждую. Для имени из WOFF2 нужен `DecompressionStream('brotli')` (иначе семейство берётся из имени файла; передайте `{ family }`). Шрифт регистрируется на всю страницу: два разных шрифта с одинаковыми семейством, весом и стилем конфликтуют. `queryLocalFonts` есть только в Chromium и в headless не проверялся. `\fe` и кодировки игнорируются.
 
 ## Поддерживаемые теги
 
@@ -164,7 +185,7 @@ still.renderAt(12.5); // секунды
 | `\fe` | Не поддерживается | Разбирается и игнорируется (для веб-шрифтов смысла нет). |
 | Поле `Effect` события (`Banner;`, `Scroll up;`, `Scroll down;`) | Не поддерживается | |
 | Заливка `\kf` на рисунках | Не поддерживается | Рисунок меняет цвет только в конце. |
-| `[Fonts]` / `[Graphics]`, BorderStyle 4, поправка LayoutResX/Y | Не поддерживается | `LayoutResX/Y` разбирается, но не используется. |
+| `[Graphics]`, BorderStyle 4, поправка LayoutResX/Y | Не поддерживается | `LayoutResX/Y` разбирается, но не используется. |
 </details>
 
 <details>
@@ -189,11 +210,11 @@ PAR выбирает другой компромисс: libass он не вкл�
 |---|---|---|
 | Подход | DOM, SVG и CSS | libass, скомпилированный в WebAssembly |
 | WASM-файл для поставки | Нет | Да (и скрипт воркера) |
-| Размер | Около 14 КБ в gzip, ноль зависимостей | Больше: внутри скомпилированная библиотека |
+| Размер | Около 22 КБ в gzip, ноль зависимостей | Больше: внутри скомпилированная библиотека |
 | Фреймворк | Не нужен, чистый TypeScript | Обычный JS, у каждого своя настройка |
 | Результат | Настоящие узлы DOM и SVG | Пиксели на canvas |
 | Вывод глиф в глиф как у libass | Нет (приближения перечислены выше) | Да, ради этого libass и берут |
-| Встроенные шрифты | Не поддерживаются | Поддерживаются рендерерами на libass |
+| Встроенные шрифты | Поддерживаются (`[Fonts]`) | Поддерживаются рендерерами на libass |
 
 Если важнее всего точность до пикселя и полное покрытие тегов, выбирайте рендерер на libass. Если достаточно небольшого,
 не требующего WASM рендерера на DOM, который удобно инспектировать, выбирайте PAR. Актуальные подробности смотрите в документации каждого проекта.
@@ -238,9 +259,9 @@ PAR берёт время из обычного элемента `<video>` (ил
 </details>
 
 <details>
-<summary>Почему нет встроенных шрифтов?</summary>
+<summary>Как работают встроенные шрифты?</summary>
 
-Пока не реализовано. Подключайте шрифты через `@font-face`, а имена шрифтов ASS сопоставляйте через `fontMap`.
+Они декодируются из `[Fonts]` и регистрируются в браузере. См. [Шрифты](#шрифты).
 </details>
 
 ## Участие в проекте

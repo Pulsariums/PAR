@@ -1,6 +1,7 @@
 import { applyI18n, onLang } from '../i18n/i18n';
 
 import { initDrop } from './dnd';
+import { initFonts } from './fontsPanel';
 import { initMatrix } from './matrix';
 import { initMetrics } from './metrics';
 import { initOptions } from './options';
@@ -34,14 +35,16 @@ export const initPlayground = (root: HTMLElement): void => {
     snippet.textContent = buildSnippet(store.get(), player.hasVideo);
     options.sync();
     metrics.draw();
+    fonts.draw();
   };
   store.subscribe(refresh);
   const source = initSource(player, store, refresh);
   const subs = initSubs(player, refresh);
+  const fonts = initFonts(player);
   initMatrix((id) => { subs.setPreset(id); selectTab('subs'); $('stage').scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' }); });
   initCopy(() => snippet.textContent ?? '');
-  initDrop(root, (f) => source.loadFile(f), (f) => void subs.loadFile(f));
-  onLang(() => { transport.label(); metrics.draw(); });
+  initDrop(root, (f) => source.loadFile(f), (f) => void subs.loadFile(f), (f) => { selectTab('fonts'); void fonts.add(f); });
+  onLang(() => { transport.label(); metrics.draw(); fonts.draw(); });
 
   subs.setPreset('basic');
   if (!reduced()) player.card.play();
