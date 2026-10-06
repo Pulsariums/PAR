@@ -29,8 +29,7 @@ Frame `k` is sampled at `t_k = (k + phase) / fps` (default phase 0).
    Rounding to a multiple of `q` errs by at most `q/2`, so `q = 2*tol/gain`, with the worst-case gain per tag
    (`quanta()` in `bake/params.ts`): positions/`\org`/clip/border/shadow: 1; angles: `diagonal * pi/180`;
    `\fscx/\fscy` percent: `width/100`; `\fs`: `width/size`; shear: `height`; drawings: `2^(p-1) / max glyph scale`;
-   `\blur` uses `tol/2` (heuristic, a blur radius has no hard displacement bound). Defaults at 1920x1080:
-   positions 0.25, angles 0.005 deg, scale 0.01 %, shear 0.0001. Colours, alphas and all tag times are untouched.
+   `\blur` uses `tol/2` (heuristic, a blur radius has no hard displacement bound). The quantum is then lowered to the next power of ten (a decimal grid keeps residuals small for the lossless coder; a 0.25 grid made files *bigger*, measured). Defaults at 1920x1080: positions 0.1 px (max error 0.05), angles 0.001 deg, scale 0.01 %, shear 0.0001, blur 0.1. Numbers already on the grid are left as written; others print with the grid's fixed decimals. Colours, alphas and all tag times are untouched.
 5. **One-frame animations are evaluated and removed.** A line that is visible on exactly one frame is sampled at
    exactly one instant: `\move` becomes `\pos` at that instant, `\t` with progress 0 is dropped, with progress 1 its tags
    are inlined, `\fad` that is fully opaque at that instant is dropped (using PAR's own `positionAt`, `transitionProgress`,
@@ -64,3 +63,45 @@ Honest limits of the guarantee:
 * Baking reduces **file size, parse time and memory**, not render cost: browser rendering cost follows the
   total bitmap size on screen, not the number of lines (cf. FBF-ifier, which goes the other way: it expands `\t`/`\move`
   into per-frame lines for renderers that handle those badly).
+
+## Measured results (synthetic data, see XPAR.md for the setup)
+
+### Lossy PAR bake
+
+| profile | fps | PAR MB | ratio | lossless XPAR MB | events in | out | dropped | merged | collapsed |
+|---|---|---|---|---|---|---|---|---|---|
+| a-text-60 | 60 | 5.50 | 29.2x | 5.05 | 1139872 | 1139872 | 0 | 0 | 0 |
+| a-text-60 | 24 | 3.25 | 49.4x | 5.05 | 1139872 | 455877 | 683995 | 0 | 0 |
+| a-text-24 | 24 | 2.36 | 27.1x | 2.21 | 456856 | 456856 | 0 | 0 | 0 |
+| b-draw-24 | 24 | 7.43 | 10.0x | 7.58 | 244713 | 244713 | 0 | 0 | 1 |
+| c-episode | 24 | 0.01 | 11.3x | 0.02 | 1027 | 1027 | 0 | 0 | 0 |
+
+Visual equivalence (headless Chromium + PAR at HEAD, 960x540, 12 frames per case, tolerance 1/8 px; `verify-par.ts`):
+
+| case | max pixel diff | mean pixel diff | pixels over 8/255 | control: source vs next frame (mean) |
+|---|---|---|---|---|
+| a-text-24 baked at 24 fps | 116/255 | 0.072/255 | 0.33 % | 3.78/255 |
+| b-draw-24 baked at 24 fps | 151/255 | 0.131/255 | 0.48 % | 2.32/255 |
+| a-text-60 (60 fps lines) baked at 24 fps | 96/255 | 0.041/255 | 0.22 % | 2.90/255 |
+| any profile, `--tol 0.0001` | 0 | 0 | 0 % | |
+
+The mean difference is about 2-5 % of what one frame of motion changes (the control); the maximum comes from a few
+anti-aliased glyph-edge pixels whose coverage flips under a sub-pixel move. "Visually equivalent" here means *within
+the stated geometric tolerance and the rasteriser's edge noise*, not pixel identical. The render-twice check (the same
+document rendered twice) differs by up to 5/255, so part of that noise is the browser itself.
+
+## Verdict: is `.par` worth having?
+
+* **Same fps as the source (frame-by-frame lines): barely.** PAR was within -2 % to +9 % of lossless XPAR
+  (b: 2 % smaller; a at 60 fps: 9 % larger; a at 24 fps: 7 % larger). Rounding smooth motion to a coarse grid adds
+  residual noise as fast as it removes digits, and the lossless coder was already making those lines cheap. At a
+  0.25 grid it was *worse* by 25 %: the first prototype of the bake showed this.
+* **Lower target fps than the source: yes, large.** Lines no frame shows are dropped: 60 fps lines baked for 24 fps
+  lose 60 % of the events and the file is 3.25 MB against 5.05 MB lossless (-36 %, 49x vs the source). Decode and parse
+  work shrink with the event count too (456 k vs 1.14 M events).
+* **Merging and one-frame animation collapse** only fire on data that has such lines (identical consecutive static
+  lines, `\t`/`\move` inside one-frame lines); the synthetic profiles have almost none (1 collapse in 245 k events), so
+  these numbers say nothing about them. They need the real sample.
+* Recommendation: ship XPAR everywhere (it is lossless, 2-6x smaller than xz on this data and seekable). Keep `.par` as an
+  *export option* whose value is the **fps reduction and dropping of invisible lines**, not precision rounding; consider
+  making the tolerance rounding optional (`--tol 0` keeps numbers exactly) and decide after measuring the real file.

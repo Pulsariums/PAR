@@ -56,7 +56,7 @@ describe('lossy bake', () => {
 
   it('rounds numbers within the stated tolerance', async () => {
     const q = quanta(defaultParams(24), 1920, 1080);
-    expect(q.pos).toBe(0.25);
+    expect(q.pos).toBe(0.1);
     const { ev } = await bake(D('0:00:01.00', '0:00:02.00', '{\\pos(100.13,200.37)\\frz12.3456\\fscx100.4321}t'));
     const t = parseScript(HEAD + `Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,${ev[0].text}`).events[0].lineTags.pos!;
     expect(Math.abs(t[0] - 100.13)).toBeLessThanOrEqual(0.125);

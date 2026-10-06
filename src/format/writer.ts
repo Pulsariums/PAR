@@ -37,7 +37,7 @@ export interface Progress {
 
 export type Sink = (bytes: Uint8Array) => void | Promise<void>;
 
-export const DEFAULTS = { chunkBytes: 512 * 1024, chunkMs: 2000, minChunkBytes: 32 * 1024, maxSpanMs: 120_000, longMs: 20_000 };
+export const DEFAULTS = { chunkBytes: 512 * 1024, chunkMs: 2000, minChunkBytes: 131072, maxSpanMs: 1800000, longMs: 20_000 };
 
 /** Builds the container: lanes of open chunks, flushes them to the sink, writes meta/index/footer on `finish`. */
 export class XparWriter {

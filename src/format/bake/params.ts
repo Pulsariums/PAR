@@ -16,8 +16,8 @@ export const defaultParams = (fps: number, over: Partial<BakeParams> = {}): Bake
   fps, phase: 0, tolPx: 0.125, renderHeight: null, merge: true, ...over,
 });
 
-const NICE = [1, 0.5, 0.25, 0.1, 0.05, 0.025, 0.01, 0.005, 0.0025, 0.001, 0.0005, 0.00025, 0.0001];
-/** Largest "round" quantum not above `q` (so printed numbers keep few decimals). */
+const NICE = [1, 0.1, 0.01, 0.001, 0.0001];
+/** Largest power-of-ten quantum not above `q`: values stay on a decimal grid, so the lossless coder sees small residuals (a 0.25 grid would not). */
 export const nice = (q: number): number => NICE.find((n) => n <= q + 1e-12) ?? NICE[NICE.length - 1];
 
 export interface Quanta {

@@ -74,7 +74,7 @@ are *not* required to be sorted: each chunk carries its own time bounds. Events 
 separate **lane** so one long sign does not widen every chunk; there is no carry-over of events between chunks (an
 event lives in exactly one chunk, found through `maxEndMs`).
 
-**Chunk**: closes after ~512 KiB of source text, or once it spans 2 s of start times and holds >= 32 KiB, or 120 s.
+**Chunk**: closes after ~512 KiB of source text, or once it spans 2 s of start times and holds >= 128 KiB, or 30 min. Seek granularity is therefore *bytes first*: a dense file gets a chunk per ~0.1-0.2 s of video, a sparse episode one chunk per 128 KiB (about the whole episode). A 2 s time grid was measured to cost ratio (a normal 24 min episode: 6.9x with ~10 KiB chunks, 10.7x as one chunk).
 It is a *stream set*: `uv n`, `n x (uv key, uv length)`, then the bodies. The chunk is independent: dictionaries and
 numeric histories restart in every chunk. CRC-32 of the stored bytes is in the index; `rawLen` bounds decoding.
 
@@ -172,3 +172,63 @@ worker and posted to the main thread.
 * Decoding speed is bounded by the entropy coder (see the numbers); `codec: 'deflate'` decodes about 3x faster for
   about 10-25 % more bytes.
 * Embedded fonts are a placeholder: stored raw, listed in `file.fonts`; integration with `src/fonts` is future work.
+
+## Measured results
+
+**All data is SYNTHETIC** (`tools/xpar/gen-bench.ts`, seed 1): particle effects per frame (a), morphing per-frame vector
+drawings (b), a 24 min dialogue/karaoke/sign episode (c). It is built to look like Aegisub-Motion / templater output
+(2-3 decimals, trailing zeros stripped, frame lines spanning frame midpoints), but real files will differ: the owner's
+real 200 MB sample is still to be measured. Setup: one machine (4 cores, Node 22.22), single thread, `xz -9e`,
+`zstd -19` (window 2^27), `brotli q9` and `gzip -9` run as dev-time baselines only (never at runtime). Sizes are
+files, MB = 2^20 bytes. Reproduce: `npm run xpar:gen`, `node tools/xpar/run.mjs bench <file> xpar|index|bake|base`, `... report <dir>`.
+
+### Size (lossless) and ratio vs source
+
+| profile | source MB | gzip -9 | deflate-raw 6 | brotli q9 | zstd 19 | xz -6 | xz -9e | XPAR deflate | **XPAR (own coder)** | XPAR + gzip |
+|---|---|---|---|---|---|---|---|---|---|---|
+| a-text-60 | 160.44 | 29.96 MB (5.4x) | 30.79 MB (5.2x) | 25.14 MB (6.4x) | 21.04 MB (7.6x) | 20.09 MB (8.0x) | 17.58 MB (9.1x) | 6.09 MB (26.3x) | **5.05 MB (31.8x)** | 5.04 MB (31.8x) |
+| a-text-24 | 64.17 | 11.91 MB (5.4x) | 12.25 MB (5.2x) | 10.06 MB (6.4x) | 8.71 MB (7.4x) | 8.22 MB (7.8x) | 7.34 MB (8.7x) | 2.65 MB (24.2x) | **2.21 MB (29.1x)** | 2.20 MB (29.1x) |
+| b-draw-24 | 74.33 | 24.51 MB (3.0x) | 24.56 MB (3.0x) | 20.43 MB (3.6x) | 17.65 MB (4.2x) | 17.51 MB (4.2x) | 15.31 MB (4.8x) | 8.29 MB (9.0x) | **7.58 MB (9.8x)** | 7.58 MB (9.8x) |
+| c-episode | 0.14 | 0.02 MB (7.5x) | 0.02 MB (7.5x) | 0.02 MB (8.0x) | 0.02 MB (8.6x) | 0.01 MB (9.2x) | 0.01 MB (9.4x) | 0.02 MB (7.1x) | **0.02 MB (6.9x)** | 0.02 MB (7.0x) |
+
+### Speed and seek cost (single thread, Node 22, one machine; MB/s of SOURCE text)
+
+| profile | codec | encode MB/s | decode all MB/s | chunks | chunks per 2 s window | 2 s window ms (cold) | 1 frame window ms (cold) | byte exact |
+|---|---|---|---|---|---|---|---|---|
+| a-text-60 | rc | 2.7 | 5.04 | 321 | 12 | 1476 | 94 | true |
+| a-text-60 | deflate | 3.5 | 13.56 | 321 | 12 | 825 | 38 | true |
+| a-text-24 | rc | 2.2 | 5.51 | 129 | 5 | 602 | 89 | true |
+| a-text-24 | deflate | 2.63 | 13.68 | 129 | 5 | 391 | 43 | true |
+| b-draw-24 | rc | 3.23 | 4.77 | 149 | 6 | 822 | 112 | true |
+| b-draw-24 | deflate | 5.32 | 12.59 | 149 | 6 | 369 | 55 | true |
+| c-episode | rc | 1.08 | 2.6 | 14 | 1 | 2 | 1 | true |
+| c-episode | deflate | 1.65 | 4.23 | 14 | 1 | 1 | 1 | true |
+
+### Plain-ASS index (no conversion)
+
+| profile | source MB | index time s | MB/s | runs | events | peak RSS MB | heap after index MB | 2 s window ms |
+|---|---|---|---|---|---|---|---|---|
+| a-text-60 | 160.44 | 2.5 | 63.2 | 642 | 1139872 | 62.67 | 5.42 | 538 |
+| a-text-24 | 64.17 | 1.1 | 57 | 257 | 456856 | 61.76 | 5.37 | 274 |
+| b-draw-24 | 74.33 | 0.6 | 129.7 | 298 | 244713 | 60.33 | 5.37 | 208 |
+| c-episode | 0.14 | 0 | 10.3 | 1 | 1027 | 0 | 5.22 | 15 |
+
+
+Memory (peak RSS of the whole Node process, baseline of an idle Node is ~45-60 MB): encoding the 160 MB profile
+117 MB; indexing the plain 160 MB ASS 63 MB RSS and 5.4 MB heap for 1.14 M events and 642 runs; baking 160 MB: 176 MB.
+Nothing scales with file size beyond the open chunks (about 512 KiB of source each) and the index.
+
+Reading the numbers honestly:
+* On frame-by-frame data XPAR is 3.5x (profile a) and 2.0x (b) smaller than `xz -9e` and 5-7x smaller than gzip;
+  with the deflate codec instead of the own coder it is still 2.8x / 1.8x smaller than xz. Gzip over an `.xpar` gains <0.5 %.
+* The own coder buys 10-25 % over deflate on the same transform, at a cost: decoding is ~2.7x slower
+  (5 vs 13.6 MB/s of source), 1-frame seek 90-110 ms vs 40-55 ms. A 2 s window of the densest profile needs
+  1.5 s of CPU (the profile has 19k events/s: 12 chunks). In a worker that keeps up with playback (decode 5 MB/s vs 2.7 MB/s
+  of subtitle text per second of video) with a margin of about 2x, not more.
+* On the normal episode (142 KB) XPAR (default single chunk) reaches ~10.7x against xz -9e 9.4x, gzip 7.5x (the table
+  above was measured before the chunk defaults were raised and shows 6.9x with 14 small chunks).
+  Gains on normal files are small; their value is the guarantee, seekability and tiny files, not ratio.
+* Encoding is 2-3 MB/s (160 MB in 60 s): the tokeniser and the coder are plain JS; fine for an export step, slow for
+  interactive use on a 200 MB file.
+* Chunk size trades ratio for seek latency: for profile b, 512 KiB chunks give 10.0x, 128 KiB 6.3x, 64 KiB 4.6x
+  (history and coder statistics restart per chunk).

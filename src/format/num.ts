@@ -40,11 +40,19 @@ export const rescale = (n: Num, d: number): number => {
 
 export const numValue = (n: Num): number => n.m / 10 ** n.d;
 
-/** Nearest multiple of `q`, printed with the fewest decimals (used by the lossy baker). */
-export const roundTo = (n: Num, q: number): Num => {
-  const v = Math.round(numValue(n) / q) * q;
+const decimalsOf = (q: number): number => {
   let d = 0;
-  while (d < MAX_DEC && Math.abs(v * 10 ** d - Math.round(v * 10 ** d)) > 1e-9) d++;
-  const m = Math.round(v * 10 ** d);
+  while (d < MAX_DEC && Math.abs(q * 10 ** d - Math.round(q * 10 ** d)) > 1e-9) d++;
+  return d;
+};
+
+/**
+ * Nearest multiple of `q`, printed with a FIXED number of decimals (those of `q`; numbers already on the grid are left as written): constant precision keeps the
+ * decimal-count streams and the numeric predictions of the lossless coder smooth (`12.00`, `12.25`, not `12`, `12.25`).
+ */
+export const roundTo = (n: Num, q: number): Num => {
+  if (n.d <= decimalsOf(q) && Math.abs(Math.round(numValue(n) / q) * q - numValue(n)) < 1e-9) return n;
+  const d = decimalsOf(q);
+  const m = Math.round(Math.round(numValue(n) / q) * q * 10 ** d);
   return { m: m === 0 ? 0 : m, d };
 };

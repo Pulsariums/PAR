@@ -11,7 +11,7 @@ if (!entry) {
   console.error('usage: node tools/xpar/run.mjs <cli|gen-bench|bench|verify-par> [args...]');
   process.exit(2);
 }
-const outDir = resolve(root, 'dist/xpar-tools');
+const outDir = resolve(root, 'node_modules/.cache/xpar-tools');
 mkdirSync(outDir, { recursive: true });
 const { build } = await import(resolve(root, 'node_modules/rolldown/dist/index.mjs'));
 await build({
