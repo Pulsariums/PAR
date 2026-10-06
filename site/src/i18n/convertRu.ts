@@ -1,0 +1,18 @@
+export const convertRu = {
+  'nav.convert': 'Конвертер',
+  'cv.title': 'Быстрый конвертер', 'cv.sub': 'ASS в XPAR или PAR и обратно. Работает в браузере; файл не покидает ваше устройство.',
+  'cv.drop': 'Перетащите сюда файлы .ass, .ssa, .xpar или .par, или', 'cv.pick': 'Выбрать файлы',
+  'cv.fps': 'Частота кадров PAR', 'cv.fpsCustom': 'своя', 'cv.fpsCustomLabel': 'Своя частота кадров', 'cv.fpsBad': 'Введите число от 1 до 1000.',
+  'cv.verify': 'Проверить круговое преобразование (SHA-256)', 'cv.verifyHint': 'XPAR декодируется заново и сравнивается с исходником. Файлы больше 20 МБ пропускают проверку, пока вы сами не отметите флажок.',
+  'cv.k.ass': 'ASS', 'cv.k.xpar': 'XPAR (без потерь)', 'cv.k.par': 'PAR (с потерями)',
+  'cv.toXpar': 'В XPAR (без потерь)', 'cv.toPar': 'В PAR (с потерями)', 'cv.toAss': 'В ASS',
+  'cv.cancel': 'Отмена', 'cv.remove': 'Убрать', 'cv.removeLabel': 'Убрать {name} из списка', 'cv.download': 'Скачать', 'cv.downloadLabel': 'Скачать {name}',
+  'cv.ph.queued': 'В очереди', 'cv.ph.encode': 'Конвертация', 'cv.ph.verify': 'Проверка', 'cv.busy': '{phase} {pct}%', 'cv.busyNoPct': '{phase}...',
+  'cv.done': '{input} в {output} ({ratio}), {s} с',
+  'cv.verified': 'Проверено: SHA-256 декодированного текста совпадает с исходным.', 'cv.checked': 'Совпадает с SHA-256, записанным в файле: побайтовый оригинал.',
+  'cv.parNote': 'PAR с потерями: это запечённый ASS, а НЕ ваш оригинал. Храните исходный ASS или XPAR.',
+  'cv.parOut': 'PAR с потерями, исходный ASS восстановить нельзя ({fps} fps). Объединено кадров {m}, отброшено событий {d}, упрощено анимаций {c}.',
+  'cv.err.unknown': 'Это не файл ASS, SSA, XPAR или PAR (определено по содержимому, а не по расширению).', 'cv.err.empty': 'Файл пуст.',
+  'cv.err.read': 'Не удалось прочитать файл: {error}', 'cv.err.fail': 'Ошибка: {error}',
+  'cv.live.done': 'Готово: {name}', 'cv.live.fail': 'Ошибка: {name}',
+};

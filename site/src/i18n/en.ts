@@ -1,3 +1,4 @@
+import { convertEn } from './convertEn';
 import { libEn } from './libEn';
 import { labEn } from './labEn';
 import { studioEn } from './studioEn';
@@ -53,6 +54,7 @@ export const en = {
   'foot.note': 'Rendered with the local PAR source from this repository.',
   ...libEn,
   ...labEn,
+  ...convertEn,
   ...studioEn,
 };
 export type Dict = Record<keyof typeof en, string>;

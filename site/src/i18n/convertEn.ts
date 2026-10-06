@@ -1,0 +1,18 @@
+export const convertEn = {
+  'nav.convert': 'Convert',
+  'cv.title': 'Quick converter', 'cv.sub': 'ASS to XPAR or PAR and back. It runs in your browser; the file never leaves your device.',
+  'cv.drop': 'Drop .ass, .ssa, .xpar or .par files here, or', 'cv.pick': 'Choose files',
+  'cv.fps': 'PAR frame rate', 'cv.fpsCustom': 'custom', 'cv.fpsCustomLabel': 'Custom frame rate', 'cv.fpsBad': 'Enter a number from 1 to 1000.',
+  'cv.verify': 'Verify round trip (SHA-256)', 'cv.verifyHint': 'XPAR is decoded again and compared with the input. Files over 20 MB skip it unless you tick the box yourself.',
+  'cv.k.ass': 'ASS', 'cv.k.xpar': 'XPAR (lossless)', 'cv.k.par': 'PAR (lossy)',
+  'cv.toXpar': 'Convert to XPAR (lossless)', 'cv.toPar': 'Convert to PAR (lossy)', 'cv.toAss': 'Convert to ASS',
+  'cv.cancel': 'Cancel', 'cv.remove': 'Remove', 'cv.removeLabel': 'Remove {name} from the list', 'cv.download': 'Download', 'cv.downloadLabel': 'Download {name}',
+  'cv.ph.queued': 'Queued', 'cv.ph.encode': 'Converting', 'cv.ph.verify': 'Verifying', 'cv.busy': '{phase} {pct}%', 'cv.busyNoPct': '{phase}...',
+  'cv.done': '{input} to {output} ({ratio}), {s} s',
+  'cv.verified': 'Round trip verified: the decoded text has the same SHA-256 as the input.', 'cv.checked': 'Matches the SHA-256 stored in the file: byte-exact original.',
+  'cv.parNote': 'PAR is lossy: this is the baked ASS, NOT your original. Keep the original ASS or an XPAR.',
+  'cv.parOut': 'PAR is lossy and cannot rebuild the original ASS ({fps} fps). Merged frames {m}, dropped events {d}, animations flattened {c}.',
+  'cv.err.unknown': 'Not an ASS, SSA, XPAR or PAR file (detected by content, not by extension).', 'cv.err.empty': 'The file is empty.',
+  'cv.err.read': 'Could not read the file: {error}', 'cv.err.fail': 'Failed: {error}',
+  'cv.live.done': 'Finished {name}', 'cv.live.fail': 'Failed {name}',
+};
