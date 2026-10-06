@@ -53,7 +53,7 @@ export const parseStyle = (fields: string[], values: string[], legacy: boolean):
     strikeOut: num(get('strikeout'), 0) !== 0,
     scaleX: Math.max(0, num(get('scalex'), 100)),
     scaleY: Math.max(0, num(get('scaley'), 100)),
-    spacing: num(get('spacing'), 0),
+    spacing: Math.max(0, num(get('spacing'), 0)), // libass: a negative style Spacing is 0 (`\fsp` may still be negative)
     angle: num(get('angle'), 0),
     borderStyle: num(get('borderstyle'), 1),
     outline: Math.max(0, num(get('outline'), d.outline)),
@@ -66,8 +66,8 @@ export const parseStyle = (fields: string[], values: string[], legacy: boolean):
   };
 };
 
-/** Style lookup with libass-like fallback: exact name, leading `*` stripped, "Default", first style. */
+/** Style lookup like libass: exact name (leading `*` stripped), then "Default", then the built-in Arial 18 (never the first style). */
 export const findStyle = (styles: Map<string, AssStyle>, name: string): AssStyle => {
   const n = name.trim().replace(/^\*+/, '');
-  return styles.get(n) ?? styles.get('Default') ?? styles.values().next().value ?? DEFAULT_STYLE;
+  return styles.get(n) ?? styles.get('Default') ?? DEFAULT_STYLE;
 };

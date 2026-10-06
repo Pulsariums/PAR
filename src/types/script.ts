@@ -106,8 +106,10 @@ export interface LineTags {
   /** x1,y1,x2,y2[,t1,t2] */
   move?: number[];
   org?: [number, number];
-  an?: number;
-  q?: number;
+  /** `null`: the first `\an` was invalid, so the style alignment stays and later `\an` tags are ignored. */
+  an?: number | null;
+  /** `null`: the last `\q` was invalid (script WrapStyle). */
+  q?: number | null;
   fad?: [number, number];
   /** a1,a2,a3,t1,t2,t3,t4 */
   fade?: number[];

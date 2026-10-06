@@ -37,7 +37,7 @@ describe('line tag precedence (libass)', () => {
   });
 
   it('ignores line tags with invalid argument counts', () => {
-    expect(tags('{\\pos(1)\\pos(7,8)\\an0\\an3}a')).toMatchObject({ pos: [7, 8], an: 3 });
+    expect(tags('{\\pos(1)\\pos(7,8)\\an3}a')).toMatchObject({ pos: [7, 8], an: 3 });
   });
 
   it('parses vector clips with an optional scale', () => {

@@ -3,7 +3,7 @@ import type { LineTags, ResetOp, SetOp, StateKey, StateOp, Transition } from '..
 import { intRect, parseClip } from './ClipParser';
 import type { KaraTag } from './KaraokeTracker';
 import { lexOverrides, type RawTag } from './TagLexer';
-import { legacyToNumpad, parseAlphaTag, parseColorTag, parseNum, parseNumList, splitArgs } from './TagValues';
+import { legacyToNumpad, parseAlphaTag, parseBold, parseColorTag, parseFlag, parseFontName, parseNum, parseNumList, splitArgs } from './TagValues';
 
 export interface ParsedBlock {
   /** Ordered state operations (sets, transitions, resets). */
@@ -38,6 +38,7 @@ const stateOps = (tag: RawTag, ops: (SetOp | ResetOp)[]): boolean => {
   const arg = tag.arg;
   if (NUM_KEYS.has(name)) ops.push(set(name as StateKey, clampNum(name, parseNum(arg))));
   else if (name === 'fr') ops.push(set('frz', parseNum(arg)));
+  else if (name === 'fsc') ops.push(set('fscx', null), set('fscy', null)); // both scales back to the style (libass)
   else if (name === 'fs') {
     const v = parseNum(arg);
     ops.push(set('fs', v, v !== null && /^\s*[+-]/.test(arg)));
@@ -46,9 +47,9 @@ const stateOps = (tag: RawTag, ops: (SetOp | ResetOp)[]): boolean => {
     const val = v === null ? null : Math.max(0, v);
     const [x, y] = name === 'bord' ? (['xbord', 'ybord'] as const) : (['xshad', 'yshad'] as const);
     ops.push(set(x, val), set(y, val));
-  } else if (name === 'b') ops.push(set('b', parseNum(arg)));
-  else if (BOOL_KEYS.has(name)) ops.push(set(name as StateKey, parseNum(arg)));
-  else if (name === 'fn') ops.push(set('fn', arg.trim() || null));
+  } else if (name === 'b') ops.push(set('b', parseBold(arg)));
+  else if (BOOL_KEYS.has(name)) ops.push(set(name as StateKey, parseFlag(arg)));
+  else if (name === 'fn') ops.push(set('fn', parseFontName(arg)));
   else if (name === 'c' || /^[1-4]c$/.test(name)) ops.push(set(`c${name === 'c' ? 1 : name[0]}` as StateKey, parseColorTag(arg)));
   else if (name === 'alpha') {
     const a = parseAlphaTag(arg);
@@ -104,18 +105,23 @@ const lineTag = (tag: RawTag, line: LineTags): boolean => {
       return true;
     }
     case 'an': {
+      // The first `\an` takes the slot even when invalid (then the style alignment stays; later ones are ignored).
       const n = parseNum(tag.arg);
-      if (line.an === undefined && n !== null && Number.isInteger(n) && n >= 1 && n <= 9) line.an = n;
+      const v = n === null ? null : Math.trunc(n);
+      if (line.an === undefined) line.an = v !== null && v >= 1 && v <= 9 ? v : null;
       return true;
     }
     case 'a': {
-      const n = legacyToNumpad(parseNum(tag.arg) ?? NaN);
+      // Legacy `\a4` and `\a8` act like `\a5` (VSFilter quirk kept by libass).
+      const raw = parseNum(tag.arg);
+      const n = legacyToNumpad(raw === 4 || raw === 8 ? 5 : raw ?? NaN);
       if (line.an === undefined && n !== null) line.an = n;
       return true;
     }
     case 'q': {
+      // The last `\q` wins; an invalid one means the script WrapStyle again.
       const n = parseNum(tag.arg);
-      if (n !== null && Number.isInteger(n) && n >= 0 && n <= 3) line.q = n;
+      line.q = n !== null && Number.isInteger(n) && n >= 0 && n <= 3 ? n : null;
       return true;
     }
     default: return false;

@@ -27,7 +27,7 @@ export const parseDialogue = (fields: string[], value: string, index: number): A
   const start = parseTime(get('start') ?? '');
   const end = parseTime(get('end') ?? '');
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 'invalid time';
-  const text = values[textIdx];
+  const text = values[textIdx].replace(/[\r\t ]+$/, ''); // libass drops trailing CR, TAB and spaces of the Text field
   const { fragments, lineTags, unknownTags } = parseText(text);
   return {
     id: String(index),

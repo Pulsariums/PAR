@@ -14,6 +14,8 @@ JASSUB code is used. Scope: logic and layout rules, not pixel-identical rasteris
 | Collisions | Same layer only; lines with `\pos`, `\move`, `\org` or any `\t` are neither shifted nor counted; bottom aligned move up, top and middle aligned move down (`\an4-6` now stack); the rectangle includes the outline. `Collisions: Reverse` is not implemented (libass has no such setting either) |
 | Text | Spaces at line start/end and around `\N` trimmed (NBSP kept); TAB = space; `\{` `\}` literal; breaks only at U+0020 (`overflow-wrap: normal`, `word-break: keep-all`, word joiner after hyphens/dashes/slashes/`!?|`); `Kerning:` header (default off = `font-kerning: none`) |
 | Parser limits | Event text is scanned in linear time (`{` x 80k and `{\b1}` x 80k parse in tens of ms); non-finite numbers never reach styles or SVG; drawing coordinates clamp to +-1e7 and a drawing keeps at most 100 000 points; `\blur` <= 100, `\be` <= 127 |
+| Small tag rules | `\fsc` resets both scales; `\move` swaps `t1 > t2`; the first `\an` takes the slot even when invalid; `\a4`/`\a8` = `\a5`; `\b` 0/1/>=100, `\i \u \s` 0/1, else the style value; `\fn0` = style font; invalid `\q` = script WrapStyle |
+| Styles and text field | A negative style Spacing is 0; an unknown style falls back to `Default`, and without one to the built-in Arial 18 (not the first style); trailing CR/TAB/spaces of Text are dropped |
 
 ## Intentionally different
 
@@ -25,3 +27,9 @@ JASSUB code is used. Scope: logic and layout rules, not pixel-identical rasteris
 | Long words | an unbreakable word wider than the line overflows, aligned to the start edge (CSS) | overflows on both sides when centred | CSS box model |
 | Wrap balance | `text-wrap: balance` for WrapStyle 0/3 (own choice) | greedy + rebalance | keep PAR's balance |
 | Pixel raster | browser text and CSS/SVG filters | FreeType + own blur | see `docs/accuracy.md` |
+
+## Not done (known gaps)
+
+Event `Effect` Banner/Scroll, YCbCr Matrix colour conversion, RTL / vertical `@font`, live event API, SSA v4 colour rules
+(OutlineColour = BackColour), perspective distance scaled by storage, `\kf` direction for `\frz` 90-270, `\pos(a,b)` with
+non-numbers (libass reads 0), `\k` with negative durations (clamped to 0), libass' timestamp fraction quirk (on purpose).

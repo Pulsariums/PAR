@@ -2,7 +2,7 @@
 export const FUNC_TAGS = ['t', 'pos', 'move', 'org', 'fade', 'fad', 'clip', 'iclip'] as const;
 
 export const NUM_TAGS = [
-  'fscx', 'fscy', 'fsp', 'fs', 'frx', 'fry', 'frz', 'fr', 'fax', 'fay', 'xbord', 'ybord', 'bord',
+  'fscx', 'fscy', 'fsc', 'fsp', 'fs', 'frx', 'fry', 'frz', 'fr', 'fax', 'fay', 'xbord', 'ybord', 'bord',
   'xshad', 'yshad', 'shad', 'blur', 'be', 'pbo', 'fe', 'b', 'i', 'u', 's', 'p',
 ] as const;
 

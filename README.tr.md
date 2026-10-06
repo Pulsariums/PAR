@@ -241,8 +241,8 @@ Durumlar, deneme alanındaki özellik test tablosuyla aynıdır; orada her satı
 
 | Etiket / özellik | Durum | Notlar |
 |---|---|---|
-| `\pos` `\move(x1,y1,x2,y2[,t1,t2])` | Çiziliyor | Satırdaki ilk `\pos`/`\move` geçerlidir (libass). |
-| `\an` `\a` | Çiziliyor | İlki geçerli; eski `\a` dönüştürülür. |
+| `\pos` `\move(x1,y1,x2,y2[,t1,t2])` | Çiziliyor | Satırdaki ilk `\pos`/`\move` geçerlidir (libass); `\move` ters `t1`/`t2` değerlerini değiştirir. |
+| `\an` `\a` | Çiziliyor | İlki geçerlidir, geçersiz olsa bile (o zaman stil hizası kalır); eski `\a` dönüştürülür (`\a4`/`\a8` `\a5` gibi davranır). |
 | `\org` `\frx` `\fry` `\frz` `\fr` | Çiziliyor | Sabit perspektifli 3B; `\org` varsayılanı bağlantı noktasıdır. |
 | `\fad` `\fade` | Çiziliyor | Satır opaklığı, ilki geçerli. |
 | `\clip` `\iclip` (dikdörtgen) | Çiziliyor | Tüm olay üzerinde CSS `clip-path`, betik koordinatlarında (`\pos`/`\move`/döndürmeyi izlemez). Sonuncusu geçerli; köşeler yer değiştirilmez (boş dikdörtgen satırı gizler, libass gibi); `\t` ile tüm betik alanından canlandırılabilir. Kenarlar yumuşatılır (libass tam piksele keser). |
@@ -250,9 +250,9 @@ Durumlar, deneme alanındaki özellik test tablosuyla aynıdır; orada her satı
 | `\t([t1,t2,][accel,]etiketler)` | Çiziliyor | Çoklu etiket, isteğe bağlı süre (`t2` = 0 tüm olay demektir), ivme (`pow`, <= 0 dahil), kaynak sırasında değerlendirme. İçindeki `\b \i \u \s \fn \r` libass'teki gibi koşulsuz uygulanır. |
 | `\k` `\K` `\kf` `\ko` `\kt` | Çiziliyor | Renk değişimi, süpürme, kenar açılması. Sayısız `\k` 100 cs'dir. Hece içinde etiket bloğundan sonraki metnin (`{\kf100}Hel{\b1}lo`) kendi süresi yoktur: hece bitince döner (libass). |
 | `\r` `\r<stil>` | Çiziliyor | Bilinmeyen stil satır stiline düşer. |
-| `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Çiziliyor | Yazı tipi `fontMap` ya da adın kendisiyle. |
+| `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Çiziliyor | Yazı tipi `fontMap` ya da adın kendisiyle. `\fn0` / `\fn` = stil fontu; `\fsc` iki ölçeği stile sıfırlar. |
 | `\fax` `\fay` | Çiziliyor | Eksen noktası metnin sol üstüdür. Parça başına farklar ilk parçanın değerini kullanır. |
-| `\b` `\i` `\u` `\s` | Çiziliyor | |
+| `\b` `\i` `\u` `\s` | Çiziliyor | Geçerli değerler libass gibi: `\b` 0, 1, >= 100; `\i \u \s` 0 ya da 1; diğerleri stil değeri. |
 | `\bord` `\shad` `\xshad` `\yshad` | Çiziliyor | Bulanıklık ya da yarı saydam dolgu gerektirdiğinde gölge, kenar ve dolgu ayrı katmanlardır; yarı saydam dolgu, libass gibi harfi kenardan oyar. CSS çizgi köşeleri sivridir, libass yuvarlar. |
 | `\xbord` `\ybord` | Yaklaşık | x/y farklıysa büyük değeri kullanır. |
 | `\blur` | Çiziliyor | libass'in sigma değeriyle Gauss (`blur * 0.849`); kenar varsa yalnız kenar ve gölge bulanır, dolgu keskin kalır (libass). Bulanıklık `ScaledBorderAndShadow` ile ölçeklenmez. `\fscx`/`\fscy` oranıyla uzar, `\fax`/`\frx` ile eğilir; libass son bitmap'i bulanıklaştırır. |

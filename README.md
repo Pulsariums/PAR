@@ -241,8 +241,8 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 
 | Tag / feature | Status | Notes |
 |---|---|---|
-| `\pos` `\move(x1,y1,x2,y2[,t1,t2])` | Rendered | First `\pos`/`\move` of the line wins (libass). |
-| `\an` `\a` | Rendered | First wins; legacy `\a` is converted. |
+| `\pos` `\move(x1,y1,x2,y2[,t1,t2])` | Rendered | First `\pos`/`\move` of the line wins (libass); `\move` swaps reversed `t1`/`t2`. |
+| `\an` `\a` | Rendered | The first one wins, even when invalid (then the style alignment stays); legacy `\a` is converted (`\a4`/`\a8` act like `\a5`). |
 | `\org` `\frx` `\fry` `\frz` `\fr` | Rendered | 3D with a fixed perspective; `\org` defaults to the anchor point. |
 | `\fad` `\fade` | Rendered | Line opacity, first wins. |
 | `\clip` `\iclip` (rect) | Rendered | CSS `clip-path` on the whole event, in script coordinates (does not follow `\pos`/`\move`/rotation). Last wins; corners are not reordered (an empty rect hides the line, as in libass); animatable with `\t` from the whole script area. Edges are anti-aliased (libass cuts on whole pixels). |
@@ -250,9 +250,9 @@ Statuses are kept in sync with the playground's feature test matrix, where every
 | `\t([t1,t2,][accel,]tags)` | Rendered | Multiple tags, optional times (`t2` = 0 means the whole event), acceleration (`pow`, also <= 0), source-order evaluation. `\b \i \u \s \fn \r` inside apply unconditionally, as in libass. |
 | `\k` `\K` `\kf` `\ko` `\kt` | Rendered | Colour switch, sweep, outline reveal. `\k` without a number is 100 cs. Text after a tag block inside a syllable (`{\kf100}Hel{\b1}lo`) has no time of its own: it flips when the syllable ends (libass). |
 | `\r` `\r<style>` | Rendered | Unknown style falls back to the line style. |
-| `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Rendered | Loaded / embedded face, `fontMap`, or the name itself (see Fonts). |
+| `\fn` `\fs` (`\fs+n`/`\fs-n`) `\fscx` `\fscy` `\fsp` | Rendered | Loaded / embedded face, `fontMap`, or the name itself (see Fonts). `\fn0` / `\fn` = style font; `\fsc` resets both scales to the style. |
 | `\fax` `\fay` | Rendered | Pivot is the text top-left. Per-fragment differences use the first fragment's value. |
-| `\b` `\i` `\u` `\s` | Rendered | |
+| `\b` `\i` `\u` `\s` | Rendered | Valid values like libass: `\b` 0, 1, >= 100; `\i \u \s` 0 or 1; anything else = style value. |
 | `\bord` `\shad` `\xshad` `\yshad` | Rendered | Shadow, outline and fill are separate layers when a blur or a translucent fill needs it; a translucent fill cuts the glyph out of the outline like libass. CSS strokes use miter joins where libass rounds. |
 | `\xbord` `\ybord` | Approximate | Uses the larger of x/y when they differ. |
 | `\blur` | Rendered | Gaussian with libass' sigma (`blur * 0.849`); with a border only the outline and shadow are blurred and the fill stays sharp (libass). Blur is not scaled by `ScaledBorderAndShadow`. Stretched by `\fscx`/`\fscy` ratios and sheared with `\fax`/`\frx`, where libass blurs the final bitmap. |

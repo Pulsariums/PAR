@@ -9,6 +9,24 @@ export const parseNum = (s: string): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** `\i \u \s`: only 0 and 1 are valid (libass); anything else reverts to the style value (null). */
+export const parseFlag = (s: string): 0 | 1 | null => {
+  const n = parseNum(s);
+  return n === 0 || n === 1 ? n : null;
+};
+
+/** `\b`: valid values are 0, 1 and >= 100 (libass); anything else reverts to the style value (null). */
+export const parseBold = (s: string): number | null => {
+  const n = parseNum(s);
+  return n !== null && (n === 0 || n === 1 || n >= 100) ? n : null;
+};
+
+/** `\fn` argument: empty or `0` means the style font (null). */
+export const parseFontName = (s: string): string | null => {
+  const t = s.trim();
+  return t === '' || t === '0' ? null : t;
+};
+
 /** Splits on top-level commas (nested parentheses are kept intact). */
 export const splitArgs = (s: string): string[] => {
   const out: string[] = [];

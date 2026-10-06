@@ -1,5 +1,5 @@
 import { lexOverrides } from '../parser/TagLexer';
-import { parseNum } from '../parser/TagValues';
+import { parseBold, parseFlag, parseFontName, parseNum } from '../parser/TagValues';
 import { findBlockOpen, unescapeText } from '../parser/textBlocks';
 import { addChars } from '../fonts/usage';
 import { cleanName, normalizeName } from '../fonts/resolver';
@@ -50,9 +50,9 @@ export const scanEventText = (
   const fold = (tag: { name: string | null; arg: string }): void => {
     switch (tag.name) {
       case 'r': { const n = tag.arg.trim(); st = fromStyle(n ? styles.get(n) ?? base : base); break; }
-      case 'fn': st = { ...st, fn: tag.arg.trim() || st.style.fontName }; break;
-      case 'b': st = { ...st, b: parseNum(tag.arg) ?? st.style.bold }; break;
-      case 'i': { const v = parseNum(tag.arg); st = { ...st, i: v === null ? st.style.italic : v !== 0 }; break; }
+      case 'fn': st = { ...st, fn: parseFontName(tag.arg) ?? st.style.fontName }; break;
+      case 'b': st = { ...st, b: parseBold(tag.arg) ?? st.style.bold }; break;
+      case 'i': { const v = parseFlag(tag.arg); st = { ...st, i: v === null ? st.style.italic : v !== 0 }; break; }
       case 'p': drawing = Math.max(0, Math.floor(parseNum(tag.arg) ?? 0)); break;
       default:
     }

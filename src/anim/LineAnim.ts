@@ -9,6 +9,7 @@ export const positionAt = (tags: LineTags, t: number, durationMs: number): [numb
   if (!m) return null;
   let t1 = m.length === 6 ? m[4] : 0;
   let t2 = m.length === 6 ? m[5] : 0;
+  if (t1 > t2) [t1, t2] = [t2, t1]; // libass swaps reversed times
   if (t1 <= 0 && t2 <= 0) {
     t1 = 0;
     t2 = durationMs;
