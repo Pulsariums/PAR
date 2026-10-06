@@ -1,6 +1,9 @@
 import { evalStates, prepareLine, type PreparedLine } from '../anim/Prepared';
 import { collisionShift, type Placed } from '../layout/Collision';
 import { inflate, stackDirection } from '../layout/Stacking';
+import { CanvasPath } from '../canvas/CanvasPath';
+import { warmUp, type WarmState } from '../canvas/warm';
+import type { CanvasStats, RenderMode } from '../canvas/types';
 import { LineView, type LineEnv } from '../render/LineView';
 import type { Overlay } from '../render/Overlay';
 import type { AssEvent, ParsedScript } from '../types/script';
@@ -22,7 +25,23 @@ export class Scene {
   /** Windowed script: lines are only drawn while this says the time is loaded. */
   covers: ((tMs: number) => boolean) | null = null;
 
-  constructor(private readonly overlay: Overlay) {}
+  private readonly canvas: CanvasPath;
+  private readonly warm: WarmState = { done: new Set() };
+  private canvasOn = false;
+
+  constructor(private readonly overlay: Overlay, mode: () => RenderMode = () => 'auto', cacheBytes = 96 << 20) {
+    this.canvas = new CanvasPath(overlay, mode, cacheBytes);
+  }
+
+  /** Counters of the canvas path and how many visible lines each path draws. */
+  get renderStats(): { canvas: CanvasStats; domLines: number; canvasLines: number } {
+    return { canvas: this.canvas.stats(), domLines: this.views.size, canvasLines: this.canvasLines };
+  }
+
+  private canvasLines = 0;
+
+  /** The last frame shipped reduced (see `Refiner`): draw it again. */
+  get needsRefine(): boolean { return this.canvas.deferred > 0; }
 
   setScript(script: ParsedScript | null): void {
     this.clear();
@@ -48,33 +67,51 @@ export class Scene {
   }
 
   get activeCount(): number {
-    return this.views.size;
+    return this.views.size + this.canvasLines;
   }
 
   /** Renders at integer ms `t`. `force` re-applies static lines too (after layout/option changes). */
   render(t: number, env: LineEnv, force: boolean): void {
     const all = this.covers && !this.covers(t) ? [] : this.timeline.visibleAt(t);
     const visible = this.hold ? all.filter((l) => !this.hold!.has(l.event.index)) : all;
-    const ids = new Set(visible.map((l) => l.event.id));
+    const route = this.canvas.route(visible, t);
+    const ids = new Set(visible.filter((_, i) => !route[i]).map((l) => l.event.id));
     for (const [id, view] of this.views) {
       if (ids.has(id)) continue;
       view.destroy();
       this.views.delete(id);
       this.placed.delete(id);
     }
-    for (const line of visible) {
-      const rel = t - this.timeline.startMs(line);
-      const existing = this.views.get(line.event.id);
-      if (existing) {
-        existing.update(rel, env, force);
-        continue;
-      }
-      const view = new LineView(line);
-      this.views.set(line.event.id, view);
-      this.overlay.insert(view.root, line.event.layer, line.event.index);
-      view.update(rel, env, true);
-      if (line.stacks) this.place(view, env, rel);
+    visible.forEach((line, i) => { if (!route[i]) this.renderDom(line, t, env, force); });
+    this.canvasLines = route.filter(Boolean).length;
+    if (this.canvasLines > 0 || this.canvasOn) {
+      const t0 = performance.now();
+      this.canvas.render(visible.map((line, i) => ({ line, rel: t - this.timeline.startMs(line), canvas: route[i] })), env);
+      this.canvasOn = this.canvasLines > 0;
+      this.lookahead(t, env, performance.now() - t0);
     }
+  }
+
+  /** Builds the sprites of events starting within a second, in the time this frame has left. */
+  private lookahead(t: number, env: LineEnv, spentMs: number): void {
+    if (!this.canvas.enabled) return;
+    // At least 2 ms: when frames are heavy the sprites of what comes next must still get built, or they never get ahead.
+    const budget = Math.max(2, Math.min(5, 12 - spentMs));
+    warmUp(this.canvas, this.timeline.startingIn(t, t + 1000), t, env, env.frameMs ?? 41.7, budget, this.warm);
+  }
+
+  private renderDom(line: PreparedLine, t: number, env: LineEnv, force: boolean): void {
+    const rel = t - this.timeline.startMs(line);
+    const existing = this.views.get(line.event.id);
+    if (existing) {
+      existing.update(rel, env, force);
+      return;
+    }
+    const view = new LineView(line);
+    this.views.set(line.event.id, view);
+    this.overlay.insert(view.root, line.event.layer, line.event.index);
+    view.update(rel, env, true);
+    if (line.stacks) this.place(view, env, rel);
   }
 
   /** Collision handling for unpositioned lines (lines already on screen keep their place). */
@@ -96,5 +133,15 @@ export class Scene {
     for (const v of this.views.values()) v.destroy();
     this.views.clear();
     this.placed.clear();
+    this.canvas.clear();
+    this.warm.done.clear();
+    this.canvasOn = false;
+    this.canvasLines = 0;
+  }
+
+  /** Releases the canvases too (the renderer unmounts). */
+  dispose(): void {
+    this.clear();
+    this.canvas.destroy();
   }
 }

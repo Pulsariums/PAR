@@ -88,6 +88,14 @@ export interface PAROptions {
   windowSeconds?: number;
   /** CSS z-index of the overlay. Default 1. */
   zIndex?: number;
+  /**
+   * How simple per-glyph events (karaoke particles: one glyph, `\pos`/`\move`, blur, colour, `\t`) are drawn. `'auto'` (default): on a
+   * canvas from cached sprites once a scene is heavy, DOM otherwise; `'dom'`: always DOM; `'canvas'`: whenever the event qualifies.
+   * Complex events (karaoke `\k`, drawings, 3D rotation, wrapped text) are always DOM.
+   */
+  renderMode?: 'auto' | 'dom' | 'canvas';
+  /** Memory cap of the canvas sprite cache, MB. Default 96. */
+  spriteCacheMB?: number;
 }
 
 /** Fully resolved options (internal). */
@@ -109,6 +117,8 @@ export interface ResolvedOptions {
   onMissingFonts: MissingFontsHandler | null;
   windowSeconds: number;
   zIndex: number;
+  renderMode: 'auto' | 'dom' | 'canvas';
+  spriteCacheMB: number;
 }
 
 export interface PARMetrics {
@@ -135,4 +145,26 @@ export interface PARMetrics {
   activeLines: number;
   /** Whether the internal render loop is running. */
   running: boolean;
+  /** Render path numbers: lines per path, canvas sprite cache, left-out detail, frame time of `draw` (ms). */
+  render: RenderMetrics;
+}
+
+export interface RenderMetrics {
+  mode: 'auto' | 'dom' | 'canvas';
+  /** Whether this browser can run the canvas path at all. */
+  canvasSupported: boolean;
+  domLines: number;
+  canvasLines: number;
+  canvasRuns: number;
+  runsMerged: number;
+  sprites: number;
+  spriteBytes: number;
+  spriteHits: number;
+  spriteMisses: number;
+  prewarmed: number;
+  evictions: number;
+  /** Blurs left out (below ~0.35 device px, or the frame ran out of sprite-building time). */
+  detailDropped: number;
+  skipped: number;
+  frameMs: { p50: number; p95: number; samples: number };
 }

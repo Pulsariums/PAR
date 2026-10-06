@@ -31,6 +31,11 @@ export const validateWindow = (w: number): number => {
   return w;
 };
 
+export const validateMode = (m: unknown): 'auto' | 'dom' | 'canvas' => {
+  if (m === 'auto' || m === 'dom' || m === 'canvas') return m;
+  throw new TypeError(`PAR: renderMode must be 'auto', 'dom' or 'canvas'`);
+};
+
 export const validateLayout = (l: LayoutOption): LayoutOption => {
   if (l === 'script') return l;
   if (l && typeof l === 'object' && finite(l.width) && finite(l.height) && l.width > 0 && l.height > 0) {
@@ -66,6 +71,8 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     onMissingFonts: patch.onMissingFonts !== undefined ? patch.onMissingFonts : prev?.onMissingFonts ?? null,
     windowSeconds: validateWindow(patch.windowSeconds ?? prev?.windowSeconds ?? 12),
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
+    renderMode: validateMode(patch.renderMode ?? prev?.renderMode ?? 'auto'),
+    spriteCacheMB: finite(patch.spriteCacheMB) && patch.spriteCacheMB > 0 ? patch.spriteCacheMB : prev?.spriteCacheMB ?? 96,
   };
 };
 

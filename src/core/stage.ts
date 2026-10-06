@@ -26,3 +26,9 @@ export const computeStage = (opts: ResolvedOptions, info: ScriptInfo | null): St
   const layout = resolved.size;
   return { region, layout, resolved, transform: stageTransform(region, layout, info?.scaledBorderAndShadow ?? false, storageSize(info, opts.video)) };
 };
+
+/** Device pixels per layout unit: region width (CSS px) times the display's pixel ratio over the layout width. */
+export const deviceScale = (el: HTMLElement, regionW: number, layoutW: number): number => {
+  const dpr = el.ownerDocument.defaultView?.devicePixelRatio ?? 1;
+  return layoutW > 0 && regionW > 0 ? Math.round(((regionW * dpr) / layoutW) * 1000) / 1000 : 1;
+};

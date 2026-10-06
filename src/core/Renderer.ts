@@ -8,10 +8,12 @@ import type { PARMetrics, PAROptions, ResolvedOptions } from '../types/options';
 import type { ParsedScript } from '../types/script';
 
 import { FontApi } from './FontApi';
+import { FrameStats } from './FrameStats';
+import { Refiner } from './Refiner';
 import { observeSize } from './observe';
-import { computeStage } from './stage';
+import { computeStage, deviceScale } from './stage';
 import { resolveOptions } from './options';
-import { buildMetrics, type Geometry } from './metrics';
+import { buildMetrics, renderMetrics, type Geometry } from './metrics';
 import { Scene } from './Scene';
 import { ScriptHost } from './ScriptHost';
 import { timeToMs } from './time';
@@ -35,7 +37,8 @@ export class PARRenderer extends FontApi {
   private lastMs = NaN;
   private lastRaw = 0;
   private destroyed = false;
-
+  private readonly frames = new FrameStats();
+  private readonly refiner = new Refiner(() => this.draw(this.now(), true));
   constructor(options: PAROptions) {
     super();
     this.opts = resolveOptions(options);
@@ -105,10 +108,10 @@ export class PARRenderer extends FontApi {
   }
 
   getMetrics(): PARMetrics {
-    return buildMetrics(this.geo, { time: this.lastMs / 1000, activeLines: this.scene.activeCount, running: this.scheduler.isRunning });
+    return buildMetrics(this.geo, { time: this.lastMs / 1000, activeLines: this.scene.activeCount, running: this.scheduler.isRunning, render: renderMetrics(this.scene.renderStats, this.opts.renderMode, this.frames.snapshot()) });
   }
 
-  /** Removes the overlay, listeners and loop. The instance cannot be used afterwards. */
+  /** Removes the overlay, listeners and loop; the instance is dead afterwards. */
   destroy(): void {
     if (this.destroyed) return;
     this.unmount();
@@ -128,7 +131,7 @@ export class PARRenderer extends FontApi {
   private mount(): void {
     const { container, video } = this.opts;
     this.overlay = new Overlay(container, this.opts.zIndex);
-    this.scene = new Scene(this.overlay);
+    this.scene = new Scene(this.overlay, () => this.opts.renderMode, this.opts.spriteCacheMB * 1048576);
     this.teardown.push(observeSize(container, video, () => this.invalidate()));
     if (video) {
       this.teardown.push(bindVideoEvents(video, {
@@ -145,9 +148,10 @@ export class PARRenderer extends FontApi {
 
   private unmount(): void {
     this.scheduler.stop();
+    this.refiner.cancel();
     this.teardown.forEach((undo) => undo());
     this.teardown = [];
-    this.scene.clear();
+    this.scene.dispose();
     this.overlay.destroy();
   }
 
@@ -161,7 +165,6 @@ export class PARRenderer extends FontApi {
   private now(): number { return this.opts.clock ? this.opts.clock() : this.opts.video ? this.opts.video.currentTime : this.lastRaw; }
 
   private frame(mediaTime: number | null): void { this.draw(this.opts.clock || mediaTime === null ? this.now() : mediaTime, false); }
-
   private invalidate(): void {
     if (this.destroyed) return;
     this.layoutDirty = true;
@@ -176,9 +179,9 @@ export class PARRenderer extends FontApi {
     this.host.update(ms);
     const forced = force || this.forceNext;
     if (!forced && ms === this.lastMs) return;
-    this.scene.render(ms, this.env, forced);
-    this.forceNext = false;
-    this.lastMs = ms;
+    this.frames.time(() => this.scene.render(ms, this.env, forced));
+    if (this.scene.needsRefine) this.refiner.request();
+    [this.forceNext, this.lastMs] = [false, ms];
   }
 
   private relayout(): void {
@@ -186,8 +189,9 @@ export class PARRenderer extends FontApi {
     const { region, layout, resolved, transform: st } = computeStage(this.opts, this.host.info);
     const prev = this.env;
     if (prev.layout.width !== layout.width || prev.layout.height !== layout.height) this.scene.clear();
-    this.env = { ...prev, layout, borderScale: st.borderScale, blurScale: st.blurScale };
-    if (st.borderScale !== prev.borderScale || st.blurScale !== prev.blurScale) this.forceNext = true;
+    const devScale = deviceScale(this.opts.container, region.width, layout.width);
+    this.env = { ...prev, layout, borderScale: st.borderScale, blurScale: st.blurScale, devScale, frameMs: 1000 / (this.opts.videoFps ?? 24) };
+    this.forceNext ||= st.borderScale !== prev.borderScale || st.blurScale !== prev.blurScale || devScale !== prev.devScale;
     this.geo = { region, scale: { x: st.scaleX, y: st.scaleY }, layout: resolved };
     this.overlay.place(region, layout);
   }

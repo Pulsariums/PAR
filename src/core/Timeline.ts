@@ -47,6 +47,11 @@ export class Timeline {
     return msOf(l.event.start);
   }
 
+  /** Lines starting in (`aMs`, `bMs`], in start order (what is about to appear). */
+  startingIn(aMs: number, bMs: number): PreparedLine[] {
+    return this.lines.slice(this.upper(aMs), this.upper(bMs));
+  }
+
   /** Lines with `startMs <= tMs < endMs`, ordered by (layer, file order). `tMs` is an integer. */
   visibleAt(tMs: number): PreparedLine[] {
     const out: PreparedLine[] = [];

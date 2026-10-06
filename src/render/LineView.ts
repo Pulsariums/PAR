@@ -17,9 +17,11 @@ import { xRatio, type StyleEnv } from './textCss';
 export const PERSPECTIVE = 312.5;
 
 const r3 = (n: number): number => Math.round(n * 1000) / 1000;
-
 export interface LineEnv extends StyleEnv {
   layout: Size;
+  /** Device pixels per layout unit (canvas sprite scale) and one video frame in ms (lookahead grid). */
+  devScale?: number;
+  frameMs?: number;
   styles: Map<string, AssStyle>;
 }
 
