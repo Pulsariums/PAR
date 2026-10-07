@@ -3,6 +3,7 @@ import { $ } from '../player/dom';
 
 import { ICON } from './markup';
 import { toggleFullscreen, onFullscreen } from './fullscreen';
+import type { VideoLike } from './blank';
 import type { WatchStage } from './stage';
 
 const mmss = (s: number): string => {
@@ -16,8 +17,8 @@ const IDLE_MS = 2800;
 
 /** Play bar over the stage: play / pause, seek, time, volume, speed, subtitles on / off, fullscreen, keys. Controls hide while playing and nothing touches them. */
 export const initControls = (stage: WatchStage): { update(): void } => {
-  const v = stage.video;
   const box = stage.box;
+  const m = (): VideoLike => stage.media;
   const seek = $<HTMLInputElement>('wSeek');
   const play = $<HTMLButtonElement>('wPlay');
   const vol = $<HTMLInputElement>('wVol');
@@ -26,29 +27,31 @@ export const initControls = (stage: WatchStage): { update(): void } => {
   const wake = (): void => {
     box.classList.remove('idle');
     window.clearTimeout(idle);
-    if (!v.paused) idle = window.setTimeout(() => { if (!v.paused && !box.contains(document.activeElement as Node | null)) box.classList.add('idle'); }, IDLE_MS);
+    if (!m().paused) idle = window.setTimeout(() => { if (!m().paused && !box.contains(document.activeElement as Node | null)) box.classList.add('idle'); }, IDLE_MS);
   };
-  const toggle = (): void => { if (v.paused) void v.play().catch(() => undefined); else v.pause(); };
-  const jump = (d: number): void => { v.currentTime = Math.min(Math.max(0, v.currentTime + d), Math.max(0, v.duration || 0)); wake(); };
+  const toggle = (): void => { if (m().paused) void Promise.resolve(m().play()).catch(() => undefined); else m().pause(); };
+  const jump = (d: number): void => { m().currentTime = Math.min(Math.max(0, m().currentTime + d), Math.max(0, m().duration || 0)); wake(); };
   const paint = (): void => {
-    play.innerHTML = v.paused ? ICON.play : ICON.pause;
-    play.setAttribute('aria-label', t(v.paused ? 'w.play' : 'w.pause'));
-    $('wMute').innerHTML = v.muted || v.volume === 0 ? ICON.muted : ICON.mute;
+    play.innerHTML = m().paused ? ICON.play : ICON.pause;
+    play.setAttribute('aria-label', t(m().paused ? 'w.play' : 'w.pause'));
+    $('wMute').innerHTML = m().muted || m().volume === 0 ? ICON.muted : ICON.mute;
     wake();
   };
   const cc = $<HTMLButtonElement>('wCc');
 
   play.addEventListener('click', toggle);
   // A tap on the picture plays / pauses; with the controls hidden, the first tap only shows them (no accidental pause on phones).
-  v.addEventListener('click', () => { if (box.classList.contains('idle')) wake(); else toggle(); });
-  v.addEventListener('dblclick', () => void toggleFullscreen(box));
-  ['play', 'pause', 'ended', 'volumechange'].forEach((e) => v.addEventListener(e, paint));
+  // Buttons repaint their icons while handling a click, so the target is detached by the time it bubbles: the bar and the empty card stop their own clicks here instead of being recognised later.
+  ['wBar', 'wEmpty'].forEach((id) => ['click', 'dblclick'].forEach((e) => $(id).addEventListener(e, (ev) => ev.stopPropagation())));
+  box.addEventListener('click', () => { if (box.classList.contains('idle')) wake(); else toggle(); });
+  box.addEventListener('dblclick', () => void toggleFullscreen(box));
+  [stage.video, stage.clock].forEach((src) => ['play', 'pause', 'ended', 'volumechange'].forEach((e) => src.addEventListener(e, paint)));
   ['pointermove', 'pointerdown', 'keydown', 'focusin'].forEach((e) => box.addEventListener(e, wake));
-  seek.addEventListener('input', () => { dragging = true; v.currentTime = Number(seek.value); });
+  seek.addEventListener('input', () => { dragging = true; m().currentTime = Number(seek.value); });
   seek.addEventListener('change', () => { dragging = false; });
-  vol.addEventListener('input', () => { v.volume = Number(vol.value); v.muted = v.volume === 0; });
-  $('wMute').addEventListener('click', () => { v.muted = !v.muted; });
-  $<HTMLSelectElement>('wSpeed').addEventListener('change', (e) => { v.playbackRate = Number((e.target as HTMLSelectElement).value); });
+  vol.addEventListener('input', () => { m().volume = Number(vol.value); m().muted = m().volume === 0; });
+  $('wMute').addEventListener('click', () => { m().muted = !m().muted; });
+  $<HTMLSelectElement>('wSpeed').addEventListener('change', (e) => { stage.video.playbackRate = stage.clock.playbackRate = Number((e.target as HTMLSelectElement).value); });
   cc.addEventListener('click', () => { const on = cc.getAttribute('aria-pressed') !== 'true'; cc.setAttribute('aria-pressed', String(on)); box.classList.toggle('nosub', !on); });
   $('wFull').addEventListener('click', () => void toggleFullscreen(box));
   onFullscreen(box, (on) => { $('wFull').innerHTML = on ? ICON.exit : ICON.full; });
@@ -58,8 +61,8 @@ export const initControls = (stage: WatchStage): { update(): void } => {
     const onRange = e.target instanceof HTMLInputElement && e.target.type === 'range';
     const k = e.key.toLowerCase();
     const act: Record<string, () => void> = {
-      ' ': toggle, k: toggle, f: () => void toggleFullscreen(box), m: () => { v.muted = !v.muted; }, c: () => cc.click(),
-      j: () => jump(-10), l: () => jump(10), home: () => { v.currentTime = 0; }, end: () => { v.currentTime = v.duration || 0; },
+      ' ': toggle, k: toggle, f: () => void toggleFullscreen(box), m: () => { m().muted = !m().muted; }, c: () => cc.click(),
+      j: () => jump(-10), l: () => jump(10), home: () => { m().currentTime = 0; }, end: () => { m().currentTime = m().duration || 0; },
       ...(onRange ? {} : { arrowleft: () => jump(e.shiftKey ? -1 : -5), arrowright: () => jump(e.shiftKey ? 1 : 5) }),
     };
     if (e.target instanceof HTMLButtonElement && (k === ' ' || k === 'enter')) return;
@@ -72,6 +75,8 @@ export const initControls = (stage: WatchStage): { update(): void } => {
 
   return {
     update(): void {
+      stage.clock.tick();
+      const v = m();
       const d = Number.isFinite(v.duration) ? v.duration : 0;
       seek.max = String(d || 1);
       if (!dragging) seek.value = String(v.currentTime);

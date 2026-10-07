@@ -18,7 +18,7 @@ export const WATCH_HTML = `
     <video id="wVid" playsinline preload="auto"></video>
     <div class="w-empty" id="wEmpty">
       <p class="w-empty-t" data-i18n="w.drop"></p>
-      <div class="w-empty-b">${pick('wPickVideo0', 'w.video')}${pick('wPickSub0', 'w.sub')}${pick('wPickFonts0', 'w.fonts')}</div>
+      <div class="w-empty-b">${pick('wPickVideo0', 'w.video')}${pick('wPickBlank0', 'w.blank')}${pick('wPickSub0', 'w.sub')}${pick('wPickFonts0', 'w.fonts')}</div>
     </div>
     <div class="w-state" id="wState" role="status" aria-live="polite" hidden></div>
     <div class="w-bar" id="wBar">
@@ -36,7 +36,7 @@ export const WATCH_HTML = `
     </div>
   </div>
   <div class="w-files">
-    <div class="w-file"><span class="w-k" data-i18n="w.video"></span><span class="w-n" id="wVideoName"></span>${pick('wPickVideo', 'w.change')}</div>
+    <div class="w-file"><span class="w-k" data-i18n="w.video"></span><span class="w-n" id="wVideoName"></span>${pick('wPickVideo', 'w.change')}${pick('wPickBlank', 'w.blank')}</div>
     <div class="w-file"><span class="w-k" data-i18n="w.sub"></span><span class="w-n" id="wSubName"></span>${pick('wPickSub', 'w.change')}</div>
     <div class="w-file"><span class="w-k" data-i18n="w.fonts"></span><span class="w-n" id="wFontsName"></span>${pick('wPickFonts', 'w.add')}</div>
   </div>

@@ -6,6 +6,8 @@ export const watchEn = {
   'w.video': 'Video',
   'w.sub': 'Subtitle',
   'w.fonts': 'Fonts',
+  'w.blank': 'Blank video',
+  'w.blankOk': 'Blank video ready. Add a subtitle to fill its timeline.',
   'w.change': 'Change',
   'w.add': 'Add',
   'w.none': 'none',

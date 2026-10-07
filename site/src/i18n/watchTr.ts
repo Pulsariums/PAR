@@ -6,6 +6,8 @@ export const watchTr = {
   'w.video': 'Video',
   'w.sub': 'Altyazı',
   'w.fonts': 'Fontlar',
+  'w.blank': 'Boş video',
+  'w.blankOk': 'Boş video hazır. Zaman çizelgesini doldurmak için bir altyazı ekleyin.',
   'w.change': 'Değiştir',
   'w.add': 'Ekle',
   'w.none': 'yok',

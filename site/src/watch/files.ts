@@ -14,11 +14,12 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
   const status = (msg: string, err = false): void => { const s = $('wStatus'); s.textContent = msg; s.classList.toggle('err', err); };
   const names = { video: '', sub: '', fonts: 0 };
   const draw = (): void => {
-    $('wVideoName').textContent = names.video || t('w.none');
+    $('wVideoName').textContent = stage.blank ? t('w.blank') : names.video || t('w.none');
     $('wSubName').textContent = names.sub || t('w.none');
     $('wFontsName').textContent = names.fonts ? t('w.fontsN', { n: names.fonts }) : t('w.fontsNone');
-    stage.box.classList.toggle('has-video', stage.hasVideo);
-    $('wEmpty').hidden = stage.hasVideo;
+    stage.box.classList.toggle('has-video', stage.ready);
+    stage.box.classList.toggle('blank', stage.blank);
+    $('wEmpty').hidden = stage.ready;
   };
 
   const addVideo = (file: File): void => {
@@ -26,6 +27,11 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
     stage.setVideo(file);
     draw();
     status(names.sub && stage.session ? '' : t('w.videoOk'));
+  };
+  const addBlank = (): void => {
+    stage.setBlank();
+    draw();
+    status(stage.session ? t('w.subReady', { n: stage.session.source.eventCount.toLocaleString('en-US') }) : t('w.blankOk'));
   };
   const addSub = async (file: File): Promise<void> => {
     const state = $('wState');
@@ -37,7 +43,7 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
       if (!s) return;
       names.sub = `${file.name} (${humanBytes(file.size)})`;
       draw();
-      status(stage.hasVideo ? t('w.subReady', { n: s.source.eventCount.toLocaleString('en-US') }) : t('w.needVideo'));
+      status(stage.ready ? t('w.subReady', { n: s.source.eventCount.toLocaleString('en-US') }) : t('w.needVideo'));
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return;
       status(t('w.fail', { error: e instanceof Error ? e.message : String(e) }), true);
@@ -61,6 +67,7 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
     input.addEventListener('change', () => { route([...(input.files ?? [])]); input.value = ''; });
   };
   bind('wFileVideo', ['wPickVideo', 'wPickVideo0']);
+  ['wPickBlank', 'wPickBlank0'].forEach((b) => $(b).addEventListener('click', addBlank));
   bind('wFileSub', ['wPickSub', 'wPickSub0']);
   bind('wFileFonts', ['wPickFonts', 'wPickFonts0']);
   watchDrop(document.body, route);

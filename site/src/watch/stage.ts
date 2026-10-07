@@ -1,4 +1,5 @@
 import { create, type PARRenderer } from '../../../src/index';
+import { BlankClock, blankDuration, type VideoLike } from './blank';
 import { openSession } from '../studio/openSession';
 import type { StudioSession } from '../studio/session';
 
@@ -14,18 +15,48 @@ export class WatchStage {
   private url: string | null = null;
   private abort: AbortController | null = null;
   session: StudioSession | null = null;
+  /** Black picture with the subtitle's own clock; shown while no video file is chosen. */
+  readonly clock = new BlankClock();
+  blank = false;
+  /** What the play bar drives: the video element or the blank clock. */
+  media: VideoLike;
 
   constructor(readonly box: HTMLElement, readonly video: HTMLVideoElement) {
+    this.media = video;
     this.par = create({ container: box, video, zIndex: 1, spriteCacheMB: cacheMB() });
   }
 
   get hasVideo(): boolean { return this.url !== null; }
+  /** A picture to play: a video file or the blank one. */
+  get ready(): boolean { return this.url !== null || this.blank; }
+
+  /** Black picture, as long as the subtitle (10 s without one). Any video is dropped; the subtitle stays. */
+  setBlank(): void {
+    this.dropVideo();
+    this.blank = true;
+    this.clock.pause();
+    this.clock.currentTime = 0;
+    this.fitBlank();
+    this.media = this.clock;
+    this.par.setOptions({ video: null, clock: () => this.clock.currentTime, region: 'container' });
+  }
+
+  private dropVideo(): void {
+    this.video.pause();
+    if (this.url) { URL.revokeObjectURL(this.url); this.video.removeAttribute('src'); this.video.load(); }
+    this.url = null;
+  }
+
+  private fitBlank(): void { this.clock.duration = blankDuration(this.session ? this.session.source.duration : null); }
 
   /** Shows a video file. Position and play state of a previous one are not carried over: a new file is a new start. */
   setVideo(file: File): void {
-    if (this.url) URL.revokeObjectURL(this.url);
+    this.clock.pause();
+    this.blank = false;
+    this.dropVideo();
     this.url = URL.createObjectURL(file);
-    this.par.setOptions({ videoFps: null });
+    this.media = this.video;
+    this.par.setOptions({ video: this.video, clock: null, region: 'video', videoFps: null });
     this.video.src = this.url;
   }
 
@@ -38,6 +69,7 @@ export class WatchStage {
     this.session?.source.close?.();
     this.session = s;
     this.par.setSubtitle(s.source);
+    this.fitBlank();
     return s;
   }
 
