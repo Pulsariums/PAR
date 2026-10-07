@@ -30,8 +30,8 @@ export interface Lines {
   covers: ((tMs: number) => boolean) | null;
 }
 
-/** Where entries get built: `'full'` = cannot take more right now (the caller is told when to try again). */
-export interface Builder { take(e: Entry): 'done' | 'full' }
+/** Where entries get built: `'full'` = cannot take more right now (the caller is told when to try again). `cost`: page-thread ms the entry would take (0 when it goes to a worker). */
+export interface Builder { take(e: Entry): 'done' | 'full'; cost(e: Entry): number }
 
 export interface Warmed {
   /** Entries handed to the builder in this slice. */
@@ -49,6 +49,8 @@ export interface Warmed {
  * first frames of a burst come before the late frames of events already running. Sprites built ahead and not yet due are counted against
  * a share of the cache (`AHEAD_SHARE`): nothing is planned that the cache could not hold next to what is needed sooner.
  * A seek (time jumps) starts the plan over at the new time instead of replaying it.
+ * An entry whose page-thread cost would overrun the time left in the slice waits for a slice of its own: only a slice that is allowed
+ * to (`exempt`: between frames, not inside one) takes it first, so one big blur never lands inside a frame.
  */
 export class WarmPlanner {
   private readonly heap = new MinHeap<Entry>((e) => e.ms);
@@ -70,6 +72,9 @@ export class WarmPlanner {
   get frontier(): number { return this.complete; }
   get aheadMB(): number { return this.aheadBytes / 1048576; }
 
+  /** `t` is not where the playhead was heading (a jump, or the first look): the next `step` starts the plan over there. */
+  isSeek(t: number): boolean { return !Number.isFinite(this.lastT) || t < this.lastT - SEEK_BACK_MS || t > this.lastT + SEEK_FORWARD_MS; }
+
   reset(): void {
     this.heap.clear();
     this.due.clear();
@@ -81,15 +86,15 @@ export class WarmPlanner {
     this.lastT = NaN;
   }
 
-  step(path: CanvasPath, t: number, env: LineEnv, frameMs: number, budgetMs: number, lines: Lines, builder: Builder): Warmed {
+  step(path: CanvasPath, t: number, env: LineEnv, frameMs: number, budgetMs: number, lines: Lines, builder: Builder, exempt = true): Warmed {
     const t0 = performance.now();
     const left = (): number => budgetMs - (performance.now() - t0);
-    if (!Number.isFinite(this.lastT) || t < this.lastT - SEEK_BACK_MS || t > this.lastT + SEEK_FORWARD_MS) this.restart(t, lines);
+    if (this.isSeek(t)) this.restart(t, lines);
     this.lastT = t;
     while (this.due.size > 0 && this.due.peek()!.ms <= t) this.aheadBytes -= this.due.pop()!.bytes;
     if (this.planned.size > MAX_PLANNED) this.planned.clear();
     const expanding = this.expand(path, t, env, frameMs, lines, left);
-    const out = this.build(path, left, builder);
+    const out = this.build(path, left, builder, exempt);
     return { built: out.built, more: out.more || (expanding && left() <= 0), waiting: out.waiting };
   }
 
@@ -146,13 +151,14 @@ export class WarmPlanner {
     }
   }
 
-  private build(path: CanvasPath, left: () => number, builder: Builder): { built: number; more: boolean; waiting: boolean } {
+  private build(path: CanvasPath, left: () => number, builder: Builder, exempt: boolean): { built: number; more: boolean; waiting: boolean } {
     const cap = path.cache.capBytes * AHEAD_SHARE;
     let built = 0;
     for (let e = this.heap.peek(); e && e.ms <= this.complete; e = this.heap.peek()) {
       if (path.cache.peek(e.key) !== undefined) { this.heap.pop(); continue; }
       if (left() <= 0) return { built, more: true, waiting: false };
       if (this.aheadBytes > 0 && this.aheadBytes + e.bytes > cap) return { built, more: false, waiting: false };
+      if (builder.cost(e) > left() && (built > 0 || !exempt)) return { built, more: true, waiting: false };
       if (builder.take(e) === 'full') return { built, more: false, waiting: true };
       this.heap.pop();
       this.aheadBytes += e.bytes;

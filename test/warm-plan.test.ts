@@ -28,7 +28,7 @@ const make = (text: string, o: { cap?: number; mode?: string } = {}) => {
   const lines = (): Lines => ({ startingIn: (a, b) => tl.startingIn(a, b), visibleAt: (t) => tl.visibleAt(t), startMs: (l) => tl.startMs(l), covers });
   const taken: Entry[] = [];
   let full = false;
-  const builder: Builder = { take: (e) => { if (full) return 'full'; taken.push(e); have.add(e.key); return 'done'; } };
+  const builder: Builder = { take: (e) => { if (full) return 'full'; taken.push(e); have.add(e.key); return 'done'; }, cost: () => 0 };
   return { env, path, lines, taken, builder, setCovers: (f: ((t: number) => boolean) | null) => { covers = f; }, setFull: (v: boolean) => { full = v; }, have };
 };
 

@@ -4,8 +4,11 @@ import { poolSize, workersAvailable, type SpriteWorkers } from './size';
 
 /** The sprite pool for this machine and option, or null (workers unavailable or switched off). The worker code is inlined into the bundle: no extra file to host. */
 export const createSpritePool = (opt: SpriteWorkers, hooks: PoolHooks): SpritePool | null => {
-  const n = poolSize(opt, typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : undefined, workersAvailable());
+  const nav = typeof navigator !== 'undefined' ? (navigator as { hardwareConcurrency?: number; deviceMemory?: number }) : null;
+  const n = poolSize(opt, nav?.hardwareConcurrency, workersAvailable(), nav?.deviceMemory);
   if (n === 0) return null;
-  const pool = new SpritePool(() => new SpriteWorker(), n, hooks);
-  return pool.dead ? null : pool;
+  try {
+    const pool = new SpritePool(() => new SpriteWorker(), n, hooks, (nav?.deviceMemory ?? 8) <= 4 ? 24 << 20 : undefined);
+    return pool.dead ? null : pool;
+  } catch { return null; }
 };

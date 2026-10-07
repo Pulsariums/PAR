@@ -3,6 +3,7 @@ import { construct } from '../construct';
 import { canvasSupported, type Sprite } from '../raster';
 
 import { attachSpriteHost, type HostScope } from './host';
+import { blurWorks } from './probe';
 
 const scope = self as unknown as HostScope & { fonts: { add(f: unknown): void; delete(f: unknown): void } };
 const faces = new Map<string, unknown>();
@@ -11,6 +12,8 @@ const masks = new ByteLru<string, Sprite | null>(24 << 20, (_k, s) => { if (s) (
 
 attachSpriteHost(scope, {
   supported: () => typeof OffscreenCanvas !== 'undefined' && typeof FontFace !== 'undefined' && !!scope.fonts && canvasSupported(),
+  blur: () => blurWorks((w, h) => new OffscreenCanvas(w, h)),
+  reset: () => masks.clear(),
   build: (spec) => {
     const s = construct(spec, {
       peek: (k) => masks.get(k),

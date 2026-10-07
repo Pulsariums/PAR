@@ -7,7 +7,7 @@ export interface Job { id: number; spec: SpriteSpec }
 
 export interface Built {
   id: number;
-  /** Null when the sprite could not be built (too large, no canvas): the main thread remembers that like a failed build. */
+  /** Null when the worker could not build it (too large, no canvas, an exception): the main thread builds it itself, so a worker-side failure is never remembered as "unbuildable". */
   bitmap: ImageBitmap | null;
   w: number; h: number; boxW: number; ox: number; oy: number; bytes: number;
 }
@@ -20,5 +20,8 @@ export type ToSprite =
 
 /** Sprite worker -> main thread. */
 export type FromSprite =
-  | { op: 'ready'; ok: boolean }
+  /** `ok`: the worker can draw canvas text at all. `blur`: its `ctx.filter` really blurs (probed with pixels); without it blurred sprites stay on the main thread. */
+  | { op: 'ready'; ok: boolean; blur: boolean }
+  /** Faces (keys) the worker could not register: sprites with those families would be drawn in a fallback font, so the pool stops taking them. */
+  | { op: 'faces'; failed: string[] }
   | { op: 'built'; gen: number; items: Built[] };

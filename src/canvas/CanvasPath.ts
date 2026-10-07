@@ -15,6 +15,8 @@ import type { DrawItem, PathStats, RenderMode, SpriteSpec } from './types';
 
 /** Time one frame may spend building sprites it needs now; then blurs are left out (counted); at twice that, new sprites wait for the next frame. */
 export const BUILD_BUDGET_MS = 8;
+/** A sprite a worker is building is waited for this long (ms since it was handed over); after that the frame builds it itself, so a slow or dead worker never leaves a line out. */
+export const PENDING_WAIT_MS = 120;
 
 export interface Routed {
   line: PreparedLine;
@@ -40,6 +42,8 @@ export class CanvasPath {
   load: number | null = null;
   /** Items of the last frame that were drawn reduced or not at all because the frame ran out of build time. */
   deferred = 0;
+  /** Ms since a sprite was handed to a worker (null: it is not on its way). Set by the look-ahead that owns the workers. */
+  pending: (key: string) => number | null = () => null;
 
   constructor(overlay: Overlay, readonly mode: () => RenderMode, capBytes: number) {
     this.layer = new CanvasLayer(overlay);
@@ -118,6 +122,9 @@ export class CanvasPath {
   private base(it: DrawItem, t0: number): Sprite | null {
     const hit = this.cache.peek(it.key);
     if (hit !== undefined) { this.cache.hits++; if (!hit) this.skipped++; return hit; }
+    // A worker is already building it: draw nothing for now (the frame is marked reduced and drawn again), never build it twice or block on it.
+    const wait = this.pending(it.key);
+    if (wait !== null && wait < PENDING_WAIT_MS) { this.deferred++; return null; }
     const spent = performance.now() - t0;
     if (spent < BUILD_BUDGET_MS) return this.build(it.key, it.spec);
     // Far over budget (a burst of new events): draw the rest next frame instead of freezing this one; counted in `skipped`.

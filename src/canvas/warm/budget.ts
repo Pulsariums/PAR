@@ -17,17 +17,23 @@ export class SliceBudget {
   private gap = 0;
   /** Smoothed wall ms of one planned-and-built sprite on this machine. */
   perBuild = 0;
+  /** Measured ms over the cost model's estimate for the same sprites (1 until something was measured): the model was fitted on another machine. */
+  private factor = 1;
 
   noteFrame(costMs: number, gapMs: number | null): void {
     this.frame = this.frame === 0 ? costMs : this.frame * (1 - EMA) + costMs * EMA;
     if (gapMs !== null && gapMs > 0 && gapMs < 500) this.gap = this.gap === 0 ? gapMs : this.gap * (1 - EMA) + gapMs * EMA;
   }
 
-  noteBuilds(n: number, ms: number): void {
+  noteBuilds(n: number, ms: number, estimatedMs = 0): void {
     if (n <= 0) return;
     const per = ms / n;
     this.perBuild = this.perBuild === 0 ? per : this.perBuild * (1 - EMA) + per * EMA;
+    if (estimatedMs > 0 && ms > 0) this.factor = Math.min(20, Math.max(0.2, this.factor * (1 - EMA) + (ms / estimatedMs) * EMA));
   }
+
+  /** Page-thread ms a sprite the cost model puts at `estimatedMs` will take on this machine. */
+  scaled(estimatedMs: number): number { return estimatedMs * this.factor; }
 
   get frameCost(): number { return this.frame; }
 

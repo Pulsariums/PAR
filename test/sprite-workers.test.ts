@@ -42,7 +42,7 @@ describe('slice budget adapts to the machine', () => {
 describe('pool size', () => {
   it('follows the cores, one on two or fewer, never more than four, none when unavailable or off', () => {
     expect(poolSize('auto', 2, true)).toBe(1);
-    expect(poolSize('auto', 1, true)).toBe(1);
+    expect(poolSize('auto', 1, true)).toBe(0); // one core: a worker would only take the page thread's time
     expect(poolSize('auto', undefined, true)).toBe(1);
     expect(poolSize('auto', 4, true)).toBe(2);
     expect(poolSize('auto', 8, true)).toBe(4);
@@ -86,6 +86,8 @@ const bitmap = (): ImageBitmap => ({ close: vi.fn(), width: 4, height: 4 } as un
 describe('sprite pool with a worker double', () => {
   const deps = (log: string[]) => ({
     supported: () => true,
+    blur: () => true,
+    reset: () => undefined,
     build: (s: SpriteSpec) => { log.push(`build ${s.text}`); return { bitmap: bitmap(), w: 4, h: 4, boxW: 3, ox: 1, oy: 2, bytes: 64 }; },
     addFace: async (f: { family: string }) => { log.push(`face ${f.family}`); },
     removeFace: (k: string) => { log.push(`drop ${k}`); },
@@ -98,6 +100,7 @@ describe('sprite pool with a worker double', () => {
     pool.setFaces([{ key: 'f1', family: 'Berylium', weight: 400, italic: false, data: new Uint8Array(8) }]);
     await wait();
     expect(pool.ready).toBe(true);
+    expect(pool.accepts(spec('A', '"Berylium", sans-serif'), 'k1')).toBe(true); // ships the face the sprite needs
     expect(pool.submit('k1', spec('A'))).toBe(true);
     expect(pool.submit('k1', spec('A'))).toBe(true); // already on its way
     expect(pool.submit('k2', spec('B'))).toBe(true);
@@ -142,8 +145,8 @@ describe('sprite pool with a worker double', () => {
     const pool = new SpritePool(() => fakeWorker(deps([])), 1, { built: () => undefined, free: () => undefined, failed: () => undefined });
     await wait();
     pool.setFaces([{ key: 'big', family: 'HugeCJK', weight: 400, italic: false, data: { byteLength: 30 << 20, slice: () => new Uint8Array(1) } as unknown as Uint8Array }]);
-    expect(pool.accepts(spec('A', '"HugeCJK", sans-serif'))).toBe(false);
-    expect(pool.accepts(spec('A', '"Arial", sans-serif'))).toBe(true);
+    expect(pool.accepts(spec('A', '"HugeCJK", sans-serif'), 'k1')).toBe(false);
+    expect(pool.accepts(spec('A', '"Arial", sans-serif'), 'k2')).toBe(true);
   });
 
   it('holds back when every worker already has its share', async () => {
