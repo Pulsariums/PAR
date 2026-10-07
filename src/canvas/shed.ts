@@ -32,6 +32,14 @@ export const pickShed = (items: readonly Candidate[], budget: number): Set<numbe
 };
 
 const MIN_FRACTION = 0.25;
+/**
+ * Cutting pixels only helps when compositing (drawing the finished sprites) is a real part of the frame. Frames that run late because
+ * sprites are being built (a burst of new events) or because the page does other work do not get cheaper by leaving sprites out, and
+ * leaving them out only costs picture. Below this smoothed composite time (ms per frame) the controller holds or releases.
+ */
+export const MIN_COMPOSITE_MS = 4;
+/** Compositing on a GPU canvas costs the page little JS time but real fill time, so a frame that asks for this many stages of pixels is cut regardless. */
+const OVERDRAW = 2;
 
 /**
  * Pixel budget per frame. Infinity (nothing shed) until frames come late; then it is cut to 85 % of what the last frame filled,
@@ -42,10 +50,15 @@ export class ShedController {
   budget = Infinity;
   private smooth = 0;
   private since = 0;
+  private composite = Infinity;
 
-  /** `filled`: pixels the last frame asked for, `stage`: stage pixels. Returns the budget for the next frame. */
-  update(late: number, filled: number, stage: number): number {
-    this.smooth = this.smooth * 0.8 + late * 0.2;
+  /**
+   * `filled`: pixels the last frame asked for, `stage`: stage pixels, `compositeMs`: time the last frame spent drawing finished sprites
+   * (not building them; omit when unknown). Returns the budget for the next frame.
+   */
+  update(late: number, filled: number, stage: number, compositeMs = Infinity): number {
+    this.composite = this.composite === Infinity || compositeMs === Infinity ? compositeMs : this.composite * 0.8 + compositeMs * 0.2;
+    this.smooth = this.smooth * 0.8 + (this.composite < MIN_COMPOSITE_MS && filled < OVERDRAW * stage ? 0 : late) * 0.2;
     if (++this.since < 6) return this.budget;
     this.since = 0;
     const floor = stage * MIN_FRACTION;
@@ -64,5 +77,6 @@ export class ShedController {
     this.budget = Infinity;
     this.smooth = 0;
     this.since = 0;
+    this.composite = Infinity;
   }
 }

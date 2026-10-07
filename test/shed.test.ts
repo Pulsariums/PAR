@@ -48,6 +48,21 @@ describe('ShedController', () => {
     expect(s.budget).toBeGreaterThanOrEqual(stage * 0.25);
   });
 
+  it('does not cut pixels for lateness that compositing does not explain (sprite builds, other work)', () => {
+    const s = new ShedController();
+    for (let i = 0; i < 200; i++) s.update(0.9, 0.3 * stage, stage, 1.2);
+    expect(s.budget).toBe(Infinity);
+  });
+
+  it('still cuts when compositing is a real share of the frame, or the frame asks for several stages of pixels', () => {
+    const a = new ShedController();
+    for (let i = 0; i < 200; i++) a.update(0.9, 0.9 * stage, stage, 9);
+    expect(a.budget).toBeLessThan(Infinity);
+    const b = new ShedController();
+    for (let i = 0; i < 200; i++) b.update(0.9, 3 * stage, stage, 0.5);
+    expect(b.budget).toBeLessThan(Infinity);
+  });
+
   it('recovers and switches off when frames are on time again', () => {
     const s = new ShedController();
     for (let i = 0; i < 120; i++) s.update(0.8, 3_000_000, stage);

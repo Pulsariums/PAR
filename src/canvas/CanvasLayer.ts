@@ -88,6 +88,9 @@ export class CanvasLayer {
 
   /** Items of the last frame that were left out to meet the pixel budget (see `shed.ts`), and the ids of the ones left out last frame. */
   shed = 0;
+  /** Last frame: time to get every sprite (cache lookups and builds) and time to draw them (shedding only acts on the second). */
+  resolveMs = 0;
+  compositeMs = 0;
   private shedIds = new Set<string>();
 
   /**
@@ -98,7 +101,10 @@ export class CanvasLayer {
     this.drawn = 0;
     this.fillPx = 0;
     this.shed = 0;
+    const t0 = performance.now();
     const resolved = runs.map((run) => run.items.map((it) => (it.alpha < 0.004 ? null : sprite(it))));
+    const t1 = performance.now();
+    this.resolveMs = t1 - t0;
     const left = this.leave(runs, resolved, budget);
     runs.forEach((run, i) => {
       const s = this.slot(i);
@@ -127,6 +133,7 @@ export class CanvasLayer {
       if (s.dirty) { s.ctx.setTransform(1, 0, 0, 1, 0, 0); s.ctx.clearRect(0, 0, s.el.width, s.el.height); s.dirty = false; }
       if (s.attached) { s.el.remove(); s.attached = false; delete s.el.dataset.parRun; }
     }
+    this.compositeMs = performance.now() - t1;
   }
 
   /** Backing-store pixels of one canvas (the stage). */

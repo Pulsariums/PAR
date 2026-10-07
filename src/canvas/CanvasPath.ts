@@ -96,7 +96,7 @@ export class CanvasPath {
     this.runs = runs.length;
     const t0 = performance.now();
     if (this.load === null) this.shedding.reset();
-    else this.shedding.update(this.load, this.layer.demandPx, this.layer.stagePx);
+    else this.shedding.update(this.load, this.layer.demandPx, this.layer.stagePx, this.layer.compositeMs);
     this.layer.draw(runs, (it) => this.sprite(it, t0), this.shedding.budget);
   }
 
