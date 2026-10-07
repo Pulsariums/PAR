@@ -1,15 +1,16 @@
-import { decode, encode, info, verify } from './cmd-xpar';
+import { decode, encode, fonts, info, verify } from './cmd-xpar';
 
 const USAGE = `xpar <command>
-  xpar encode <in.ass> <out.xpar> [--codec deflate|rc|stored] [--chunk-bytes N]
+  xpar encode <in.ass> <out.xpar> [--codec deflate|rc|stored] [--chunk-bytes N] [--font file|dir]...
+  xpar fonts  <file.xpar|file.par> [outDir]   list the attached fonts (extract them byte for byte into outDir)
   xpar decode <in.xpar|in.par> <out.ass>
   xpar info   <file.xpar|file.par>
   xpar verify <in.ass> [--codec ...]        encode + decode + SHA-256 compare
-  par  bake   <in.ass> <out.par> --fps N    lossy render-baked format (see docs/formats/PAR.md)
+  par  bake   <in.ass> <out.par> --fps N [--font file|dir]...   lossy render-baked format (see docs/formats/PAR.md)
   par  optimize <in.ass> <out.ass> --fps N [--mode exact|invisible|loose]   frame-by-frame runs -> \move / \t (docs/optimize.md)`;
 
 const [cmd, ...rest] = process.argv.slice(2);
-const table: Record<string, (a: string[]) => Promise<void>> = { encode, decode, info, verify };
+const table: Record<string, (a: string[]) => Promise<void>> = { encode, decode, info, verify, fonts };
 try {
   if (cmd === 'optimize') {
     const { optimizeCmd } = await import('./cmd-optimize');

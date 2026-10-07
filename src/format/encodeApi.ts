@@ -47,7 +47,8 @@ export const encodeXpar = async (input: XparInput, opts: EncodeOptions = {}): Pr
   else if (input instanceof Uint8Array) keep = input;
   else if (typeof Blob !== 'undefined' && input instanceof Blob && input.size <= KEEP_LIMIT) keep = new Uint8Array(await input.arrayBuffer());
   const x = await encodeContainer(keep ?? input, opts);
-  return keep && x.length > keep.length + 20 ? storedForm(keep) : x;
+  // The stored form has no room for attachments: with fonts the container is always written.
+  return keep && !opts.fonts?.length && x.length > keep.length + 20 ? storedForm(keep) : x;
 };
 
 /** Streaming variant: output goes to `sink` as chunks complete (small known inputs go through `encodeXpar` and its stored fallback). */

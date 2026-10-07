@@ -191,7 +191,7 @@ The [Studio section of the site](https://pulsariums.github.io/PAR/#studio-root) 
 
 ## The Converter
 
-The [converter card at the top of the site](https://pulsariums.github.io/PAR/#convert-root) turns files in your browser (nothing is uploaded; the work runs in a Worker with progress and cancel). Drop or pick several files; the type is detected by content, not by extension. **.ass / .ssa** become `name.xpar` (lossless, optional SHA-256 round-trip check, on by default under 20 MB) or `name.<fps>fps.par` (lossy, fps presets 23.976 to 60 or custom). **.xpar** gives back the byte-exact original `name.ass`; **.par** gives the baked `name.baked.ass`, which is NOT the original because PAR is lossy. Each file shows input and output size, ratio and time. Code: `site/src/convert`.
+The [converter card at the top of the site](https://pulsariums.github.io/PAR/#convert-root) turns files in your browser (nothing is uploaded; the work runs in a Worker with progress and cancel). Drop or pick several files; the type is detected by content, not by extension. **.ass / .ssa** become `name.xpar` (lossless, optional SHA-256 round-trip check, on by default under 20 MB) or `name.<fps>fps.par` (lossy, fps presets 23.976 to 60 or custom). **.xpar** gives back the byte-exact original `name.ass`; **.par** gives the baked `name.baked.ass`, which is NOT the original because PAR is lossy. Each file shows input and output size, ratio and time. Fonts: pick or drop font files (or a `.zip`) in the Fonts part and they are stored inside the `.xpar` / `.par`, whole and byte for byte (never subset); XPAR / PAR to ASS also offers `name.fonts.zip`. CLI: `--font file|dir` and `xpar fonts`. Code: `site/src/convert`.
 
 ## Fonts
 

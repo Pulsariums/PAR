@@ -1,5 +1,5 @@
 import { ChunkBuilder, type ChunkEvent } from './chunk';
-import { CODEC_DEFLATE, CODEC_IDS, CODEC_RCF, CODEC_STORED, encodeBlock, type CodecName } from './codec';
+import { CODEC_DEFLATE, CODEC_IDS, CODEC_RCF, CODEC_STORED, deflateRaw, encodeBlock, type CodecName } from './codec';
 import { crc32 } from './crc32';
 import { FLAG_LOSSY, writeFooter, writeHeader, type BlockRef } from './container';
 import { fail } from './errors';
@@ -18,7 +18,7 @@ export interface EncodeOptions {
   maxSpanMs?: number;
   /** Events at least this long (ms) go to the long lane. */
   longMs?: number;
-  /** Fonts to embed verbatim (placeholder section, see docs). */
+  /** Font files to attach, kept byte for byte (deflated when that saves at least 3 %); `file.fonts` gives them back. */
   fonts?: Array<{ name: string; data: Uint8Array }>;
   /** Progress callback (after each input slice). `fraction` is set when `totalBytes` is known. */
   onProgress?: (p: Progress) => void;
@@ -78,9 +78,18 @@ export class XparWriter {
     if (this.started) return;
     this.started = true;
     await this.out(writeHeader(this.lossy ? FLAG_LOSSY : 0));
+    const seen = new Set<string>();
     for (const f of this.fontData) {
-      this.fonts.push({ name: f.name, offset: this.offset, len: f.data.length, crc: crc32(f.data) });
-      await this.out(f.data);
+      const crc = crc32(f.data);
+      const id = `${f.name}\0${f.data.length}\0${crc}`;
+      if (seen.has(id)) continue; // the same file added twice
+      seen.add(id);
+      // Fonts are kept byte for byte: deflate when it saves at least 3 %, else as they are (WOFF, WOFF2 and most CJK fonts are compressed already).
+      const z = f.data.length >= 256 ? await deflateRaw(f.data) : f.data;
+      const packed = z.length < f.data.length * 0.97;
+      const body = packed ? z : f.data;
+      this.fonts.push({ name: f.name, offset: this.offset, len: body.length, rawLen: f.data.length, codec: packed ? CODEC_DEFLATE : CODEC_STORED, crc });
+      await this.out(body);
     }
   }
 

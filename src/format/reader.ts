@@ -25,7 +25,11 @@ const chunkBytes = (ev: DecodedEvent[]): number => ev.reduce((n, e) => n + e.lin
 
 export interface XparFont {
   name: string;
+  /** Bytes of the font itself. */
   size: number;
+  /** Bytes it takes in the file (smaller when deflated). */
+  stored: number;
+  /** The original bytes, checked against their CRC-32. */
   read(): Promise<Uint8Array>;
 }
 
@@ -102,9 +106,10 @@ export class XparFile {
   get fonts(): XparFont[] {
     return this.meta.fonts.map((f: FontRef) => ({
       name: f.name,
-      size: f.len,
+      size: f.rawLen,
+      stored: f.len,
       read: async () => {
-        const b = await this.src.read(f.offset, f.len);
+        const b = await decodeBlock(await this.src.read(f.offset, f.len), f.codec, f.rawLen);
         if (crc32(b) !== f.crc) fail('CHECKSUM', `font ${f.name} is corrupt`);
         return b;
       },

@@ -31,6 +31,8 @@ export class Row {
   private readonly outText = el('span', 'cv-otext');
   private readonly dl: HTMLButtonElement;
   private readonly note = el('p', 'hint cv-note');
+  private readonly zip: HTMLButtonElement;
+  private zipBlob: { blob: Blob; name: string } | null = null;
   private readonly rm: HTMLButtonElement;
   private blob: { blob: Blob; name: string } | null = null;
 
@@ -47,7 +49,8 @@ export class Row {
     this.cancel = button('', () => h.cancel(this.id));
     this.busy.append(this.bar, this.busyText, this.cancel);
     this.dl = button('', () => { if (this.blob) download(this.blob.blob, this.blob.name); }, 'btn sm primary');
-    this.out.append(this.dl, this.outText);
+    this.zip = button('', () => { if (this.zipBlob) download(this.zipBlob.blob, this.zipBlob.name); }, 'btn sm');
+    this.out.append(this.dl, this.zip, this.outText);
     this.rm = button('', () => h.remove(this.id), 'btn sm cv-rm');
     const head = el('div', 'cv-head');
     head.append(this.name, this.meta, this.rm);
@@ -92,6 +95,9 @@ export class Row {
     const r = it.result;
     this.blob = r ? { blob: r.blob, name: it.outName } : null;
     this.out.hidden = it.status !== 'done' || !r;
+    this.zipBlob = r?.fontsZip ? { blob: r.fontsZip, name: `${it.outName.replace(/\.[^.]+$/, '')}.fonts.zip` } : null;
+    this.zip.hidden = !this.zipBlob;
+    this.zip.textContent = t('cv.fontsZip');
     let note = '';
     if (it.status === 'error') note = it.error || (it.size === 0 ? t('cv.err.empty') : t('cv.err.unknown'));
     if (it.status === 'done' && r && it.action) {
@@ -102,6 +108,7 @@ export class Row {
         : it.action === 'xpar' ? (r.verified === 'ok' ? t('cv.verified') : '')
           : it.kind === 'par' ? t('cv.parNote') : t('cv.checked');
     }
+    if (it.status === 'done' && r?.fonts) note = `${note ? `${note} ` : ''}${t('cv.fontsDone', { n: r.fonts.count, raw: humanBytes(r.fonts.raw), stored: humanBytes(r.fonts.stored) })}`;
     this.note.hidden = !note;
     this.note.textContent = note;
     this.note.classList.toggle('err', it.status === 'error');

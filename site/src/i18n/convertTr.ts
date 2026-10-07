@@ -1,5 +1,9 @@
 export const convertTr = {
   'nav.convert': 'Dönüştür',
+  'cv.fonts': 'Dosyayla saklanacak fontlar', 'cv.fontsAdd': 'Font ekle', 'cv.fontsOn': 'Bu fontları XPAR / PAR içinde sakla',
+  'cv.fontsHint': 'İsteğe bağlı. Kendi yaptığın ya da Windows fontları (.ttf .otf .ttc .woff .woff2 ya da bunların .zip\'i; bu kartın herhangi bir yerine bırakabilirsin). Olduğu gibi, bayt bayt saklanır (yalnızca küçülüyorsa deflate edilir) ve altyazıyla ek bir adım olmadan oynar.',
+  'cv.fontsTotal': '{n} font, {size}', 'cv.fontsBad': 'Font ya da font zip\'i değil: {names}',
+  'cv.fontsDone': '{n} font bayt bayt saklandı ({raw} -> {stored}).', 'cv.fontsZip': 'Fontları indir (.zip)',
   'cv.title': 'Hızlı dönüştürücü', 'cv.sub': 'ASS dosyasını XPAR veya PAR yap, ya da geri çevir. Tarayıcında çalışır; dosya cihazından çıkmaz.',
   'cv.drop': '.ass, .ssa, .xpar veya .par dosyalarını buraya bırak, ya da', 'cv.pick': 'Dosya seç',
   'cv.fps': 'PAR kare hızı', 'cv.fpsCustom': 'özel', 'cv.fpsCustomLabel': 'Özel kare hızı', 'cv.fpsBad': '1 ile 1000 arasında bir sayı gir.',

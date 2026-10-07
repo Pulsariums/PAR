@@ -1,3 +1,4 @@
+import { zipStore } from '../../../src/fontlib';
 import { Sha256, bakePar, decodeXparTo, encodeXparTo, openXpar, parHeader, toHex, FILE_TYPES } from '../../../src/format';
 
 import type { ConvertDone, ConvertRequest, FromConvertWorker, Phase } from './protocol';
@@ -35,24 +36,43 @@ const decode = async (blob: Blob, expected: number | 'source', phase: Phase, sca
   return { parts, sha: toHex(h.digest()), lossy: header.lossy, header };
 };
 
+const readFonts = (files: File[]): Promise<Array<{ name: string; data: Uint8Array }>> =>
+  Promise.all(files.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })));
+
+/** What a container holds in fonts; with `expect`, every font is read back and compared byte for byte with what went in. */
+const fontInfo = async (blob: Blob, expect?: Array<{ name: string; data: Uint8Array }>): Promise<ConvertDone['fonts']> => {
+  const fonts = (await openXpar(blob)).fonts;
+  if (expect) {
+    for (const want of expect) {
+      const got = fonts.find((f) => f.name === want.name && f.size === want.data.length);
+      const bytes = await got?.read();
+      if (!bytes || bytes.length !== want.data.length || bytes.some((v, i) => v !== want.data[i])) throw new Error(`verification failed: the font ${want.name} did not come back byte for byte. Nothing was produced.`);
+    }
+  }
+  return fonts.length ? { count: fonts.length, raw: fonts.reduce((n, f) => n + f.size, 0), stored: fonts.reduce((n, f) => n + f.stored, 0) } : undefined;
+};
+
 const toXpar = async (req: ConvertRequest): Promise<ConvertDone> => {
   const t0 = performance.now();
   const parts: Uint8Array[] = [];
   const share = req.verify ? 0.5 : 1;
-  await encodeXparTo(req.blob, (b) => void parts.push(b.slice()), { totalBytes: req.blob.size, onProgress: (p) => progress(p.fraction === null ? null : p.fraction * share, 'encode') });
+  const fonts = await readFonts(req.fonts);
+  await encodeXparTo(req.blob, (b) => void parts.push(b.slice()), { fonts, totalBytes: req.blob.size, onProgress: (p) => progress(p.fraction === null ? null : p.fraction * share, 'encode') });
   const out = new Blob(parts as BlobPart[], { type: FILE_TYPES.xpar.mime });
   if (req.verify) {
     const want = await hashBlob(req.blob);
     const back = await decode(out, req.blob.size, 'verify', [0.5, 1]);
     if (back.sha !== want) throw mismatch();
   }
-  return { blob: out, ms: performance.now() - t0, verified: req.verify ? 'ok' : 'none' };
+  return { blob: out, ms: performance.now() - t0, verified: req.verify ? 'ok' : 'none', fonts: await fontInfo(out, req.verify ? fonts : undefined) };
 };
 
 const toPar = async (req: ConvertRequest): Promise<ConvertDone> => {
   const t0 = performance.now();
-  const { bytes, stats } = await bakePar(req.blob, { fps: req.fps }, { totalBytes: req.blob.size, onProgress: (p) => progress(p.fraction, 'encode') });
-  return { blob: new Blob([bytes as BlobPart], { type: FILE_TYPES.par.mime }), ms: performance.now() - t0, verified: 'none', notes: { dropped: stats.dropped, merged: stats.merged, collapsed: stats.collapsed } };
+  const fonts = await readFonts(req.fonts);
+  const { bytes, stats } = await bakePar(req.blob, { fps: req.fps }, { fonts, totalBytes: req.blob.size, onProgress: (p) => progress(p.fraction, 'encode') });
+  const blob = new Blob([bytes as BlobPart], { type: FILE_TYPES.par.mime });
+  return { blob, ms: performance.now() - t0, verified: 'none', notes: { dropped: stats.dropped, merged: stats.merged, collapsed: stats.collapsed }, fonts: await fontInfo(blob) };
 };
 
 /** XPAR -> the original ASS, checked against the SHA-256 stored in the file; PAR -> the baked ASS (its stored hash belongs to the original, so no check). */
@@ -60,7 +80,14 @@ const toAss = async (req: ConvertRequest): Promise<ConvertDone> => {
   const t0 = performance.now();
   const { parts, sha, lossy, header } = await decode(req.blob, 'source', 'encode', [0, 1]);
   if (!lossy && header.sourceSha256 && sha !== header.sourceSha256) throw mismatch();
-  return { blob: new Blob(parts as BlobPart[], { type: FILE_TYPES.ass.mime }), ms: performance.now() - t0, verified: lossy ? 'none' : 'ok' };
+  const out: ConvertDone = { blob: new Blob(parts as BlobPart[], { type: FILE_TYPES.ass.mime }), ms: performance.now() - t0, verified: lossy ? 'none' : 'ok' };
+  const info = await fontInfo(req.blob);
+  if (info) {
+    const attached = (await openXpar(req.blob)).fonts;
+    out.fonts = info;
+    out.fontsZip = new Blob([zipStore(await Promise.all(attached.map(async (f) => ({ name: f.name, data: await f.read() }))))], { type: 'application/zip' });
+  }
+  return out;
 };
 
 ctx.onmessage = (e) => {

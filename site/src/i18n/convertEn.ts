@@ -1,5 +1,9 @@
 export const convertEn = {
   'nav.convert': 'Convert',
+  'cv.fonts': 'Fonts to store with the file', 'cv.fontsAdd': 'Add fonts', 'cv.fontsOn': 'Store these fonts in the XPAR / PAR',
+  'cv.fontsHint': 'Optional. Your own or Windows fonts (.ttf .otf .ttc .woff .woff2, or a .zip of them; drop them anywhere on this card). They are stored exactly as they are, byte for byte (deflated only when that makes them smaller), and play with the subtitle without an extra step.',
+  'cv.fontsTotal': '{n} fonts, {size}', 'cv.fontsBad': 'Not a font or a zip of fonts: {names}',
+  'cv.fontsDone': '{n} fonts stored byte for byte ({raw} -> {stored}).', 'cv.fontsZip': 'Download the fonts (.zip)',
   'cv.title': 'Quick converter', 'cv.sub': 'ASS to XPAR or PAR and back. It runs in your browser; the file never leaves your device.',
   'cv.drop': 'Drop .ass, .ssa, .xpar or .par files here, or', 'cv.pick': 'Choose files',
   'cv.fps': 'PAR frame rate', 'cv.fpsCustom': 'custom', 'cv.fpsCustomLabel': 'Custom frame rate', 'cv.fpsBad': 'Enter a number from 1 to 1000.',

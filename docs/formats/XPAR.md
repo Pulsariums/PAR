@@ -64,8 +64,8 @@ a precise `TRUNCATED` error. A reader needs 52 bytes from the end, then the meta
 
 **Meta block**: sections `{id uv, len uv, body}`; unknown ids are skipped (forward compatibility).
 `1` info (flags bom/crlf/final-newline, line count, event count, dialogue count, duration ms) · `2` event Format layouts
-· `3` verbatim lines `(line number delta, bytes)` · `4` line-ending exceptions · `5` embedded fonts (placeholder:
-name, offset, length, crc32; blobs stored raw between header and chunks) · `6` free-form JSON parameters (PAR) ·
+· `3` verbatim lines `(line number delta, bytes)` · `4` line-ending exceptions · `5` embedded fonts, old form (name, offset, length, crc32; raw blobs; still read) · `8` embedded fonts
+(name, offset, stored length, original length, codec `0` stored / `1` raw deflate, crc32 of the original bytes; blobs between header and chunks) · `6` free-form JSON parameters (PAR) ·
 `7` provenance `{kind, sha256[32], source bytes, source duration ms, fps x1000, encoder id}`.
 
 **Index block**: per chunk `offset (delta), len, rawLen, codec, lane, event count, minStartMs, maxEndMs, minLine,
@@ -171,7 +171,7 @@ worker and posted to the main thread.
 * Chunks restart their statistics: smaller chunks seek faster and compress worse (measured below).
 * Decoding speed is bounded by the entropy coder (see the numbers); `codec: 'deflate'` decodes about 3x faster for
   about 10-25 % more bytes.
-* Embedded fonts are a placeholder: stored raw, listed in `file.fonts`; integration with `src/fonts` is future work.
+* Embedded fonts (`EncodeOptions.fonts`, `xpar encode/par bake --font file|dir`) are **lossless**: whole files, never subset or re-encoded. A font is deflated only when that saves at least 3 % (WOFF, WOFF2 and most CJK fonts are compressed already and stay as they are); `file.fonts[i].read()` returns the original bytes and checks the CRC-32. Identical fonts (name, size, crc) are stored once. `fromXpar` hands the fonts to the player as ordinary `[Fonts]` data, so a converted file plays with its fonts without a second step. `xpar fonts file.xpar [outDir]` lists or extracts them.
 
 ## Measured results
 

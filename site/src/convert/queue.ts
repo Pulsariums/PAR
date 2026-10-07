@@ -14,6 +14,8 @@ export interface Item {
   action: Action | null;
   fps: number;
   verify: boolean;
+  /** Fonts to store with the output (XPAR / PAR), chosen when it was queued. */
+  fonts: File[];
   /** 0..1, null = unknown (indeterminate). */
   progress: number | null;
   phase: Phase;
@@ -30,14 +32,14 @@ const patch = (q: Queue, id: number, p: Partial<Item>): Queue => q.map((i) => (i
 
 export const addItem = (q: Queue, id: number, file: { name: string; size: number }, kind: SniffKind, error = ''): Queue => {
   const bad = kind === 'unknown' || file.size === 0 || !!error;
-  return [...q, { id, name: file.name, size: file.size, kind, status: bad ? 'error' : 'ready', action: null, fps: 24, verify: false, progress: 0, phase: 'encode', error, outName: '', result: null }];
+  return [...q, { id, name: file.name, size: file.size, kind, status: bad ? 'error' : 'ready', action: null, fps: 24, verify: false, fonts: [], progress: 0, phase: 'encode', error, outName: '', result: null }];
 };
 
 /** Queues a conversion; ignored when the kind cannot do that action or the file is already queued / running. */
-export const enqueue = (q: Queue, id: number, action: Action, fps: number, verify: boolean): Queue => {
+export const enqueue = (q: Queue, id: number, action: Action, fps: number, verify: boolean, fonts: File[] = []): Queue => {
   const it = q.find((i) => i.id === id);
   if (!it || (it.status !== 'ready' && it.status !== 'done' && it.status !== 'error') || !actionsFor(it.kind).includes(action)) return q;
-  return patch(q, id, { status: 'queued', action, fps, verify, progress: 0, phase: 'encode', error: '', outName: outputName(action, it.name, it.kind, fps), result: null });
+  return patch(q, id, { status: 'queued', action, fps, verify, fonts, progress: 0, phase: 'encode', error: '', outName: outputName(action, it.name, it.kind, fps), result: null });
 };
 
 /** The next file to run, or null while one is running or nothing is queued. */

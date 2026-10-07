@@ -1,5 +1,8 @@
 import { decodeXparTo, encodeXparTo, openXpar, type EncodeOptions } from '../../src/format';
 
+import { mkdirSync } from 'node:fs';
+
+import { loadFonts, saveFont } from './fonts-io';
 import { fileSize, fileSource, mb, newHash, openOut, readChunks } from './node-io';
 
 const flag = (a: string[], name: string): string | undefined => {
@@ -13,6 +16,8 @@ export const encOptions = (a: string[]): EncodeOptions => {
   if (codec) o.codec = codec as EncodeOptions['codec'];
   const cb = flag(a, '--chunk-bytes');
   if (cb) o.chunkBytes = Number(cb);
+  const fonts = loadFonts(a);
+  if (fonts.length) o.fonts = fonts;
   return o;
 };
 
@@ -73,4 +78,17 @@ export const verify = async (a: string[]): Promise<void> => {
   const same = dh.digest('hex') === oh.digest('hex');
   console.log(`${input}: round-trip ${same ? 'BYTE-EXACT' : 'MISMATCH'} (xpar ${mb(size)} MB)`);
   if (!same) process.exit(1);
+};
+
+/** List the attached fonts; with an output directory also write each back, byte for byte. */
+export const fonts = async (a: string[]): Promise<void> => {
+  const [input, dir] = a;
+  const f = await openXpar(fileSource(input));
+  if (dir) mkdirSync(dir, { recursive: true });
+  for (const x of f.fonts) {
+    const bytes = dir ? await x.read() : null;
+    if (bytes && dir) saveFont(dir, x.name, bytes);
+    console.log(`${x.name}  ${x.size} bytes  stored ${x.stored}${bytes ? '  -> ' + dir : ''}`);
+  }
+  if (!f.fonts.length) console.log('no fonts attached');
 };

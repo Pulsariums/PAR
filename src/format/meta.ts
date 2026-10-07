@@ -1,10 +1,17 @@
 import { ByteReader, ByteWriter } from './bytes';
 import { fail, LIMITS } from './errors';
 
+/** An attached font file: stored as-is or deflated, byte-exact either way (`crc` is of the original bytes). */
 export interface FontRef {
   name: string;
   offset: number;
+  /** Bytes in the file. */
   len: number;
+  /** Bytes of the font itself. */
+  rawLen: number;
+  /** 0 stored, 1 deflate-raw (see `codec.ts`). */
+  codec: number;
+  /** CRC-32 of the original font bytes. */
   crc: number;
 }
 
@@ -51,6 +58,8 @@ const S_EOL = 4;
 const S_FONTS = 5;
 const S_PARAMS = 6;
 const S_PROV = 7;
+/** Fonts with a codec per font (section 5 is the first, uncompressed, layout: still read). */
+const S_FONTS2 = 8;
 
 const section = (out: ByteWriter, id: number, fill: (w: ByteWriter) => void): void => {
   const w = new ByteWriter(64);
@@ -92,12 +101,14 @@ export const encodeMeta = (m: Meta): Uint8Array => {
     });
   }
   if (m.fonts.length) {
-    section(out, S_FONTS, (w) => {
+    section(out, S_FONTS2, (w) => {
       w.uv(m.fonts.length);
       for (const f of m.fonts) {
         w.str(f.name);
         w.u64(f.offset);
         w.u32(f.len);
+        w.u32(f.rawLen);
+        w.u8(f.codec);
         w.u32(f.crc);
       }
     });
@@ -159,7 +170,11 @@ export const decodeMeta = (buf: Uint8Array): Meta => {
     } else if (id === S_FONTS) {
       const n = s.uv();
       if (n > LIMITS.maxFonts) fail('LIMIT', 'too many fonts');
-      for (let i = 0; i < n; i++) m.fonts.push({ name: s.str(4096), offset: s.u64(), len: s.u32(), crc: s.u32() });
+      for (let i = 0; i < n; i++) { const name = s.str(4096), offset = s.u64(), len = s.u32(), crc = s.u32(); m.fonts.push({ name, offset, len, rawLen: len, codec: 0, crc }); }
+    } else if (id === S_FONTS2) {
+      const n = s.uv();
+      if (n > LIMITS.maxFonts) fail('LIMIT', 'too many fonts');
+      for (let i = 0; i < n; i++) m.fonts.push({ name: s.str(4096), offset: s.u64(), len: s.u32(), rawLen: s.u32(), codec: s.u8(), crc: s.u32() });
     } else if (id === S_PARAMS) m.params = s.str(1 << 20);
     else if (id === S_PROV) m.prov = { kind: s.u8(), sha256: s.bytes(32).slice(), srcBytes: s.uv(), srcDurationMs: s.uv(), fpsX1000: s.uv(), encoder: s.str(256) };
   }

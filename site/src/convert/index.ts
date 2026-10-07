@@ -2,6 +2,7 @@ import { sniffBlob } from '../../../src/source';
 import { onLang, t } from '../i18n/i18n';
 
 import { buildControls, type Controls } from './controls';
+import { isFontFile } from './fonts';
 import { shouldVerify, type Action } from './plan';
 import * as Q from './queue';
 import { runConvert, type Run } from './runner';
@@ -28,7 +29,7 @@ export const initConvert = (root: HTMLElement): void => {
     const file = files.get(it.id)!;
     q = Q.start(q, it.id);
     rows.get(it.id)?.update(q.find((i) => i.id === it.id)!);
-    const run = runConvert({ blob: file, kind: it.kind, action: it.action, fps: it.fps, verify: it.verify }, (f, phase) => {
+    const run = runConvert({ blob: file, kind: it.kind, action: it.action, fps: it.fps, verify: it.verify, fonts: it.action === 'ass' ? [] : it.fonts }, (f, phase) => {
       if (current?.id !== it.id) return;
       q = Q.progress(q, it.id, f, phase);
       rows.get(it.id)?.update(q.find((i) => i.id === it.id)!);
@@ -41,7 +42,11 @@ export const initConvert = (root: HTMLElement): void => {
   };
 
   const files = new Map<number, File>();
-  const add = async (picked: File[]): Promise<void> => {
+  const add = async (all: File[]): Promise<void> => {
+    // fonts (and zips of fonts) dropped on the card go to the font box, whatever else is dropped with them
+    const fonts = all.filter((f) => isFontFile(f.name));
+    if (fonts.length) await ctl.addFonts(fonts);
+    const picked = all.filter((f) => !isFontFile(f.name));
     for (const f of picked) {
       const id = ++seq;
       let kind: Awaited<ReturnType<typeof sniffBlob>> = 'unknown';
@@ -62,7 +67,7 @@ export const initConvert = (root: HTMLElement): void => {
     const fps = ctl.fps();
     if (action === 'par' && fps === null) { ctl.live.textContent = t('cv.fpsBad'); return; }
     const v = ctl.verify();
-    set(Q.enqueue(q, id, action, fps ?? 24, shouldVerify(action, v.checked, v.touched, it.size)));
+    set(Q.enqueue(q, id, action, fps ?? 24, shouldVerify(action, v.checked, v.touched, it.size), ctl.fonts()));
   };
   const stop = (id: number): void => { if (current?.id === id) { current.run.cancel(); current = null; } };
   const onCancel = (id: number): void => { stop(id); set(Q.cancel(q, id)); };

@@ -2,7 +2,7 @@ import { fromUtf8 } from '../format/bytes';
 import { openPar, openXpar } from '../format/open';
 import type { XparFile } from '../format/reader';
 import { toSource, type XparSource } from '../format/source';
-import { KNOWN_SECTIONS } from '../fonts/uudecode';
+import { KNOWN_SECTIONS, uuencode } from '../fonts/uudecode';
 import { filterWindow, Meter } from './window';
 import type { SubtitleSource } from './types';
 
@@ -21,13 +21,30 @@ const fontSection = (f: XparFile): string | null => {
   return out.length ? out.join('\n') : null;
 };
 
+/** Attached fonts as the `fontname:` + uuencoded lines an ASS `[Fonts]` section holds, so the renderer loads them like embedded ones. */
+const attached = async (f: XparFile): Promise<string | null> => {
+  const fonts = f.fonts;
+  if (fonts.length === 0) return null;
+  const out: string[] = [];
+  for (const font of fonts) out.push(`fontname: ${font.name}`, ...uuencode(await font.read()));
+  return out.join('\n');
+};
+
+/** The file's own `[Fonts]` lines followed by its attached fonts, as one section. */
+const fontsOf = async (f: XparFile): Promise<string | null> => {
+  const own = fontSection(f);
+  const more = await attached(f);
+  if (!more) return own;
+  return own ? `${own}\n${more}` : `[Fonts]\n${more}`;
+};
+
 const wrap = (file: XparFile, kind: string, meter: Meter, indexMs: number): SubtitleSource => ({
   kind,
   script: { info: file.script.info, styles: file.script.styles, warnings: file.script.warnings },
   duration: file.duration,
   eventCount: file.meta.dialogues,
   readWindow: (t0, t1, signal) => meter.time(async () => filterWindow(await file.readWindow(t0, t1, signal), t0, t1)),
-  fontSection: async () => fontSection(file),
+  fontSection: () => fontsOf(file),
   stats: () => ({ bytesRead: meter.bytesRead, decodeMs: meter.decodeMs, indexMs }),
 });
 

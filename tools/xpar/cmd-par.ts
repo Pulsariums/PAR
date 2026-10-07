@@ -1,6 +1,7 @@
 import { Baker } from '../../src/format/bake';
 import { pump } from '../../src/format/pump';
 
+import { encOptions } from './cmd-xpar';
 import { fileSize, mb, openOut, readChunks } from './node-io';
 
 const flag = (a: string[], n: string): string | undefined => {
@@ -8,11 +9,11 @@ const flag = (a: string[], n: string): string | undefined => {
   return i === -1 ? undefined : a[i + 1];
 };
 
-/** `par bake <in.ass> <out.par> --fps N [--tol px] [--phase f] [--render-height px] [--no-merge]` */
+/** `par bake <in.ass> <out.par> --fps N [--tol px] [--phase f] [--render-height px] [--no-merge] [--font file|dir]...` */
 export const bakeCmd = async (a: string[]): Promise<void> => {
   const [input, output] = a;
   const fps = Number(flag(a, '--fps'));
-  if (!input || !output || !fps) throw new Error('usage: par bake <in.ass> <out.par> --fps N [--tol px] [--phase f] [--render-height px] [--no-merge]');
+  if (!input || !output || !fps) throw new Error('usage: par bake <in.ass> <out.par> --fps N [--tol px] [--phase f] [--render-height px] [--no-merge] [--font file|dir]...');
   const out = openOut(output);
   const t0 = performance.now();
   const b = new Baker((u) => out.write(u), {
@@ -21,7 +22,7 @@ export const bakeCmd = async (a: string[]): Promise<void> => {
     phase: Number(flag(a, '--phase') ?? 0),
     renderHeight: flag(a, '--render-height') ? Number(flag(a, '--render-height')) : null,
     merge: !a.includes('--no-merge'),
-  });
+  }, encOptions(a));
   await pump(readChunks(input), (c) => b.push(c));
   await b.finish();
   await out.end();
