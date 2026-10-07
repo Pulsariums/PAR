@@ -68,6 +68,32 @@ Reproduced with `seek.mjs` (and in the Studio with the same file): seeks to the 
 
 Tests: `test/seek-storm.test.ts` (random seeks with random read latency, at 24 / 30 / 60 / 23.976 fps, settled frame must equal a whole-script render byte for byte; back/forward phases of `\move` `\t` `\fad`; paused seeks), `test/source-seek.test.ts` (last seek wins, one live read), `test/source-cancel.test.ts` (abort, warm chunks).
 
+## Bursts: a thousand events in one frame (second pass)
+
+The table above is a steady-state view. Playing *into* a burst (`tools/bench/burst.mjs`: free-running clock from a few seconds before the heavy moment, per-rAF counters) showed what a viewer sees as a stutter: in the frames where 1,000+ events start, hundreds of items were not drawn at all (the build budget deferred them: `skipped`), blurs were dropped, and frames took 90-100 ms. Causes, all in the build-ahead (`warmUp`), none in drawing:
+
+1. **It ran only inside a draw, 2-5 ms per frame, one second ahead.** A burst needs ~1,700 sprites (about 0.35 ms of CPU each). It is now a pump (`Scene.pump`): when a slice leaves work, the next one is queued as a message task (a `setTimeout(0)` loop is clamped to 4 ms once nested and left the pump idle two thirds of the time: 1.07 -> 0.44 ms of wall time per sprite when idle). Slices are sized from the cost of recent frames (1.5-6 ms while frames are being drawn, 10 ms when nothing was drawn for 120 ms), nearest start first, 5 s ahead. When no canvas line is on screen it still looks ahead every 6th render.
+2. **It re-planned every sample every frame.** Progress is now kept per event (`WarmState.next`).
+3. **It warmed the wrong keys.** Samples were taken at 0, 42, 83... ms from the event start, but frames fall on multiples of the video frame length; quantisation boundaries made the two grids differ and about a quarter of the sprites were rebuilt at draw time. `sampleTimes` takes the event's start and samples on the frames that will be drawn.
+4. **Vector clips were re-baked every frame.** 92-98 % of draw-time misses in the heavy windows were `bake()`: the file has ~75 clipped glyph shards on screen at once, each living one or two frames with a unique clip. Most of those clips are plain rectangles written as `m x y l ...`; `clipShape` now recognises an axis-aligned rectangle (`rectOfDrawing`) and the canvas applies it as a `rect()` clip. Baking is limited to events that stay put (no `\move`, no animated size or clip) and last 200 ms or more, and is skipped past the build budget (the clip is applied on the draw instead, same pixels).
+5. **Sprites covered the whole line box.** A sprite is now cut to the measured ink (`actualBoundingBox*`) plus stroke, offsets and 3 sigma of blur, aligned to whole device pixels: identical pixels (fidelity run unchanged, mean 0.041) and 15-22 % fewer pixels at the heavy moments (peak 2.68 -> 2.27, 1.81 -> 1.42, 2.97 -> 2.51 Mpx per frame).
+6. **`\fax` / `\fay` events went to the DOM** (a dozen large glyphs with `\t` on scale and shear appear at 53 s of the sample). They are now drawn on the canvas (`shx`, `shy`: the DOM composes shear, then x-scale, about the box's top-left corner, so the canvas uses `rx * fax` and `fay / rx` about that corner). Fidelity against the DOM: 0.02-0.06 whole-frame mean on four fixtures; sharp text with shear and a border is softer on the canvas (bilinear resampling of the sprite, like rotation).
+
+`burst.mjs` before (the commit this pass started from) and after, 1280x720 software Chromium, e24.par, free-running clock, three windows:
+
+| window (peak events) | gap p99 ms | longest gap ms | items not drawn (deferred) | blurs dropped | sprite builds at draw time |
+|---|---|---|---|---|---|
+| 7-10.5 s (1432) before | 95 | 99 | 1861 | 437 | 682 |
+| after | 59 | 73 | 0 | 86 | 154 |
+| 50-54 s (1265) before | 94 | 102 | 2859 | 709 | 1014 |
+| after | 51 | 121 | 0 | 190 | 272 |
+| 22.6-25 s (1094) before | 91 | 102 | 2312 | 477 | 819 |
+| after | 95 | 101 | 87 | 235 | 378 |
+
+Reading: the burst frames themselves (1,000+ events appearing within a few frames) are now clean in the first and second windows: nothing deferred, no frame of the burst over 60 ms. The longest gaps that remain are cold ones: a single frame in the first second after playback starts (nothing built yet, 60-70 sprites at once) or a group of large glyphs that appears right after a burst, before the pump got to it. Seeking into a burst is cold by definition: the sprites it needs are built at that frame under the 8/16 ms budget and finished on the next turns. Seek latency and the storm check are unchanged within run noise (`seek.mjs`: 0 wrong final frames, single seeks 237-465 ms cold).
+
+What is *not* verified: a GPU. Software raster is bound by fill (a 1000-sprite 72x72 micro-benchmark costs 80-90 ms whether drawn with Canvas 2D or instanced WebGL in this rig, recording is 2-3 ms), so this pass reduces the work (pixels, builds, DOM) rather than the cost of a draw call; on a GPU the per-frame cost should be lower still, but the stutter you see there is most likely the builds, which this pass addresses. `getMetrics().render` now also reports `drawn` and `fillMpx` of the last frame (shown in the Studio Metrics panel) to read it off a real machine.
+
 ## Caveats
 
 Software Chromium only; fonts of the sample are not installed, so both paths use the same fallback font; the first draw of a never-seen heavy moment after a seek still shows the scene over a few frames (sprites are built under the budget), after a cold decode of 0.3-0.6 s in the Worker.

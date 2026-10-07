@@ -3,8 +3,8 @@ import { SOFT_BREAK, type SetOp, type StateOp } from '../types/script';
 
 import type { RenderMode } from './types';
 
-/** Tags the canvas path reproduces exactly; anything else (3D rotation, shear, `\be`, karaoke, underline...) stays DOM. */
-const ALLOWED = new Set(['fn', 'fs', 'b', 'i', 'fscx', 'fscy', 'fsp', 'frz', 'xbord', 'ybord', 'xshad', 'yshad', 'blur', 'c1', 'c2', 'c3', 'c4', 'a1', 'a2', 'a3', 'a4']);
+/** Tags the canvas path reproduces exactly; anything else (3D rotation, `\be`, karaoke, underline...) stays DOM. */
+const ALLOWED = new Set(['fn', 'fs', 'b', 'i', 'fscx', 'fscy', 'fsp', 'frz', 'fax', 'fay', 'xbord', 'ybord', 'xshad', 'yshad', 'blur', 'c1', 'c2', 'c3', 'c4', 'a1', 'a2', 'a3', 'a4']);
 const MAX_CHARS = 16;
 
 export interface Complexity {

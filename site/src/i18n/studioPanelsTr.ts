@@ -49,6 +49,7 @@ export const studioPanelsTr = {
   'st.m.paths': 'Satır: DOM / canvas',
   'st.m.sprites': 'Sprite önbelleği',
   'st.m.cache': 'Önbellek',
+  'st.m.drawn': 'Son karede çizilen (öğe / piksel)',
   'st.m.dropped': 'Atlanan ayrıntı / kare',
   'st.m.frameMs': 'Kare süresi p50 / p95',
   'st.heavy': 'Ağır sahne: aynı anda en çok {n} satır. Parçacıklar canvas üzerine çizilir. Takılma olursa çizim FPS değerini düşürün (Gelişmiş) ya da diğer sekmeleri kapatın.',

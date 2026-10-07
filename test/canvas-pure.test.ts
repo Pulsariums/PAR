@@ -25,11 +25,11 @@ describe('canvas eligibility', () => {
     expect(why('{\\an5\\move(0,0,50,50)\\t(0,500,\\blur6\\c&H00FF00&)\\clip(0,0,100,100)}ka')).toBe('ok');
     expect(why('{\\an5\\pos(10,10)\\clip(m 0 0 l 10 0 10 10)}K')).toBe('ok');
     expect(why('{\\pos(10,10)\\fsp2\\blur2}Kara')).toBe('ok');
+    expect(why('{\\pos(10,10)\\fax0.3\\fay-0.1\\t(0,100,\\fax0)}K')).toBe('ok');
   });
 
   it('keeps everything it cannot reproduce exactly in the DOM', () => {
     expect(why('{\\pos(1,1)\\frx30}K')).toBe('tag frx');
-    expect(why('{\\pos(1,1)\\fax0.3}K')).toBe('tag fax');
     expect(why('{\\pos(1,1)\\be2}K')).toBe('tag be');
     expect(why('{\\pos(1,1)\\u1}K')).toBe('tag u');
     expect(why('{\\pos(1,1)\\k20}K')).toBe('karaoke');
@@ -38,7 +38,7 @@ describe('canvas eligibility', () => {
     expect(why('{\\pos(1,1)}two words')).toBe('whitespace');
     expect(why('{\\pos(1,1)}a\\Nb')).toBe('whitespace');
     expect(why('{\\pos(1,1)\\rBox}K')).toBe('reset');
-    expect(why('{\\pos(1,1)\\t(0,100,\\fax1)}K')).toBe('tag fax');
+    expect(why('{\\pos(1,1)\\t(0,100,\\fry40)}K')).toBe('tag fry');
     expect(why('{\\pos(1,1)}K', 'Box')).toBe('box');
     expect(why('K')).toBe('stacking'); // collision stacking needs the DOM measure
     expect(why('{\\pos(1,1)}' + 'x'.repeat(17))).toBe('long');
@@ -123,6 +123,22 @@ describe('frame plan equals direct evaluation', () => {
     expect(ts.length).toBeLessThanOrEqual(24);
     expect(ts[ts.length - 1]).toBeLessThan(anim.durationMs);
   });
+
+  it('sampleTimes with the event start lands on the frames that will be drawn (multiples of the frame length)', () => {
+    const anim = line(text).l;
+    const f = 1000 / 24;
+    const start = 1010; // not a frame boundary
+    const ts = sampleTimes(anim, f, start);
+    expect(ts.length).toBeGreaterThan(1);
+    for (const t of ts) {
+      const abs = start + t;
+      expect(Math.abs(abs - Math.round(abs / f) * f)).toBeLessThanOrEqual(0.5 + 1e-9);
+      expect(t).toBeGreaterThanOrEqual(0);
+    }
+    expect(ts.every((t, i) => i === 0 || t > ts[i - 1])).toBe(true);
+    // a static event needs one sample whatever the start
+    expect(sampleTimes(line('{\\an5\\pos(5,5)}K').l, f, start)).toEqual([0]);
+  });
 });
 
 describe('level of detail rules', () => {
@@ -149,5 +165,20 @@ describe('level of detail rules', () => {
     expect(m.colour).not.toBe(m2.colour);
     const bordered = line('{\\an5\\pos(5,5)\\bord2\\blur2}K').l;
     expect(maskOf(planLine(bordered, 0, env(sc), new Set(), { blur: 0 }).spec)).toBeNull();
+  });
+});
+
+describe('shear', () => {
+  it('folds the x-scale into the final-space coefficients (the DOM shears first, then scales x)', () => {
+    const plain = line('{\\an5\\pos(5,5)\\fax0.3\\fay0.2}K');
+    const a = planLine(plain.l, 0, env(plain.sc), new Set(), { blur: 0 });
+    expect([a.shx, a.shy]).toEqual([0.3, 0.2]);
+    const wide = line('{\\an5\\pos(5,5)\\fscx200\\fscy100\\fax0.3\\fay0.2}K');
+    const b = planLine(wide.l, 0, env(wide.sc), new Set(), { blur: 0 });
+    expect(b.shx).toBeCloseTo(0.6, 6);
+    expect(b.shy).toBeCloseTo(0.1, 6);
+    const none = line('{\\an5\\pos(5,5)}K');
+    const c = planLine(none.l, 0, env(none.sc), new Set(), { blur: 0 });
+    expect([c.shx, c.shy]).toEqual([0, 0]);
   });
 });

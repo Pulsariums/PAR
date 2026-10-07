@@ -52,12 +52,12 @@ for (const t0 of times) {
   const events = [];
   if (cdp) { cdp.on('Tracing.dataCollected', (d) => events.push(...d.value)); await cdp.send('Tracing.start', { categories: process.env.CATS || 'devtools.timeline,disabled-by-default-devtools.timeline,gpu,cc', transferMode: 'ReportEvents' }); }
   const r = await page.evaluate(async ({ t0, frames, fps, play }) => {
-    const sync = [], total = [], act = [];
+    const sync = [], total = [], act = [], dr = [], fill = [];
     for (let i = 0; i < frames; i++) {
       const a = performance.now(); const t = t0 + i / fps;
       window.clockT = t; window.par.renderAt(t);
       const b = performance.now(); await window.raf(); await window.raf();
-      act.push(window.par.getMetrics().activeLines); sync.push(b - a); total.push(performance.now() - a);
+      { const gm = window.par.getMetrics(); act.push(gm.activeLines); dr.push(gm.render.drawn); fill.push(gm.render.fillMpx); } sync.push(b - a); total.push(performance.now() - a);
     }
     const m = window.par.getMetrics();
     let gaps = [], n = 0;
@@ -67,7 +67,7 @@ for (const t0 of times) {
       while (performance.now() - s < play * 1000) { await window.raf(); const now = performance.now(); gaps.push(now - last); last = now; n++; }
       window.par.setOptions({ clock: () => window.clockT });
     }
-    return { sync, total, gaps, n, active: act, metrics: m };
+    return { sync, total, gaps, n, active: act, drawnSeries: dr, fillSeries: fill, metrics: m };
   }, { t0, frames, fps, play });
   if (pcdp) { const { profile } = await pcdp.send('Profiler.stop'); fs.writeFileSync(profFile, JSON.stringify(profile)); }
   let breakdown = null;
@@ -89,7 +89,7 @@ for (const t0 of times) {
   }
   const rec = { t0, active: [r.active[0], Math.max(...r.active), r.active[r.active.length - 1]], syncMean: +(r.sync.reduce((a, b) => a + b, 0) / frames).toFixed(1), stepP50: +q(r.total, .5).toFixed(1), stepP95: +q(r.total, .95).toFixed(1), stepFps: +(1000 / (r.total.reduce((a, b) => a + b, 0) / frames)).toFixed(1) };
   if (play) Object.assign(rec, { playFps: +(r.n / play).toFixed(1), gapP95: +q(r.gaps, .95).toFixed(1) });
-  const m = r.metrics.render ?? {}; rec.render = { dom: m.domLines, cv: m.canvasLines, runs: m.canvasRuns, sprites: m.sprites, MB: Math.round((m.spriteBytes || 0) / 1e6), hit: m.spriteHits, miss: m.spriteMisses, warm: m.prewarmed, drop: m.detailDropped, skip: m.skipped, ev: m.evictions, frameMs: m.frameMs }; rec.perFrameMsMainThread = breakdown;
+  const m = r.metrics.render ?? {}; rec.render = { dom: m.domLines, cv: m.canvasLines, runs: m.canvasRuns, drawn: [q(r.drawnSeries, .5), Math.max(...r.drawnSeries)], fillMpx: [q(r.fillSeries, .5), Math.max(...r.fillSeries)], sprites: m.sprites, MB: Math.round((m.spriteBytes || 0) / 1e6), hit: m.spriteHits, miss: m.spriteMisses, warm: m.prewarmed, drop: m.detailDropped, skip: m.skipped, ev: m.evictions, frameMs: m.frameMs }; rec.perFrameMsMainThread = breakdown;
   out.push(rec); console.log(JSON.stringify(rec));
 }
 await browser.close(); srv.close();

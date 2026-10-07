@@ -65,3 +65,32 @@ export const drawingBounds = (cmds: DrawCommand[]): [number, number, number, num
   }
   return x1 === Infinity ? null : [x1, y1, x2, y2];
 };
+
+/**
+ * `[x1, y1, x2, y2]` when the drawing is one axis-aligned rectangle (`m x1 y1 l x2 y1 x2 y2 x1 y2`, closing point optional, any
+ * start corner or winding), else null. A rectangle written as a vector clip is the same region as the `\clip(x1,y1,x2,y2)` form.
+ */
+export const rectOfDrawing = (cmds: DrawCommand[]): [number, number, number, number] | null => {
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i < cmds.length; i++) {
+    const c = cmds[i];
+    if (i === 0 ? c.cmd !== 'm' : c.cmd !== 'l') return null;
+    if (c.pts.length !== 1) return null;
+    pts.push(c.pts[0]);
+  }
+  if (pts.length === 5 && pts[4][0] === pts[0][0] && pts[4][1] === pts[0][1]) pts.pop();
+  if (pts.length !== 4) return null;
+  const hv = pts.every((p, i) => {
+    const q = pts[(i + 1) % 4];
+    return (p[0] === q[0]) !== (p[1] === q[1]);
+  });
+  const horizontal = pts[0][1] === pts[1][1];
+  const alt = pts.every((p, i) => {
+    const q = pts[(i + 1) % 4];
+    return i % 2 === 0 ? (horizontal ? p[1] === q[1] : p[0] === q[0]) : (horizontal ? p[0] === q[0] : p[1] === q[1]);
+  });
+  if (!hv || !alt) return null;
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+};

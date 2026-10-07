@@ -57,7 +57,12 @@ export interface DrawItem {
   size: number;
   ax: number;
   ay: number;
+  /** Shear in the final (horizontally scaled) space, about the box's top-left corner: x' = x + shx * y, y' = y + shy * x (`\fax` / `\fay` with the x-scale folded in, as the DOM path composes them). */
+  shx: number;
+  shy: number;
   clip: ClipShape[];
+  /** Position, size and clip stay as they are for the event's life and it lasts a while: worth baking a vector clip into the sprite. */
+  still: boolean;
 }
 
 /** Counters of the canvas path (`PARMetrics.render`). */
@@ -74,6 +79,9 @@ export interface CanvasStats {
   /** Items not drawn because their sprite could not be built (too large / no canvas). */
   skipped: number;
   runs: number;
+  /** Items drawn and device pixels covered (megapixels, sprite rectangles incl. transparent margin) in the last frame. */
+  drawn: number;
+  fillMpx: number;
   /** Runs beyond the canvas pool size that were merged into the last one (z-order approximated). */
   runsMerged: number;
 }

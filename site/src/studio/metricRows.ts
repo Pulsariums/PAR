@@ -15,6 +15,7 @@ export const renderRows = (r: Render): MetricRow[] => [
   { key: 'st.m.paths', value: `${r.domLines} / ${r.canvasLines} (${r.canvasRuns} canvas${r.runsMerged ? `, ${r.runsMerged} merged` : ''})` },
   { key: 'st.m.sprites', value: `${r.sprites} (${humanBytes(r.spriteBytes)})` },
   { key: 'st.m.cache', value: `${pct(r.spriteHits, r.spriteHits + r.spriteMisses)} hit, ${r.evictions} evicted, ${r.prewarmed} prewarmed` },
+  { key: 'st.m.drawn', value: `${r.drawn} / ${r.fillMpx.toFixed(2)} Mpx` },
   { key: 'st.m.dropped', value: `${r.detailDropped} / ${r.skipped}` },
   { key: 'st.m.frameMs', value: r.frameMs.samples > 0 ? `${ms(r.frameMs.p50)} / ${ms(r.frameMs.p95)} ms` : DASH },
 ];

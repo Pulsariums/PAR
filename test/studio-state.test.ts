@@ -56,7 +56,7 @@ describe('measured FPS (metrics panel)', () => {
 });
 
 const render = (over: Partial<Render> = {}): Render => ({
-  mode: 'auto', canvasSupported: true, domLines: 3, canvasLines: 400, canvasRuns: 2, runsMerged: 0, sprites: 120, spriteBytes: 2 * 1048576,
+  mode: 'auto', canvasSupported: true, domLines: 3, canvasLines: 400, canvasRuns: 2, runsMerged: 0, drawn: 380, fillMpx: 4.2, sprites: 120, spriteBytes: 2 * 1048576,
   spriteHits: 90, spriteMisses: 10, prewarmed: 7, evictions: 1, detailDropped: 4, skipped: 0, frameMs: { p50: 4.04, p95: 13.26, samples: 50 }, ...over,
 });
 
@@ -66,6 +66,7 @@ describe('render metric rows', () => {
     expect(rows['st.m.paths']).toBe('3 / 400 (2 canvas)');
     expect(rows['st.m.sprites']).toBe('120 (2.0 MB)');
     expect(rows['st.m.cache']).toBe('90% hit, 1 evicted, 7 prewarmed');
+    expect(rows['st.m.drawn']).toBe('380 / 4.20 Mpx');
     expect(rows['st.m.dropped']).toBe('4 / 0');
     expect(rows['st.m.frameMs']).toBe('4.0 / 13.3 ms');
   });

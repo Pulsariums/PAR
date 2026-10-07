@@ -32,6 +32,9 @@ export class CanvasLayer {
   private readonly paths = new Map<string, Path2D>();
   private size = { w: 0, h: 0, f: 0 };
   private layout: Size = { width: 0, height: 0 };
+  /** Items drawn and device pixels covered by the last `draw`. */
+  drawn = 0;
+  fillPx = 0;
 
   constructor(private readonly overlay: Overlay, readonly maxRuns = 6) {}
 
@@ -83,6 +86,8 @@ export class CanvasLayer {
 
   /** Draws the runs (canvas i = run i) and frees the canvases no run needs. `sprite` resolves an item's bitmap (null = skip it). */
   draw(runs: Run[], sprite: (it: DrawItem) => Sprite | Baked | null): void {
+    this.drawn = 0;
+    this.fillPx = 0;
     runs.forEach((run, i) => {
       const s = this.slot(i);
       if (!s) return;
@@ -100,6 +105,8 @@ export class CanvasLayer {
         if (it.alpha < 0.004) continue;
         const sp = sprite(it);
         if (!sp) continue;
+        this.drawn++;
+        this.fillPx += sp.w * sp.h;
         if ('x' in sp) this.baked(s.ctx, it, sp);
         else this.item(s.ctx, it, sp);
       }
@@ -135,7 +142,10 @@ export class CanvasLayer {
     ctx.translate(it.org[0], it.org[1]);
     ctx.rotate(it.rot * DEG);
     ctx.translate(-it.org[0], -it.org[1]);
-    ctx.translate(it.anchor[0] - it.ax * sp.boxW * s - sp.pad * s, it.anchor[1] - it.ay * it.size - sp.pad * s);
+    // Box top-left (after alignment); the shear pivots there like the DOM path's box transform.
+    ctx.translate(it.anchor[0] - it.ax * sp.boxW * s, it.anchor[1] - it.ay * it.size);
+    if (it.shx !== 0 || it.shy !== 0) ctx.transform(1, it.shy, it.shx, 1, 0, 0);
+    ctx.translate(sp.ox * s, sp.oy * s);
     ctx.globalAlpha = Math.min(1, Math.max(0, it.alpha));
     const k = s / it.spec.scale;
     ctx.drawImage(sp.canvas as CanvasImageSource, 0, 0, sp.w, sp.h, 0, 0, sp.w * k, sp.h * k);

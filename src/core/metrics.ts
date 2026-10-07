@@ -20,6 +20,7 @@ export const renderMetrics = (
   r: { canvas: CanvasStats; domLines: number; canvasLines: number }, mode: RenderMetrics['mode'], frameMs: RenderMetrics['frameMs'],
 ): RenderMetrics => ({
   mode, canvasSupported: canvasSupported(), domLines: r.domLines, canvasLines: r.canvasLines, canvasRuns: r.canvas.runs, runsMerged: r.canvas.runsMerged,
+  drawn: r.canvas.drawn, fillMpx: r.canvas.fillMpx,
   sprites: r.canvas.sprites, spriteBytes: r.canvas.spriteBytes, spriteHits: r.canvas.spriteHits, spriteMisses: r.canvas.spriteMisses,
   prewarmed: r.canvas.prewarmed, evictions: r.canvas.evictions, detailDropped: r.canvas.detailDropped, skipped: r.canvas.skipped, frameMs,
 });

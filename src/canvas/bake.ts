@@ -22,8 +22,8 @@ const place = (it: DrawItem, sp: Sprite) => {
   const s = it.size / it.spec.size;
   return {
     s,
-    x: it.anchor[0] - it.ax * sp.boxW * s - sp.pad * s,
-    y: it.anchor[1] - it.ay * it.size - sp.pad * s,
+    x: it.anchor[0] - it.ax * sp.boxW * s + sp.ox * s,
+    y: it.anchor[1] - it.ay * it.size + sp.oy * s,
     w: (sp.w / it.spec.scale) * s,
     h: (sp.h / it.spec.scale) * s,
   };
@@ -36,7 +36,7 @@ const place = (it: DrawItem, sp: Sprite) => {
  */
 export const bakeable = (it: DrawItem): ClipShape | null => {
   const c = it.clip.length === 1 ? it.clip[0] : null;
-  return c && !c.rect && !c.evenodd && c.bbox && it.rot === 0 ? c : null;
+  return c && it.still && !c.rect && !c.evenodd && c.bbox && it.rot === 0 && it.shx === 0 && it.shy === 0 ? c : null;
 };
 
 /** Cache key of the baked sprite: sprite, placement and clip. */
@@ -63,5 +63,5 @@ export const bake = (it: DrawItem, sp: Sprite, c: ClipShape): Baked | null => {
   ctx.setTransform(f, 0, 0, f, -x0 * f, -y0 * f);
   ctx.clip(new Path2D(c.d));
   ctx.drawImage(sp.canvas as CanvasImageSource, 0, 0, sp.w, sp.h, p.x, p.y, p.w, p.h);
-  return { canvas, w, h, boxW: 0, pad: 0, bytes: w * h * 4, x: x0, y: y0 };
+  return { canvas, w, h, boxW: 0, ox: 0, oy: 0, bytes: w * h * 4, x: x0, y: y0 };
 };

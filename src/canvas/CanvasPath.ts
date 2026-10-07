@@ -98,7 +98,8 @@ export class CanvasPath {
   private sprite(it: DrawItem, t0: number): Sprite | Baked | null {
     const sp = this.base(it, t0);
     const c = sp ? bakeable(it) : null;
-    if (!sp || !c) return sp;
+    // Past the build budget the clip is applied on the draw instead of baking (same pixels, no build time).
+    if (!sp || !c || performance.now() - t0 >= BUILD_BUDGET_MS) return sp;
     const key = bakeKey(it, c);
     const hit = this.cache.peek(key);
     if (hit !== undefined) return hit as Baked | null;
@@ -143,7 +144,7 @@ export class CanvasPath {
   stats(): CanvasStats {
     return {
       sprites: this.cache.size, spriteBytes: this.cache.bytes, spriteHits: this.cache.hits, spriteMisses: this.cache.misses, prewarmed: this.cache.prewarmed,
-      evictions: this.cache.evictions, detailDropped: this.dropped.blur, skipped: this.skipped, runs: this.runs, runsMerged: this.merged,
+      evictions: this.cache.evictions, detailDropped: this.dropped.blur, skipped: this.skipped, runs: this.runs, runsMerged: this.merged, drawn: this.layer.drawn, fillMpx: Math.round(this.layer.fillPx / 1e4) / 100,
     };
   }
 

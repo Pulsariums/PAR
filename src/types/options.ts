@@ -157,6 +157,9 @@ export interface RenderMetrics {
   canvasLines: number;
   canvasRuns: number;
   runsMerged: number;
+  /** Canvas items drawn in the last frame and the device pixels their rectangles covered (megapixels). */
+  drawn: number;
+  fillMpx: number;
   sprites: number;
   spriteBytes: number;
   spriteHits: number;

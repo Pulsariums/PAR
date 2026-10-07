@@ -15,6 +15,7 @@ const cases = {
   aniso: () => `\\fscx70\\fscy130\\blur2\\c&H3DE2F8&`, rot_move: (i, x, y) => `\\move(${x - 30},${y},${x + 30},${y + 10},0,3000)\\frz${25 + i * 20}\\blur1`,
   clip_rect: (i, x, y) => `\\clip(${x - 15},${y - 40},${x + 40},${y + 18})\\blur1`, clip_vec: (i, x, y) => `\\clip(m ${x - 20} ${y - 30} l ${x + 30} ${y - 20} ${x + 10} ${y + 25} ${x - 25} ${y + 15})`,
   fade: () => `\\fad(1500,0)\\bord2\\blur2`, translucent: () => `\\1a&H80&\\bord3\\blur1\\3c&HFF0000&`, alpha_blur: () => `\\1a&H40&\\blur4\\c&HDC4D00&`,
+  shear_x: () => `\\fax0.3\\blur1`, shear_y: () => `\\fay-0.2\\blur1\\c&H3DE2F8&`, shear_rot: () => `\\fax0.25\\fay0.15\\frz20\\blur1.5`, shear_aniso: () => `\\fscx150\\fscy90\\fax-0.3\\bord2\\3c&H0000FF&`, shear_t: () => `\\blur1\\t(0,2000,\\fax0.5\\fay0.2)`,
   trans: () => `\\blur1\\c&HF8E23D&\\t(0,2000,\\blur6\\c&H0000FF&\\fscx150\\fscy150\\frz90)`,  fs_small: () => `\\fs18\\blur2`, bord0blur5: () => `\\fs30\\blur5\\1a&H42&`,
 };
 const mk = (fn, st = 'Default', chunks = [...'Kara']) => HEAD + chunks.map((ch, i) => { const x = 90 + i * 150, y = 180; return `Dialogue: 0,0:00:00.00,0:00:05.00,${st},,0,0,0,,{\\an5\\pos(${x},${y})${fn(i, x, y)}}${ch}`; }).join('\n') + '\n';

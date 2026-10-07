@@ -1,4 +1,4 @@
-import { drawingBounds, parseDrawing } from '../parser/DrawingParser';
+import { drawingBounds, parseDrawing, rectOfDrawing } from '../parser/DrawingParser';
 import type { ClipSpec } from '../types/script';
 
 import { drawingToPath } from './drawingPath';
@@ -33,6 +33,7 @@ export const clipShape = (clip: ClipSpec | undefined): ClipShape | null => {
 const computeShape = (clip: ClipSpec): ClipShape | null => {
   let inner: string;
   let bbox: [number, number, number, number] | undefined;
+  let boxRect: [number, number, number, number] | undefined;
   if (clip.rect) {
     const [x1, y1, x2, y2] = clip.rect;
     // libass does not reorder the corners: an empty rect hides everything (`\clip`) or nothing (`\iclip`).
@@ -44,11 +45,15 @@ const computeShape = (clip: ClipSpec): ClipShape | null => {
     const b = drawingBounds(cmds);
     const k = (clip.scale ?? 1) > 1 ? Math.pow(2, (clip.scale ?? 1) - 1) : 1;
     if (b) bbox = [b[0] / k, b[1] / k, b[2] / k, b[3] / k];
+    const r = rectOfDrawing(cmds);
+    if (r) boxRect = [r[0] / k, r[1] / k, r[2] / k, r[3] / k];
     if (!inner) return clip.inverse ? null : EMPTY;
     if (!inner.endsWith('Z')) inner += ' Z';
   } else return null;
   if (clip.inverse) return { d: `${OUTER} ${inner}`, evenodd: true };
-  return clip.rect ? { d: inner, evenodd: false, rect: clip.rect } : { d: inner, evenodd: false, bbox };
+  if (clip.rect) return { d: inner, evenodd: false, rect: clip.rect };
+  // A rectangle drawn as a vector clip clips like a rect (the canvas applies `rect()`, far cheaper than a path).
+  return boxRect ? { d: inner, evenodd: false, rect: boxRect } : { d: inner, evenodd: false, bbox };
 };
 
 /** The shape as CSS `clip-path` (applied to an element whose origin is the layout origin). */

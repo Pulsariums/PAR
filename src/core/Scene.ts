@@ -2,13 +2,21 @@ import { evalStates, prepareLine, type PreparedLine } from '../anim/Prepared';
 import { collisionShift, type Placed } from '../layout/Collision';
 import { inflate, stackDirection } from '../layout/Stacking';
 import { CanvasPath } from '../canvas/CanvasPath';
-import { warmUp, type WarmState } from '../canvas/warm';
+import { newWarmState, warmUp, type WarmState } from '../canvas/warm';
 import type { CanvasStats, RenderMode } from '../canvas/types';
 import { LineView, type LineEnv } from '../render/LineView';
 import type { Overlay } from '../render/Overlay';
 import type { AssEvent, ParsedScript } from '../types/script';
 
 import { Timeline } from './Timeline';
+
+/** How far ahead (ms of subtitle time) sprites are built. */
+const HORIZON_MS = 5000;
+/** No frame drawn for this long (ms) = nothing is playing: idle slices may be long. */
+const IDLE_AFTER_MS = 120;
+const IDLE_SLICE_MS = 10;
+/** Without canvas lines on screen, the lookahead runs on every this-many-th render. */
+const QUIET_EVERY = 6;
 
 /**
  * Keeps the DOM in sync with the visible events: builds a LineView when an event appears,
@@ -26,7 +34,16 @@ export class Scene {
   covers: ((tMs: number) => boolean) | null = null;
 
   private readonly canvas: CanvasPath;
-  private readonly warm: WarmState = { done: new Set() };
+  private readonly warm: WarmState = newWarmState();
+  /** Idle warm-up pump (see `pump`) and what it needs to know about the last drawn frame. */
+  private pumpArmed = false;
+  /** Bumped to cancel a queued slice (clear / new script). */
+  private pumpGen = 0;
+  private lastDrawAt = 0;
+  private lastT = 0;
+  private lastEnv: LineEnv | null = null;
+  private frameCost = 0;
+  private quiet = 0;
   private canvasOn = false;
 
   constructor(private readonly overlay: Overlay, mode: () => RenderMode = () => 'auto', cacheBytes = 96 << 20) {
@@ -89,15 +106,53 @@ export class Scene {
       this.canvas.render(visible.map((line, i) => ({ line, rel: t - this.timeline.startMs(line), canvas: route[i] })), env);
       this.canvasOn = this.canvasLines > 0;
       this.lookahead(t, env, performance.now() - t0);
+    } else if (++this.quiet % QUIET_EVERY === 0) {
+      // No canvas line on screen: the next burst still needs its sprites, so look ahead now and then.
+      this.lookahead(t, env, null);
     }
   }
 
-  /** Builds the sprites of events starting within a second, in the time this frame has left. */
-  private lookahead(t: number, env: LineEnv, spentMs: number): void {
+  /**
+   * Builds the sprites of events starting soon. A small slice runs inside the frame; when work is left, `pump` carries on between
+   * frames: a burst of a thousand new events needs far more build time than the frames before it can spare, so it is spread over
+   * the seconds ahead (nearest start first), in slices sized from what recent frames cost.
+   */
+  private lookahead(t: number, env: LineEnv, spentMs: number | null): void {
     if (!this.canvas.enabled) return;
-    // At least 2 ms: when frames are heavy the sprites of what comes next must still get built, or they never get ahead.
-    const budget = Math.max(2, Math.min(5, 12 - spentMs));
-    warmUp(this.canvas, this.timeline.startingIn(t, t + 1000), t, env, env.frameMs ?? 41.7, budget, this.warm);
+    this.lastT = t;
+    this.lastEnv = env;
+    if (spentMs !== null) this.lastDrawAt = performance.now();
+    if (spentMs !== null) this.frameCost = this.frameCost === 0 ? spentMs : this.frameCost * 0.8 + spentMs * 0.2;
+    const w = warmUp(this.canvas, this.timeline.startingIn(t, t + HORIZON_MS), t, env, env.frameMs ?? 41.7, 1.5, this.warm, this.startOf);
+    if (w.more) this.arm();
+  }
+
+  private readonly startOf = (l: PreparedLine): number => this.timeline.startMs(l);
+
+  private arm(): void {
+    if (this.pumpArmed) return;
+    this.pumpArmed = true;
+    const gen = this.pumpGen;
+    const run = (): void => { if (gen === this.pumpGen) this.pump(); };
+    if (typeof MessageChannel === 'undefined') { setTimeout(run, 0); return; }
+    // A message task, not `setTimeout(0)`: timers are clamped to 4 ms once nested, which left the pump idle two thirds of the time.
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => { ch.port1.close(); run(); };
+    ch.port2.postMessage(0);
+  }
+
+  /**
+   * One slice between frames. While frames are being drawn it is sized to leave room for the next one (the frame's own cost
+   * measured); with nothing drawn lately (paused, between bursts) the main thread is free and slices are long.
+   */
+  private pump(): void {
+    this.pumpArmed = false;
+    const env = this.lastEnv;
+    if (!env || !this.canvas.enabled) return;
+    const playing = performance.now() - this.lastDrawAt < IDLE_AFTER_MS;
+    const budget = playing ? Math.max(1.5, Math.min(6, 13 - this.frameCost)) : IDLE_SLICE_MS;
+    const w = warmUp(this.canvas, this.timeline.startingIn(this.lastT, this.lastT + HORIZON_MS), this.lastT, env, env.frameMs ?? 41.7, budget, this.warm, this.startOf);
+    if (w.more) this.arm();
   }
 
   private renderDom(line: PreparedLine, t: number, env: LineEnv, force: boolean): void {
@@ -135,6 +190,10 @@ export class Scene {
     this.placed.clear();
     this.canvas.clear();
     this.warm.done.clear();
+    this.warm.next.clear();
+    this.pumpGen++;
+    this.pumpArmed = false;
+    this.lastEnv = null;
     this.canvasOn = false;
     this.canvasLines = 0;
   }

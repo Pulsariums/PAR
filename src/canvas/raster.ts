@@ -13,8 +13,9 @@ export interface Sprite {
   h: number;
   /** Box width in layout units at the sprite's size class (advance + spacing, times the horizontal scale). */
   boxW: number;
-  /** Transparent margin around the box (layout units) that holds borders, blur and shadows. */
-  pad: number;
+  /** Top-left corner of the bitmap relative to the text box's top-left (layout units at the sprite's size class): the bitmap covers the ink, borders, shadows and blur tails, not the whole line box. */
+  ox: number;
+  oy: number;
   bytes: number;
 }
 
@@ -90,6 +91,32 @@ const paintPlate = (ctx: Ctx, s: SpriteSpec, p: PlateSpec, ox: number, oy: numbe
   }
 };
 
+
+const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+
+/**
+ * Layout-unit rectangle (relative to the box's top-left) that holds everything the plates paint: the measured ink of the glyphs
+ * (not the line box, which is mostly empty for most letters), stroke reach, offsets, shadows and the blur tails (3 sigma).
+ * Browsers that report no ink metrics fall back to the whole line box.
+ */
+export const inkBounds = (s: SpriteSpec, tm: TextMetrics, baseline: number, boxW: number): { x0: number; y0: number; x1: number; y1: number } => {
+  const inkL = -num(tm.actualBoundingBoxLeft, 0);
+  const inkR = num(tm.actualBoundingBoxRight, boxW / s.rx);
+  const up = num(tm.actualBoundingBoxAscent, baseline);
+  const down = num(tm.actualBoundingBoxDescent, s.size - baseline);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of s.plates) {
+    const dxs = p.shadow ? [p.dx, p.dx + p.shadow.dx] : [p.dx];
+    const dys = p.shadow ? [p.dy, p.dy + p.shadow.dy] : [p.dy];
+    const sw = p.strokeW / 2;
+    x0 = Math.min(x0, s.rx * (inkL + Math.min(...dxs) - sw) - 3 * p.blur);
+    x1 = Math.max(x1, s.rx * (inkR + Math.max(...dxs) + sw) + 3 * p.blur);
+    y0 = Math.min(y0, baseline - up + Math.min(...dys) - sw - 3 * p.blur);
+    y1 = Math.max(y1, baseline + down + Math.max(...dys) + sw + 3 * p.blur);
+  }
+  return Number.isFinite(x0) ? { x0, y0, x1, y1 } : { x0: 0, y0: 0, x1: boxW, y1: s.size };
+};
+
 /** Rasterises a sprite: every plate in order, blurred plates through a scratch bitmap (`ctx.filter`). Null when it cannot be built. */
 export const buildSprite = (s: SpriteSpec): Sprite | null => {
   const probe = scratchFor(8, 8);
@@ -105,25 +132,29 @@ export const buildSprite = (s: SpriteSpec): Sprite | null => {
   // Browsers centre the glyph box in a line box of height `size` (half-leading) and round ascent / descent to whole pixels.
   const baseline = (s.size - (asc + desc)) / 2 + asc;
   const boxW = tm.width * s.rx;
-  const reach = Math.max(0, ...s.plates.map((p) => Math.max(p.strokeW / 2 + Math.max(Math.abs(p.dx), Math.abs(p.dy)) + (p.shadow ? Math.max(Math.abs(p.shadow.dx), Math.abs(p.shadow.dy)) : 0), 0) * Math.max(1, s.rx) + 3 * p.blur));
-  const pad = Math.ceil(reach + 2);
-  const w = Math.ceil((boxW + 2 * pad) * s.scale);
-  const h = Math.ceil((s.size + 2 * pad) * s.scale);
+  const b = inkBounds(s, tm, baseline, boxW);
+  // Whole device pixels from the box origin: the glyph keeps the same sub-pixel phase whatever the bitmap's size.
+  const left = Math.floor(b.x0 * s.scale) - 1;
+  const top = Math.floor(b.y0 * s.scale) - 1;
+  const w = Math.ceil(b.x1 * s.scale) + 1 - left;
+  const h = Math.ceil(b.y1 * s.scale) + 1 - top;
   if (w > MAX_SIDE || h > MAX_SIDE || w < 1 || h < 1) return null;
+  const ox = left / s.scale;
+  const oy = top / s.scale;
   const canvas = makeSurface(w, h);
   const ctx = ctxOf(canvas);
   if (!ctx) return null;
   for (const p of s.plates) {
-    if (p.blur <= 0 && !p.carve) { paintPlate(ctx, s, p, pad, pad, baseline); continue; }
+    if (p.blur <= 0 && !p.carve) { paintPlate(ctx, s, p, -ox, -oy, baseline); continue; }
     const t = scratchFor(w, h);
     if (!t) return null;
     t.ctx.setTransform(1, 0, 0, 1, 0, 0);
     t.ctx.clearRect(0, 0, w, h);
-    paintPlate(t.ctx, s, p, pad, pad, baseline);
+    paintPlate(t.ctx, s, p, -ox, -oy, baseline);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.filter = p.blur > 0 ? `blur(${p.blur * s.scale}px)` : 'none';
     ctx.drawImage(t.c as CanvasImageSource, 0, 0, w, h, 0, 0, w, h);
     ctx.filter = 'none';
   }
-  return { canvas, w, h, boxW, pad, bytes: w * h * 4 };
+  return { canvas, w, h, boxW, ox, oy, bytes: w * h * 4 };
 };
