@@ -1,4 +1,5 @@
 import { convertTr } from './convertTr';
+import { watchTr } from './watchTr';
 import { libTr } from './libTr';
 import { studioPanelsTr } from './studioPanelsTr';
 import { studioTr } from './studioTr';
@@ -40,5 +41,6 @@ export const tr: Dict = {
   ...libTr,
   ...studioPanelsTr,
   ...convertTr,
+  ...watchTr,
   ...studioTr,
 };

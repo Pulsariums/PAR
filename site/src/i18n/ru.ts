@@ -1,4 +1,5 @@
 import { convertRu } from './convertRu';
+import { watchRu } from './watchRu';
 import { libRu } from './libRu';
 import { studioPanelsRu } from './studioPanelsRu';
 import { studioRu } from './studioRu';
@@ -40,5 +41,6 @@ export const ru: Dict = {
   ...libRu,
   ...studioPanelsRu,
   ...convertRu,
+  ...watchRu,
   ...studioRu,
 };

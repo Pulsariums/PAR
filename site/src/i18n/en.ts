@@ -1,4 +1,5 @@
 import { convertEn } from './convertEn';
+import { watchEn } from './watchEn';
 import { libEn } from './libEn';
 import { studioPanelsEn } from './studioPanelsEn';
 import { studioEn } from './studioEn';
@@ -39,6 +40,7 @@ export const en = {
   ...libEn,
   ...studioPanelsEn,
   ...convertEn,
+  ...watchEn,
   ...studioEn,
 };
 export type Dict = Record<keyof typeof en, string>;
