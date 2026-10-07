@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseScript } from '../src/index';
-import { FEATURES } from '../site/src/playground/features';
+import { FEATURES } from '../site/src/player/features';
 import { PRESETS, presetById } from '../site/src/presets';
 
 describe('playground presets', () => {

@@ -1,6 +1,6 @@
 import { t } from '../../i18n/i18n';
 
-import { el } from '../../playground/dom';
+import { el } from '../../player/dom';
 import { download } from '../../common/download';
 import { exportName } from '../../common/exportName';
 import { humanBytes, percent } from '../../common/format';

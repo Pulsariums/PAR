@@ -1,5 +1,5 @@
 import { t } from '../i18n/i18n';
-import { $, el } from '../playground/dom';
+import { $, el } from '../player/dom';
 import { PRESETS, presetById } from '../presets';
 
 import type { SizeClient } from './size/client';

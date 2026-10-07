@@ -1,6 +1,6 @@
 import { t } from '../i18n/i18n';
 import type { Dict } from '../i18n/en';
-import { button, el } from '../playground/dom';
+import { button, el } from '../player/dom';
 import { humanBytes } from '../common/format';
 import { download } from '../common/download';
 

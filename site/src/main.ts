@@ -2,7 +2,6 @@ import { initConvert } from './convert';
 import { initHero } from './hero';
 import { initI18n, onLang, t } from './i18n/i18n';
 import type { Dict } from './i18n/en';
-import { initPlayground } from './playground';
 import { initStudio } from './studio';
 import { initRouting } from './routing';
 import { initTheme } from './theme';
@@ -21,7 +20,6 @@ const renderFeatures = () => {
 initTheme();
 initRouting();
 initConvert(document.getElementById('convert-root') as HTMLElement);
-initPlayground(document.getElementById('playground') as HTMLElement);
 initStudio(document.getElementById('studio-root') as HTMLElement);
 initI18n();
 renderFeatures();

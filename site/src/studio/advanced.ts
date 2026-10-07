@@ -1,7 +1,7 @@
 import type { FpsOption, PARRenderer } from '../../../src/index';
 import { t } from '../i18n/i18n';
-import { $ } from '../playground/dom';
-import { RENDER_MARKS, VIDEO_MARKS } from '../playground/fpsMarks';
+import { $ } from '../player/dom';
+import { RENDER_MARKS, VIDEO_MARKS } from '../player/fpsMarks';
 
 import type { VideoFpsState } from './fpsState';
 
@@ -39,5 +39,12 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
     video.value = fps.picked === null ? '' : String(fps.picked);
   };
   sync();
-  return { sync };
+  /** The choices as the generated code needs them. */
+  const values = () => ({
+    renderMode: mode.value as 'auto' | 'dom' | 'canvas',
+    fps: (rate.value === 'auto' ? 'auto' : Number(rate.value)) as 'auto' | number,
+    videoFps: fps.option,
+    timeOffset: Number.isFinite(Number(offset.value)) ? Number(offset.value) : 0,
+  });
+  return { sync, values };
 };

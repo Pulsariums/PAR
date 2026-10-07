@@ -1,7 +1,12 @@
 /** Studio section texts. */
 export const studioEn = {
-  'nav.studio': 'Studio',
-  'st.title': 'Studio: play your own video with your subtitles',
+  'nav.watch': 'Watch', 'nav.lab': 'Lab',
+  'st.labFonts': 'Fonts: report and library', 'st.edit': 'Edit the subtitle',
+  'st.editHint': 'Type ASS and it plays after a short pause. The text is kept on the shelf as scratch.ass, so it exports and sizes like any subtitle.',
+  'st.editFromSel': 'Load the selected subtitle', 'st.editNew': 'Start from a basic example',
+  'st.editNone': 'No subtitle is selected.', 'st.editBig': '{name} is too big to edit here (over 256 KB).', 'st.editLoaded': 'Loaded {name} into the editor.',
+  'st.title': 'Try it on your own files',
+  'st.view': 'View', 'st.view.watch': 'Watch', 'st.view.lab': 'Lab', 'st.ref': 'Reference: features and code',
   'st.shelves': 'Media shelf',
   'st.videos': 'Videos',
   'st.subs': 'Subtitles',

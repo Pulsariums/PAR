@@ -9,7 +9,7 @@ npm ci
 npm run typecheck   # tsc, strict
 npm test            # vitest (jsdom)
 npm run build       # dist/: ESM, CJS, IIFE, types
-npm run dev         # playground at http://localhost:5173/PAR/
+npm run dev         # site (watch / lab) at http://localhost:5173/PAR/
 npm run build:site  # site-dist/ (what GitHub Pages serves)
 ```
 
@@ -19,7 +19,7 @@ npm run build:site  # site-dist/ (what GitHub Pages serves)
 - Every fix to a shared function means checking all its callers in the same change.
 - Subtitle timing, ids and ASS tags (for example `{\pos}`) must never be lost: parse and validate, do not trust raw input.
 - When you change tag support, update the three READMEs (`README.md`, `README.tr.md`, `README.ru.md`) and
-  `site/src/playground/features.ts` together, and add or adjust a playground preset in `site/src/presets/`.
+  `site/src/player/features.ts` together, and add or adjust a site preset in `site/src/presets/`.
 - Add a test in `test/` for every behaviour change. Run typecheck, tests and both builds before opening a PR.
 
 ## Maintainers: GitHub Pages

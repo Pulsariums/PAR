@@ -8,7 +8,7 @@ export const libEn = {
   'lib.persist': 'Keep on this device', 'lib.persisted': 'Protected from automatic clean-up.', 'lib.persistDenied': 'The browser did not grant protection; it may still keep the fonts.',
   'lib.export': 'Export all as .zip', 'lib.unavailable': 'The font library needs IndexedDB, which is unavailable here (private mode or blocked storage).',
   'lib.added': '{n} added, {d} already in the library.', 'lib.addError': '{name}: {error}',
-  'lib.selectAll': 'Select all shown', 'lib.selected': '{n} selected', 'lib.deleteSel': 'Delete selected', 'lib.clearSel': 'Clear selection',
+  'lib.selectAll': 'Select all shown','lib.deleteSel': 'Delete selected', 'lib.clearSel': 'Clear selection',
   'lib.selectFont': 'Select {name}', 'lib.selectGroup': 'Select all variants of {name}', 'lib.remove': 'Delete',
   'lib.confirmDelete': '{n} font(s) will be removed from this device. Continue?',
   'lib.names': 'Names', 'lib.namesLabel': 'Extra names for this font (comma separated)', 'lib.namesHint': 'A script may use any of these names. The names inside the font file always work too.',

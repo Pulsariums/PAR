@@ -1,7 +1,7 @@
 import { defaultLayoutSize, type DefaultLayoutOption, type LayoutOption, type PARMetrics, type PARRenderer } from '../../../src/index';
 import { t } from '../i18n/i18n';
 
-import { $, el } from '../playground/dom';
+import { $, el } from '../player/dom';
 
 const num = (id: string): number => Number($<HTMLInputElement>(id).value);
 const round = (n: number): string => String(Math.round(n * 1000) / 1000);

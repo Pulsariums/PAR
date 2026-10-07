@@ -2,20 +2,19 @@ import type { FontLibrary } from '../../../src/fontlib';
 import { usedCharacters } from '../../../src/index';
 import { onLang, t } from '../i18n/i18n';
 
-import { $, bytesLabel, button, el } from './dom';
-import type { LibList as ListClass } from './libList';
-import { askEnabled, initMissingPrompt, setAsk } from './missingUi';
-import type { Player } from './player';
+import { bytesLabel, button, el } from '../player/dom';
+import type { LibList as ListClass } from '../player/libList';
+import { askEnabled, setAsk } from '../player/missingUi';
+import type { Player } from '../player/player';
 
 const FONT_ACCEPT = '.ttf,.otf,.ttc,.otc,.woff,.woff2,.zip';
 
 /**
- * Fonts tab, "Font library" section: the user's own persistent font store (IndexedDB, loaded as a separate chunk), wired to
+ * Lab, "Font library" section: the user's own persistent font store (IndexedDB, loaded as a separate chunk), wired to
  * the renderer as a font provider. Add / list / search / group / select / delete / names / export, storage use with a
  * quota warning, the persistence request, per-font previews and character grids, and the "font is missing" prompt.
  */
-export const initFontLib = (player: Player, selectTab: (id: string) => void): void => {
-  const root = $('fontLib');
+export const initFontLib = (root: HTMLElement, player: Player): void => {
   let lib: FontLibrary | null = null;
   let list: InstanceType<typeof ListClass> | null = null;
   let ListCtor: typeof ListClass | null = null;
@@ -24,8 +23,6 @@ export const initFontLib = (player: Player, selectTab: (id: string) => void): vo
   let fatal = '';
   const picker = Object.assign(el('input'), { type: 'file', multiple: true, accept: FONT_ACCEPT, hidden: true });
   const previewText = (): string => custom || t('lib.sample');
-  const addFonts = (): void => { selectTab('fonts'); picker.click(); };
-  initMissingPrompt(player, addFonts);
 
   const shell = (): void => {
     const head = el('div', 'row');
@@ -55,7 +52,7 @@ export const initFontLib = (player: Player, selectTab: (id: string) => void): vo
     if (!lib || !list) return;
     list.set(await lib.list());
     const u = await lib.usage();
-    const box = $('libUsage');
+    const box = root.querySelector<HTMLElement>('#libUsage')!;
     const lines = [t('lib.count', { n: u.count, size: bytesLabel(u.bytes) })];
     if (u.quota !== null && u.used !== null) lines.push(t('lib.quota', { used: bytesLabel(u.used), quota: bytesLabel(u.quota) }));
     else lines.push(t('lib.quotaUnknown'));
@@ -97,8 +94,8 @@ export const initFontLib = (player: Player, selectTab: (id: string) => void): vo
   shell();
   void (async () => {
     try {
-      // the library and its UI are separate chunks: nothing is downloaded until the playground opens
-      const [ui, shared] = await Promise.all([import('./libList'), import('./libShared')]);
+      // the library and its UI are separate chunks: nothing is downloaded until the panel is opened
+      const [ui, shared] = await Promise.all([import('../player/libList'), import('../player/libShared')]);
       ListCtor = ui.LibList;
       lib = await shared.getLibrary();
       lib.onChange(() => void refresh());

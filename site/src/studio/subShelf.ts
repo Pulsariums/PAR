@@ -3,7 +3,7 @@ import { t } from '../i18n/i18n';
 import { humanBytes } from '../common/format';
 import { openSession } from './openSession';
 import type { StudioSession } from './session';
-import type { Player } from '../playground/player';
+import type { Player } from '../player/player';
 
 import type { SubKind } from './exportPlan';
 import { Shelf, newId } from './shelfState';
@@ -59,5 +59,15 @@ export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session
   };
 
   shelf.subscribe(() => { apply(); draw(); });
-  return { render: draw, add };
+
+  /** Replaces (or creates) the item of that name with new content, selects it and plays it. */
+  async function upsert(file: File): Promise<void> {
+    const ex = shelf.items.find((i) => i.name === file.name);
+    if (!ex) { await add([file], true); return; }
+    ex.file = file; ex.size = file.size; ex.error = '';
+    applied = null; // same id, new content: apply() must reopen it
+    if (shelf.selectedId !== ex.id) shelf.select(ex.id); else { apply(); draw(); }
+  }
+
+  return { render: draw, add, upsert, selectedFile: (): File | null => shelf.selected?.file ?? null };
 };

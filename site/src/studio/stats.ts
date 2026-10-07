@@ -1,9 +1,9 @@
 import { frameRate, type PARMetrics } from '../../../src/index';
 import { clock, humanBytes } from '../common/format';
 import { t } from '../i18n/i18n';
-import { $ } from '../playground/dom';
-import { FpsMeter, fpsText } from '../playground/fpsMeter';
-import type { Player } from '../playground/player';
+import { $ } from '../player/dom';
+import { FpsMeter, fpsText } from '../player/fpsMeter';
+import type { Player } from '../player/player';
 
 import { HeavyHint, renderRows, type MetricRow } from './metricRows';
 

@@ -29,7 +29,7 @@ export const studioPanelsEn = {
   'st.m.time': 'Time', 'st.m.frame': 'Frame', 'st.m.win': 'In memory', 'st.m.range': 'Window', 'st.m.read': 'Read from file', 'st.m.decode': 'Decode time',
   'st.m.heap': 'JS heap', 'st.m.first': 'First frame after open', 'st.m.seek': 'Last seek', 'st.m.loading': 'loading', 'st.m.idle': 'idle', 'st.m.events': '{n} events',
   'st.stage': 'Subtitle player. Press Space to play or pause.',
-  'st.sub': 'One player for everything. Add videos, subtitles and fonts to the shelf and pick what plays, or try a subtitle alone on the test card (Examples). A 100 MB script plays smoothly because only a few seconds of it are ever in memory. Everything stays on this device.',
+  'st.sub': 'Watch is the player alone: add a video, subtitles and fonts to the shelf and see how PAR does on your machine, with nothing else measured or drawn. Lab adds the exact numbers, export, options and a reference. A 100 MB script plays smoothly because only a few seconds of it are ever in memory. Everything stays on this device.',
   'st.export': 'Sizes and export of the selected subtitle',
   'st.s.empty': 'Select a subtitle to see its size, the XPAR and PAR sizes and its PlayRes.',
   'st.keys': 'Click the picture, then: Space or K play / pause, Left / Right or , / . one frame, Shift + arrows 1 s, J / L 5 s, [ / ] previous / next line, Home / End.',

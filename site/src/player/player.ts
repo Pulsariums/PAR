@@ -1,10 +1,9 @@
-import { create, type FpsOption, type LayoutOption, type PARRenderer, type RegionOption, type SubtitleSource } from '../../../src/index';
+import { create, type PARRenderer, type SubtitleSource } from '../../../src/index';
 
-import type { Settings } from './store';
 import { drawCard } from './testcard';
 import { CardTransport, VideoTransport, type Transport } from './transport';
 
-/** Owns the PAR instance, the two transports and the mapping Settings -> PAR options. */
+/** Owns the PAR instance and the two transports (test card clock, video element). */
 export class Player {
   readonly card = new CardTransport();
   readonly par: PARRenderer;
@@ -68,21 +67,6 @@ export class Player {
     this.card.pause();
     this.transport = this.videoTransport;
     this.par.setOptions({ video: this.video, clock: null });
-  }
-
-  /** Maps settings to PAR options. Returns an error message, or '' on success. */
-  apply(s: Readonly<Settings>): string {
-    this.video.style.objectFit = s.fit;
-    const region: RegionOption = s.region === 'custom' ? { ...s.rect } : s.region === 'video' && !this.hasVideo ? 'container' : s.region;
-    const layout: LayoutOption = s.layoutCustom ? { ...s.layout } : 'script';
-    const fps: FpsOption = s.fpsAuto ? 'auto' : s.fps;
-    const vf = s.videoFps.trim() === '' ? null : Number(s.videoFps);
-    try {
-      this.par.setOptions({ region, layout, fps, videoFps: vf, timeOffset: s.timeOffset, zIndex: s.zIndex });
-      return '';
-    } catch (e) {
-      return e instanceof Error ? e.message : String(e);
-    }
   }
 
   /** Called every animation frame: redraws the test card when its time changed. */

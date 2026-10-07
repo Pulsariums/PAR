@@ -1,7 +1,7 @@
 import type { Dict } from '../i18n/en';
 import { t } from '../i18n/i18n';
-import { el } from '../playground/dom';
-import { PAR_MARKS, fpsChips, type Chips } from '../playground/fpsMarks';
+import { el } from '../player/dom';
+import { PAR_MARKS, fpsChips, type Chips } from '../player/fpsMarks';
 
 import { defaultFps, exportBlockers, type SubKind } from './exportPlan';
 import { containerNotes, playResText, sessionInfo } from './exportInfo';

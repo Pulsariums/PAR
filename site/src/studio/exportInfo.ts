@@ -1,7 +1,7 @@
 import { writtenPlayRes, LAYOUT_1080P } from '../../../src/index';
 import { exactBytes, humanBytes } from '../common/format';
 import { t } from '../i18n/i18n';
-import { el } from '../playground/dom';
+import { el } from '../player/dom';
 
 import type { StudioSession } from './session';
 

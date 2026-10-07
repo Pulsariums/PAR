@@ -1,7 +1,12 @@
 /** Studio section texts. */
 export const studioTr = {
-  'nav.studio': 'Stüdyo',
-  'st.title': 'Stüdyo: kendi videonuzu altyazınızla oynatın',
+  'nav.watch': 'İzle', 'nav.lab': 'Lab',
+  'st.labFonts': 'Fontlar: rapor ve kitaplık', 'st.edit': 'Altyazıyı düzenle',
+  'st.editHint': 'ASS yazın, kısa bir duraklamadan sonra oynar. Metin rafta scratch.ass olarak tutulur; yani her altyazı gibi dışa aktarılır ve boyutlanır.',
+  'st.editFromSel': 'Seçili altyazıyı yükle', 'st.editNew': 'Basit bir örnekle başla',
+  'st.editNone': 'Seçili altyazı yok.', 'st.editBig': '{name} burada düzenlemek için çok büyük (256 KB üstü).', 'st.editLoaded': '{name} düzenleyiciye yüklendi.',
+  'st.title': 'Kendi dosyalarınla dene',
+  'st.view': 'Görünüm', 'st.view.watch': 'İzle', 'st.view.lab': 'Lab', 'st.ref': 'Başvuru: özellikler ve kod',
   'st.shelves': 'Medya rafı',
   'st.videos': 'Videolar',
   'st.subs': 'Altyazılar',

@@ -1,9 +1,13 @@
-/** Old deep links keep working: the Lab was merged into the Studio, so `#lab` and `#lab-root` (and the short `#studio`) land on the Studio section. */
+import { requestView, viewFromHash } from './view';
+
+/** Deep links: `#lab` / `#lab-root` open the Studio section in the lab view, `#studio` in whatever view it is in. */
 const LEGACY = /^#(lab|lab-root|studio)$/;
 const TARGET = 'studio-root';
 
 const redirect = (): void => {
   if (!LEGACY.test(location.hash)) return;
+  const v = viewFromHash(location.hash);
+  if (v) requestView(v);
   history.replaceState(null, '', `#${TARGET}`);
   document.getElementById(TARGET)?.scrollIntoView();
 };

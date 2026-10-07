@@ -1,7 +1,7 @@
 import type { FontLibrary, FontRecord } from '../../../src/fontlib';
 import { t } from '../i18n/i18n';
 import { humanBytes } from '../common/format';
-import type { Player } from '../playground/player';
+import type { Player } from '../player/player';
 
 import { createShelf } from './shelfView';
 
@@ -29,7 +29,7 @@ export const initFontShelf = (host: HTMLElement, player: Player, status: (msg: s
     status(res.errors.length ? t('st.fontsErr', { n: res.added.length, e: res.errors.map((e) => `${e.name}: ${e.error}`).join('; ') }) : t('st.fontsAdded', { n: res.added.length }));
   }
 
-  void import('../playground/libShared').then((m) => m.getLibrary()).then(async (l) => {
+  void import('../player/libShared').then((m) => m.getLibrary()).then(async (l) => {
     lib = l;
     player.par.setOptions({ fontProviders: [l.asProvider()] });
     const load = (): void => void l.list().then((r) => { records = r.sort((a, b) => a.family.localeCompare(b.family)); draw(); });

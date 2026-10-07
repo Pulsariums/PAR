@@ -25,3 +25,9 @@
   .st-shelf:not(.on) { display: none; }
 }
 .seg.st-tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+
+/* Two views of one player: watch shows the player alone, lab adds measurements, export and reference. */
+.st-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.st-top h2 { margin: 0; }
+.st[data-view="watch"] .st-lab { display: none; }
+.st-top { margin-bottom: 8px; }

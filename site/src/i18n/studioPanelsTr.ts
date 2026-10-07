@@ -29,7 +29,7 @@ export const studioPanelsTr = {
   'st.m.time': 'Zaman', 'st.m.frame': 'Kare', 'st.m.win': 'Bellekte', 'st.m.range': 'Pencere', 'st.m.read': 'Dosyadan okunan', 'st.m.decode': 'Çözme süresi',
   'st.m.heap': 'JS yığını', 'st.m.first': 'Açılıştan ilk kareye', 'st.m.seek': 'Son atlama', 'st.m.loading': 'yükleniyor', 'st.m.idle': 'boşta', 'st.m.events': '{n} olay',
   'st.stage': 'Altyazı oynatıcı. Oynatmak ya da duraklatmak için Boşluk tuşuna basın.',
-  'st.sub': 'Her şey için tek oynatıcı. Videoları, altyazıları ve fontları rafa ekleyin ve neyin oynayacağını seçin; ya da bir altyazıyı tek başına test kartında deneyin (Örnekler). 100 MB\'lık bir betik bile akıcı oynar: bellekte her an yalnızca birkaç saniyesi durur. Her şey bu cihazda kalır.',
+  'st.sub': 'İzle yalnızca oynatıcıdır: rafa bir video, altyazı ve font ekleyin ve PAR makinenizde nasıl çalışıyor görün; başka hiçbir şey ölçülmez ya da çizilmez. Lab; kesin sayıları, dışa aktarmayı, seçenekleri ve bir başvuru bölümünü ekler. 100 MB\'lık bir betik akıcı oynar, çünkü bellekte her an yalnızca birkaç saniyesi vardır. Her şey bu cihazda kalır.',
   'st.export': 'Seçili altyazının boyutları ve dışa aktarma',
   'st.s.empty': 'Boyutunu, XPAR ve PAR boyutlarını ve PlayRes değerini görmek için bir altyazı seçin.',
   'st.keys': 'Görüntüye tıklayın, sonra: Boşluk ya da K oynat / duraklat, Sol / Sağ ya da , / . bir kare, Shift + ok 1 sn, J / L 5 sn, [ / ] önceki / sonraki satır, Home / End.',

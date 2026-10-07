@@ -8,7 +8,7 @@ export const libTr = {
   'lib.persist': 'Bu cihazda kalıcı tut', 'lib.persisted': 'Otomatik temizlemeye karşı korunuyor.', 'lib.persistDenied': 'Tarayıcı koruma vermedi; fontları yine de tutabilir.',
   'lib.export': 'Hepsini .zip olarak dışa aktar', 'lib.unavailable': 'Font kütüphanesi IndexedDB ister; burada kullanılamıyor (gizli mod ya da engellenmiş depolama).',
   'lib.added': '{n} eklendi, {d} zaten kütüphanede.', 'lib.addError': '{name}: {error}',
-  'lib.selectAll': 'Görünenlerin hepsini seç', 'lib.selected': '{n} seçili', 'lib.deleteSel': 'Seçilenleri sil', 'lib.clearSel': 'Seçimi temizle',
+  'lib.selectAll': 'Görünenlerin hepsini seç','lib.deleteSel': 'Seçilenleri sil', 'lib.clearSel': 'Seçimi temizle',
   'lib.selectFont': '{name} seç', 'lib.selectGroup': '{name} fontunun tüm varyantlarını seç', 'lib.remove': 'Sil',
   'lib.confirmDelete': '{n} font bu cihazdan silinecek. Devam edilsin mi?',
   'lib.names': 'Adlar', 'lib.namesLabel': 'Bu font için ek adlar (virgülle ayırın)', 'lib.namesHint': 'Bir betik bu adlardan herhangi birini kullanabilir. Font dosyasının içindeki adlar da her zaman çalışır.',

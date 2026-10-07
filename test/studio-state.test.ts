@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { Player } from '../site/src/playground/player';
-import { FpsMeter, fpsText } from '../site/src/playground/fpsMeter';
+import { Player } from '../site/src/player/player';
+import { FpsMeter, fpsText } from '../site/src/player/fpsMeter';
 import { VideoFpsState } from '../site/src/studio/fpsState';
 import { HEAVY_LINES, HeavyHint, renderRows, type Render } from '../site/src/studio/metricRows';
 import { regionFor, studioMode } from '../site/src/studio/mode';

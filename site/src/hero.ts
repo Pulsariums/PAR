@@ -1,8 +1,8 @@
 import { create } from '../../src/index';
 
 import { ev, script } from './presets/ass';
-import { CardTransport } from './playground/transport';
-import { drawCard } from './playground/testcard';
+import { CardTransport } from './player/transport';
+import { drawCard } from './player/testcard';
 import { onLang, t } from './i18n/i18n';
 
 /** Hero: karaoke, a moving sign, a fade and a rotating shape, all rendered by PAR over the test card. */

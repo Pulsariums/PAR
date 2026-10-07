@@ -90,7 +90,7 @@ fonts fetched lazily, `libassMemoryLimit` / `libassGlyphLimit` cache caps, `pres
 `maxRenderHeight` to bound the raster size, skipped frames while busy, colour-matrix correction (BT.601/709) from the
 track's `YCbCr Matrix`, `timeOffset`. libass itself caps `\blur` at 100 and `\be` at 127; PAR now does the same.
 
-## Matrix updates for the site (apply in `site/src/playground/features.ts` and `site/src/i18n/hints.ts`)
+## Matrix updates for the site (apply in `site/src/player/features.ts` and `site/src/i18n/hints.ts`)
 
 - `\blur \be` (status `approx`): split into `\blur` = `rendered` and `\be` = `approx`.
 - `\bord \shad` stays `rendered`; `\xbord \ybord` stays `approx` (note: also border stretched by `\fscx/\fscy`).

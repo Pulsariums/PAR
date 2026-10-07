@@ -1,4 +1,4 @@
-import { el } from '../../playground/dom';
+import { el } from '../../player/dom';
 
 export interface RowState {
   /** Headline: the size (exact or estimated). */

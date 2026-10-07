@@ -31,8 +31,9 @@ describe('Studio texts', () => {
     }
   });
 
-  it('has no dead keys and no leftover Lab texts', () => {
-    expect(Object.keys(en).filter((k) => k.startsWith('lab.') || k === 'nav.lab')).toEqual([]);
+  it('has no dead keys and no texts of the old separate Lab section', () => {
+    // `lab.*` was the separate Lab section's dictionary; the Lab is now a view of the Studio (`st.view.lab`, `nav.lab`).
+    expect(Object.keys(en).filter((k) => k.startsWith('lab.'))).toEqual([]);
     const used = (k: string): boolean => new RegExp(`['":]${k.replace(/\./g, '\\.')}['",]`).test(sources);
     expect(keys.filter((k) => !DYNAMIC.test(k) && !used(k))).toEqual([]);
   });

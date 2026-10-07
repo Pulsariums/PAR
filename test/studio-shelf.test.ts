@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyFiles } from '../site/src/playground/dnd';
+import { classifyFiles } from '../site/src/player/dnd';
 import { Shelf } from '../site/src/studio/shelfState';
 
 const item = (id: string) => ({ id });

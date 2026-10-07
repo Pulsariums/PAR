@@ -1,6 +1,6 @@
 import { t } from '../i18n/i18n';
 import { humanBytes } from '../common/format';
-import type { Player } from '../playground/player';
+import type { Player } from '../player/player';
 
 import { probeFps } from './fpsDetect';
 import { regionFor } from './mode';

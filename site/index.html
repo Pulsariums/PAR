@@ -9,7 +9,7 @@
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="PAR - Pulsar ASS Renderer" />
-  <meta property="og:description" content="Dependency-free ASS/SSA subtitle renderer for the browser. DOM + SVG + CSS, no WASM. Try every feature in the live playground." />
+  <meta property="og:description" content="Dependency-free ASS/SSA subtitle renderer for the browser. DOM + SVG + CSS, no WASM. Watch your own subtitles or open the lab." />
   <meta property="og:url" content="https://pulsariums.github.io/PAR/" />
   <meta property="og:image" content="https://pulsariums.github.io/PAR/og.png" />
   <meta property="og:image:width" content="1200" />
@@ -28,15 +28,15 @@
   <link rel="stylesheet" href="./styles/convert.css" />
 </head>
 <body>
-  <a class="skip" href="#playground" data-i18n="nav.skip">Skip to playground</a>
+  <a class="skip" href="#studio-root" data-i18n="nav.skip">Skip to the player</a>
   <header class="top">
     <div class="wrap bar">
       <a class="brand" href="#top" aria-label="PAR"><img src="./favicon.svg" alt="" width="24" height="24" /><b>PAR</b></a>
       <nav class="nav" aria-label="Main">
         <a href="#convert-root" data-i18n="nav.convert">Convert</a>
         <a href="#features" data-i18n="nav.features">Features</a>
-        <a href="#playground" data-i18n="nav.playground">Playground</a>
-        <a href="#studio-root" data-i18n="nav.studio">Studio</a>
+        <a href="#studio-root" data-i18n="nav.watch">Watch</a>
+        <a href="#lab" data-i18n="nav.lab">Lab</a>
         <a href="#docs" data-i18n="nav.docs">Docs</a>
       </nav>
       <div class="tools">
@@ -62,7 +62,7 @@
         <h1 data-i18n="hero.title">ASS subtitles, drawn by the browser.</h1>
         <p class="lead" data-i18n="hero.sub">PAR renders .ass / .ssa in plain DOM, SVG and CSS. No WebAssembly, no framework, about 22 kB gzipped.</p>
         <div class="cta">
-          <a class="btn primary" href="#playground" data-i18n="hero.cta">Open the playground</a>
+          <a class="btn primary" href="#studio-root" data-i18n="hero.cta">Play your subtitles</a>
           <a class="btn" href="https://github.com/Pulsariums/PAR" rel="noopener" data-i18n="hero.gh">View on GitHub</a>
         </div>
         <pre class="install"><code>npm install pulsar-ass-renderer</code></pre>
@@ -82,8 +82,6 @@
       <h2 data-i18n="feat.title">What you get</h2>
       <div class="grid" id="featGrid"></div>
     </section>
-
-    <section class="wrap" id="playground"></section>
 
     <section class="wrap" id="studio-root"></section>
 

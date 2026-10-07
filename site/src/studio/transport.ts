@@ -1,8 +1,8 @@
 import { frameIndex, frameRate, type SubtitleSource } from '../../../src/index';
 import { clock } from '../common/format';
 import { t } from '../i18n/i18n';
-import { $ } from '../playground/dom';
-import type { Player } from '../playground/player';
+import { $ } from '../player/dom';
+import type { Player } from '../player/player';
 
 import { nextStart, prevStart } from './neighbors';
 

@@ -1,22 +1,25 @@
 import { t } from '../i18n/i18n';
 
-import type { Settings } from './store';
+/** What the generated `create(...)` call needs to know about the Studio's current choices. */
+export interface SnippetInput {
+  hasVideo: boolean;
+  /** `'auto'` or a render fps. */
+  fps: 'auto' | number;
+  videoFps: number | null;
+  timeOffset: number;
+  renderMode: 'auto' | 'dom' | 'canvas';
+}
 
-/** The `create(...)` call equivalent to the current settings (defaults omitted). */
-export const buildSnippet = (s: Readonly<Settings>, hasVideo: boolean): string => {
-  const src = hasVideo
+/** The `create(...)` call equivalent to the current choices (defaults omitted). */
+export const buildSnippet = (s: SnippetInput): string => {
+  const src = s.hasVideo
     ? ["  video: document.querySelector('video'),"]
     : ['  container: document.querySelector(\'.player\'),', '  clock: () => myPlayer.currentTime, // seconds'];
   const lines = [...src, '  subtitle: assText,'];
-  if (s.region === 'custom') {
-    const r = s.rect;
-    lines.push(`  region: { x: ${r.x}, y: ${r.y}, width: ${r.width}, height: ${r.height} },`);
-  } else if (s.region !== (hasVideo ? 'video' : 'container')) lines.push(`  region: '${s.region}',`);
-  if (s.layoutCustom) lines.push(`  layout: { width: ${s.layout.width}, height: ${s.layout.height} },`);
-  if (!s.fpsAuto) lines.push(`  fps: ${s.fps},`);
-  if (s.videoFps.trim() !== '' && Number(s.videoFps) > 0) lines.push(`  videoFps: ${Number(s.videoFps)},`);
+  if (s.fps !== 'auto') lines.push(`  fps: ${s.fps},`);
+  if (s.videoFps !== null && s.videoFps > 0) lines.push(`  videoFps: ${s.videoFps},`);
   if (s.timeOffset !== 0) lines.push(`  timeOffset: ${s.timeOffset},`);
-  if (s.zIndex !== 1) lines.push(`  zIndex: ${s.zIndex},`);
+  if (s.renderMode !== 'auto') lines.push(`  renderMode: '${s.renderMode}',`);
   return `import { create } from 'pulsar-ass-renderer';\n\nconst par = create({\n${lines.join('\n')}\n});`;
 };
 
@@ -39,12 +42,12 @@ export const copyText = async (text: string): Promise<boolean> => {
   }
 };
 
-export const initCopy = (get: () => string) => {
-  const btn = document.getElementById('copy') as HTMLButtonElement;
+/** A button that copies `get()` and says so for a moment. */
+export const copyButton = (btn: HTMLButtonElement, get: () => string, label = 'code.copy', done = 'code.copied'): void => {
   btn.addEventListener('click', async () => {
     if (await copyText(get())) {
-      btn.textContent = t('code.copied');
-      window.setTimeout(() => { btn.textContent = t('code.copy'); }, 1500);
+      btn.textContent = t(done as 'code.copied');
+      window.setTimeout(() => { btn.textContent = t(label as 'code.copy'); }, 1500);
     }
   });
 };

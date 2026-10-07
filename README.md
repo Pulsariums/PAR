@@ -14,7 +14,7 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-typed-3178c6?logo=typescript&logoColor=white" />
 </p>
 
-### [▶ Live demo and playground](https://pulsariums.github.io/PAR/)
+### [▶ Live demo: watch and lab](https://pulsariums.github.io/PAR/)
 
 **Dependency-free ASS/SSA subtitle renderer for the browser. DOM + SVG + CSS, no WebAssembly.**
 
@@ -22,7 +22,7 @@
 
 PAR (Pulsar ASS Renderer) draws Advanced SubStation Alpha (`.ass`) and SubStation Alpha (`.ssa`) subtitles on top of a
 `<video>` or any container. Give it the video element and the raw script text; sizing, letterboxing, play, pause and
-seek tracking are handled for you. Open the [playground](https://pulsariums.github.io/PAR/) to try every supported tag
+seek tracking are handled for you. Open the [live page](https://pulsariums.github.io/PAR/) to try every supported tag
 with a built-in test card, your own video file or a video URL, without installing anything.
 
 ## Features
@@ -187,7 +187,7 @@ An OP/ED can put hundreds of per-letter particles on screen at once (single glyp
 
 ## The Studio
 
-The [Studio section of the site](https://pulsariums.github.io/PAR/#studio-root) is the one player of the site, for your own files (nothing is uploaded). A player (video or, without a video, a generated test card, plus the PAR overlay) with transport: seek bar with time labels, play / pause, frame step at the video fps, 1 s / 5 s steps, previous / next line, speed, loop and the keys Space / K, arrows or `,` `.`, Shift + arrows, J / L, `[` `]`, Home / End. Next to it a three-part media shelf: **Videos** (mp4 / webm / mkv as far as your browser decodes them), **Subtitles** (`.ass` / `.ssa` / `.xpar` / `.par`, big files are windowed in a Worker) and **Fonts** (the persistent `pulsar-ass-renderer/fontlib` library, missing-font prompt included). Video and subtitle are selected independently. An **Examples** menu loads the playground presets (and a generator for 10 / 100 MB stress scripts) as ordinary subtitles, so subtitles can be tried without any video. One **Sizes and export** panel shows the ASS size next to the XPAR (lossless) and PAR (lossy, at the chosen fps) size, exact or estimated, with progress and cancel, and downloads `name.xpar` / `name.<fps>fps.par`; an XPAR / PAR cannot be re-exported (a PAR has lost the ASS), those buttons say why. An **Advanced** row sets the render mode (`auto` default, `dom`, `canvas`), render FPS, video FPS and the time offset. Under the player two collapsible panels: **Metrics** (time, frame, active lines, window, bytes read, decode time, measured FPS, which shows an em dash while paused, JS heap, open-to-first-frame, last seek, plus `getMetrics().render`: lines per path, sprite cache, dropped / skipped detail, frame time p50 / p95) and **Virtual and real size** (layout size, region size, scale, default 1080p / 720p / libass / custom, override and an overlay of the virtual frame). A "Heavy scene" hint appears when many lines are on screen. It always uses the windowed source and the canvas particle path. On phones the shelves sit in tabs under the player. Code: `site/src/studio`.
+The [Studio section of the site](https://pulsariums.github.io/PAR/#studio-root) is the one player of the site, for your own files (nothing is uploaded). A player (video or, without a video, a generated test card, plus the PAR overlay) with transport: seek bar with time labels, play / pause, frame step at the video fps, 1 s / 5 s steps, previous / next line, speed, loop and the keys Space / K, arrows or `,` `.`, Shift + arrows, J / L, `[` `]`, Home / End. Next to it a three-part media shelf: **Videos** (mp4 / webm / mkv as far as your browser decodes them), **Subtitles** (`.ass` / `.ssa` / `.xpar` / `.par`, big files are windowed in a Worker) and **Fonts** (the persistent `pulsar-ass-renderer/fontlib` library, missing-font prompt included). Video and subtitle are selected independently. An **Examples** menu loads the playground presets (and a generator for 10 / 100 MB stress scripts) as ordinary subtitles, so subtitles can be tried without any video. One **Sizes and export** panel shows the ASS size next to the XPAR (lossless) and PAR (lossy, at the chosen fps) size, exact or estimated, with progress and cancel, and downloads `name.xpar` / `name.<fps>fps.par`; an XPAR / PAR cannot be re-exported (a PAR has lost the ASS), those buttons say why. An **Advanced** row sets the render mode (`auto` default, `dom`, `canvas`), render FPS, video FPS and the time offset. Under the player two collapsible panels: **Metrics** (time, frame, active lines, window, bytes read, decode time, measured FPS, which shows an em dash while paused, JS heap, open-to-first-frame, last seek, plus `getMetrics().render`: lines per path, sprite cache, dropped / skipped detail, frame time p50 / p95) and **Virtual and real size** (layout size, region size, scale, default 1080p / 720p / libass / custom, override and an overlay of the virtual frame). A "Heavy scene" hint appears when many lines are on screen. It always uses the windowed source and the canvas particle path. On phones the shelves sit in tabs under the player. Code: `site/src/studio`. The site shows it in two views: **Watch** (the default: the player and the shelf only, nothing is measured or drawn besides PAR itself, so you see what PAR costs on your machine) and **Lab** (`#lab`): the size and export panel, advanced options, a subtitle editor (typing plays after a pause, kept on the shelf as `scratch.ass`), the fonts report and library manager, metrics, the virtual-vs-real layout panel and a reference (the feature matrix and the `create(...)` call for your current choices).
 
 ## The Converter
 
@@ -243,7 +243,7 @@ await par.preflight();                  // same for the loaded script (waits for
 
 ## Supported tags
 
-Statuses are kept in sync with the playground's feature test matrix, where every row loads a preset you can check by eye.
+Statuses are kept in sync with the Lab's feature matrix (Reference), where every row loads a preset you can check by eye.
 **Rendered** = drawn in the DOM. **Approximate** = drawn, but differs from libass in a known way. **Not supported** = not drawn.
 
 <details open>

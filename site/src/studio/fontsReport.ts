@@ -3,8 +3,8 @@ import { t } from '../i18n/i18n';
 import type { Dict } from '../i18n/en';
 import { TEST_FAMILY, testFontBytes } from '../presets/fonts';
 
-import { $, el } from './dom';
-import type { Player } from './player';
+import { $, el } from '../player/dom';
+import type { Player } from '../player/player';
 
 const KEY: Record<FontStatus, keyof Dict> = { embedded: 'st.embedded', user: 'st.user', provider: 'st.provider', local: 'st.local', system: 'st.system', missing: 'st.missing' };
 const CLASS: Record<FontStatus, string> = { embedded: 'rendered', user: 'rendered', provider: 'rendered', local: 'rendered', system: 'system', missing: 'unsupported' };
@@ -28,8 +28,8 @@ const usedRow = (f: FontReportEntry): HTMLElement => {
   return li;
 };
 
-/** Fonts tab: add files (picker, drop, generated test font), list what the script needs, list what is loaded. */
-export const initFonts = (player: Player) => {
+/** Lab, fonts report: the generated test font, what the script needs and what is loaded (status, synthetic bold / italic, missing glyphs). */
+export const initFontsReport = (player: Player) => {
   const par = player.par;
   const status = $<HTMLParagraphElement>('fontStatus');
   const say = (msg: string) => { status.textContent = msg; };
@@ -81,11 +81,6 @@ export const initFonts = (player: Player) => {
     draw();
   };
 
-  $<HTMLInputElement>('fontFiles').addEventListener('change', (e) => {
-    const input = e.target as HTMLInputElement;
-    void add(Array.from(input.files ?? []));
-    input.value = '';
-  });
   $('fontTestLoad').addEventListener('click', () => void add([new File([testFontBytes() as BlobPart], `${TEST_FAMILY}.ttf`, { type: 'font/ttf' })]));
   $('fontTestSave').addEventListener('click', () => {
     const url = URL.createObjectURL(new Blob([testFontBytes() as BlobPart], { type: 'font/ttf' }));

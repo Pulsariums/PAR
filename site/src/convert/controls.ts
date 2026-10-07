@@ -1,5 +1,5 @@
 import { applyI18n, t } from '../i18n/i18n';
-import { watchDrop } from '../playground/dnd';
+import { watchDrop } from '../player/dnd';
 
 import { DEFAULT_FPS, FPS_PRESETS, parseFps } from './plan';
 
