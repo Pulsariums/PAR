@@ -4,7 +4,7 @@ import { ByteLru } from '../util/ByteLru';
 export interface Sized {
   bytes: number;
   /** Frees the bitmap when evicted. */
-  canvas?: { width: number; height: number };
+  canvas?: { width: number; height: number; close?: () => void };
 }
 
 /**
@@ -16,14 +16,28 @@ export class SpriteCache<S extends Sized> {
   hits = 0;
   misses = 0;
   prewarmed = 0;
+  /** Evicted ImageBitmaps wait here until `sweep`: one may still be in the list of the frame being drawn, and drawing a closed bitmap throws. */
+  private readonly graveyard: Array<{ close: () => void }> = [];
 
   constructor(capBytes: number) {
-    this.lru = new ByteLru<string, S | null>(capBytes, (_k, s) => { if (s?.canvas) { s.canvas.width = 0; s.canvas.height = 0; } });
+    this.lru = new ByteLru<string, S | null>(capBytes, (_k, s) => { if (s?.canvas) this.release(s.canvas); });
+  }
+
+  /** Frees an evicted bitmap: a canvas is shrunk to nothing now, an ImageBitmap (built by a worker) is closed at the next `sweep`. */
+  private release(c: { width: number; height: number; close?: () => void }): void {
+    if (typeof c.close === 'function') this.graveyard.push(c as { close: () => void });
+    else { c.width = 0; c.height = 0; }
+  }
+
+  /** Closes the bitmaps evicted since the last sweep (call between frames). */
+  sweep(): void {
+    for (const b of this.graveyard.splice(0)) b.close();
   }
 
   get bytes(): number { return this.lru.bytes; }
   get size(): number { return this.lru.size; }
   get evictions(): number { return this.lru.evictions; }
+  get capBytes(): number { return this.lru.capBytes; }
   set capBytes(n: number) { this.lru.capBytes = n; }
 
   /** Cached sprite without building (undefined = unknown, null = known unbuildable). Counts as a use, not as a hit/miss. */
@@ -37,6 +51,14 @@ export class SpriteCache<S extends Sized> {
     const s = build();
     this.lru.set(key, s, s ? s.bytes : 16);
     return s;
+  }
+
+  /** Stores a sprite built elsewhere (a worker) unless the key is already cached; counts as built ahead. */
+  put(key: string, s: S | null): boolean {
+    if (this.lru.has(key)) { if (s?.canvas) this.release(s.canvas); return false; }
+    this.prewarmed++;
+    this.lru.set(key, s, s ? s.bytes : 16);
+    return true;
   }
 
   /** Builds and stores without touching hit/miss counters (lookahead). */

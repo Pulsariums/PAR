@@ -22,5 +22,5 @@ export const renderMetrics = (
   mode, canvasSupported: canvasSupported(), domLines: r.domLines, canvasLines: r.canvasLines, canvasRuns: r.canvas.runs, runsMerged: r.canvas.runsMerged,
   drawn: r.canvas.drawn, fillMpx: r.canvas.fillMpx, shed: r.canvas.shed, shedBudgetMpx: r.canvas.shedBudgetMpx,
   sprites: r.canvas.sprites, spriteBytes: r.canvas.spriteBytes, spriteHits: r.canvas.spriteHits, spriteMisses: r.canvas.spriteMisses,
-  prewarmed: r.canvas.prewarmed, evictions: r.canvas.evictions, detailDropped: r.canvas.detailDropped, skipped: r.canvas.skipped, frameMs,
+  prewarmed: r.canvas.prewarmed, workers: r.canvas.workers, workerBuilt: r.canvas.workerBuilt, planQueued: r.canvas.planQueued, planLeadMs: r.canvas.leadMs, evictions: r.canvas.evictions, detailDropped: r.canvas.detailDropped, skipped: r.canvas.skipped, frameMs,
 });

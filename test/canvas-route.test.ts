@@ -50,3 +50,21 @@ describe('canvas routing', () => {
     expect(p.route(lines(5), 0).some(Boolean)).toBe(false);
   });
 });
+
+describe('sprite cache and the first render', () => {
+  const env = (devScale: number) => ({ layout: { width: 640, height: 360 }, devScale } as never);
+  const sprite = { canvas: { width: 1, height: 1 }, w: 1, h: 1, boxW: 1, ox: 0, oy: 0, bytes: 10 };
+
+  it('keeps what the look-ahead built before the first canvas frame, and clears only when the raster scale really changes', () => {
+    vi.stubGlobal('OffscreenCanvas', FakeCanvas);
+    const p = path('canvas');
+    p.cache.store('built-ahead', () => sprite as never);
+    p.render([], env(0.5));
+    expect(p.cache.size).toBe(1);
+    p.render([], env(0.5));
+    expect(p.cache.size).toBe(1);
+    p.render([], env(1));
+    expect(p.cache.size).toBe(0);
+  });
+});
+

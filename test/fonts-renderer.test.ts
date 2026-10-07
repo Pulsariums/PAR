@@ -220,3 +220,28 @@ describe('local and system fonts', () => {
     par.destroy();
   });
 });
+
+describe('windowed usage does not drop what was built', () => {
+  it('new glyphs seen in a later window go to onUsage, not onChange (no re-layout, no cache flush)', async () => {
+    const { FontManager } = await import('../src/fonts/FontManager');
+    const use = (chars: number[]) => new Map([['arial', { name: 'Arial', looks: new Map(), styles: new Set<string>(), lines: new Set<number>(), chars: new Set(chars) }]]);
+    const onChange = vi.fn();
+    const onUsage = vi.fn();
+    const fm = new FontManager({ onChange, onUsage });
+    fm.extendUsage(use([65]));
+    fm.extendUsage(use([65, 66]));
+    fm.extendUsage(use([65]));
+    await Promise.resolve();
+    await fm.idle();
+    expect(onUsage).toHaveBeenCalledTimes(2);
+    expect(onChange).not.toHaveBeenCalled();
+    // without an onUsage the old behaviour stays (a re-layout)
+    const legacy = vi.fn();
+    const fm2 = new FontManager({ onChange: legacy });
+    fm2.extendUsage(use([70]));
+    await fm2.idle();
+    expect(legacy).toHaveBeenCalled();
+    fm.dispose();
+    fm2.dispose();
+  });
+});

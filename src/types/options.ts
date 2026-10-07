@@ -168,6 +168,12 @@ export interface RenderMetrics {
   spriteHits: number;
   spriteMisses: number;
   prewarmed: number;
+  /** Sprite workers running (0 = built on the main thread), sprites they delivered, sprites in the warm plan not yet built. */
+  workers: number;
+  workerBuilt: number;
+  planQueued: number;
+  /** How far ahead of the playhead the warm plan has looked, ms of subtitle time. */
+  planLeadMs: number;
   evictions: number;
   /** Blurs left out (below ~0.35 device px, or the frame ran out of sprite-building time). */
   detailDropped: number;

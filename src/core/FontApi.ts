@@ -24,6 +24,12 @@ export abstract class FontApi {
         this.onFontsChanged();
         this.fontListeners.forEach((fn) => fn());
       },
+      onUsage: () => {
+        const held = this.missing.hold;
+        this.missing.update();
+        this.fontListeners.forEach((fn) => fn());
+        if (held !== null || this.missing.hold !== null) this.onFontsChanged();
+      },
     });
     this.missing = new MissingFonts(this.fonts, () => this.fontOpts.onMissingFonts, () => this.onFontsChanged());
   }

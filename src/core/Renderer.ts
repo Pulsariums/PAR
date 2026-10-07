@@ -15,6 +15,7 @@ import { observeSize } from './observe';
 import { computeStage, deviceScale } from './stage';
 import { resolveOptions } from './options';
 import { buildMetrics, renderMetrics, type Geometry } from './metrics';
+import { debugWorkers } from '../canvas/workers/size';
 import { Scene } from './Scene';
 import { ScriptHost } from './ScriptHost';
 import { timeToMs } from './time';
@@ -127,13 +128,15 @@ export class PARRenderer extends FontApi {
     if (this.destroyed) return;
     this.scene.hold = this.missing.hold;
     this.scene.clear();
+    this.scene.setFaces(this.fonts.shipFaces());
     this.invalidate();
   }
 
   private mount(): void {
     const { container, video } = this.opts;
     this.overlay = new Overlay(container, this.opts.zIndex);
-    this.scene = new Scene(this.overlay, () => this.opts.renderMode, this.opts.spriteCacheMB * 1048576);
+    this.scene = new Scene(this.overlay, () => this.opts.renderMode, this.opts.spriteCacheMB * 1048576, debugWorkers);
+    this.scene.setFaces(this.fonts.shipFaces());
     this.teardown.push(observeSize(container, video, () => this.invalidate()));
     if (video) {
       this.teardown.push(bindVideoEvents(video, {

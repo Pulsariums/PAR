@@ -57,7 +57,7 @@ describe('measured FPS (metrics panel)', () => {
 
 const render = (over: Partial<Render> = {}): Render => ({
   mode: 'auto', canvasSupported: true, domLines: 3, canvasLines: 400, canvasRuns: 2, runsMerged: 0, drawn: 380, fillMpx: 4.2, shed: 0, shedBudgetMpx: 0, sprites: 120, spriteBytes: 2 * 1048576,
-  spriteHits: 90, spriteMisses: 10, prewarmed: 7, evictions: 1, detailDropped: 4, skipped: 0, frameMs: { p50: 4.04, p95: 13.26, samples: 50 }, ...over,
+  spriteHits: 90, spriteMisses: 10, prewarmed: 7, workers: 0, workerBuilt: 0, planQueued: 0, planLeadMs: 0, evictions: 1, detailDropped: 4, skipped: 0, frameMs: { p50: 4.04, p95: 13.26, samples: 50 }, ...over,
 });
 
 describe('render metric rows', () => {

@@ -8,10 +8,10 @@ import { ShedController } from './shed';
 import { analyzeLine, chooseMode, type Complexity } from './eligibility';
 import type { Dropped } from './paint';
 import { planLine } from './plan';
-import { buildSprite, canvasSupported, type Sprite } from './raster';
+import { construct } from './construct';
+import { canvasSupported, type Sprite } from './raster';
 import { SpriteCache } from './SpriteCache';
-import { maskOf, tint } from './tint';
-import type { CanvasStats, DrawItem, RenderMode, SpriteSpec } from './types';
+import type { DrawItem, PathStats, RenderMode, SpriteSpec } from './types';
 
 /** Time one frame may spend building sprites it needs now; then blurs are left out (counted); at twice that, new sprites wait for the next frame. */
 export const BUILD_BUDGET_MS = 8;
@@ -81,7 +81,10 @@ export class CanvasPath {
   render(seq: readonly Routed[], env: LineEnv): void {
     const f = env.devScale ?? 1;
     this.deferred = 0;
-    if (f !== this.scale) { this.cache.clear(); this.scale = f; }
+    // Sprites carry their scale in the key; the first render must keep what the look-ahead built before any canvas line was on screen.
+    if (this.scale !== 0 && f !== this.scale) this.cache.clear();
+    this.scale = f;
+    this.cache.sweep();
     this.layer.resize(env.layout, f);
     const runs: Run[] = [];
     let open: Run | null = null;
@@ -130,16 +133,9 @@ export class CanvasPath {
     return s;
   }
 
-  /** Builds a sprite; plain single-colour ones are tinted from a shared white mask (see `tint.ts`). */
+  /** Builds a sprite; plain single-colour ones are tinted from a shared white mask kept in the cache (see `construct.ts`). */
   private construct(spec: SpriteSpec): Sprite | null {
-    const m = maskOf(spec);
-    if (!m) return buildSprite(spec);
-    let mask = this.cache.peek(m.key);
-    if (mask === undefined) {
-      this.cache.store(m.key, () => buildSprite(m.spec), false);
-      mask = this.cache.peek(m.key);
-    }
-    return mask ? tint(mask, m.colour) : null;
+    return construct(spec, { peek: (k) => this.cache.peek(k), store: (k, build) => this.cache.store(k, build, false) });
   }
 
   /** Lookahead build: not counted as a draw-time miss. */
@@ -147,7 +143,7 @@ export class CanvasPath {
     this.cache.store(key, () => this.construct(spec));
   }
 
-  stats(): CanvasStats {
+  stats(): PathStats {
     return {
       sprites: this.cache.size, spriteBytes: this.cache.bytes, spriteHits: this.cache.hits, spriteMisses: this.cache.misses, prewarmed: this.cache.prewarmed,
       evictions: this.cache.evictions, detailDropped: this.dropped.blur, skipped: this.skipped, runs: this.runs, runsMerged: this.merged, drawn: this.layer.drawn, shed: this.layer.shed, shedBudgetMpx: this.shedding.budget < Infinity ? Math.round(this.shedding.budget / 1e4) / 100 : 0, fillMpx: Math.round(this.layer.fillPx / 1e4) / 100,
@@ -157,6 +153,7 @@ export class CanvasPath {
   /** Fonts changed or the stage was rebuilt: bitmaps and sticky decisions are stale. */
   clear(): void {
     this.cache.clear();
+    this.cache.sweep();
     this.modes.clear();
     this.layer.draw([], () => null);
   }

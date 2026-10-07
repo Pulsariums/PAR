@@ -7,7 +7,8 @@ type Surface = HTMLCanvasElement | OffscreenCanvas;
 export const MAX_SIDE = 2048;
 
 export interface Sprite {
-  canvas: Surface;
+  /** The bitmap: a canvas built here, or an ImageBitmap a worker built and transferred. */
+  canvas: Surface | ImageBitmap;
   /** Bitmap size in device pixels. */
   w: number;
   h: number;

@@ -65,8 +65,8 @@ export interface DrawItem {
   still: boolean;
 }
 
-/** Counters of the canvas path (`PARMetrics.render`). */
-export interface CanvasStats {
+/** Counters of the canvas path itself. */
+export interface PathStats {
   sprites: number;
   spriteBytes: number;
   spriteHits: number;
@@ -88,3 +88,20 @@ export interface CanvasStats {
   /** Runs beyond the canvas pool size that were merged into the last one (z-order approximated). */
   runsMerged: number;
 }
+
+/** Counters of the look-ahead: the warm plan and the sprite workers. */
+export interface WarmStats {
+  /** Sprite workers running (0 = every sprite is built on the main thread) and sprites they have delivered. */
+  workers: number;
+  workerBuilt: number;
+  /** Sprites in the warm plan not yet built, and megabytes of built-ahead sprites not yet due. */
+  planQueued: number;
+  aheadMB: number;
+  /** How far ahead of the playhead the plan has looked (ms of subtitle time). */
+  leadMs: number;
+  /** Main-thread wall ms of one planned-and-built sprite on this machine (0 = none measured). */
+  buildMs: number;
+}
+
+/** Counters of the canvas path (`PARMetrics.render`). */
+export type CanvasStats = PathStats & WarmStats;

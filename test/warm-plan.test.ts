@@ -1,0 +1,142 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { prepareLine } from '../src/anim/Prepared';
+import type { CanvasPath } from '../src/canvas/CanvasPath';
+import { MinHeap } from '../src/canvas/warm/heap';
+import { WarmPlanner, type Builder, type Entry, type Lines } from '../src/canvas/warm/planner';
+import { Timeline } from '../src/core/Timeline';
+import { parseScript } from '../src/parser/ScriptParser';
+import type { LineEnv } from '../src/render/LineView';
+
+const HEAD = '[Script Info]\nPlayResX: 640\nPlayResY: 360\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,2,10,10,10,1\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n';
+const fonts = { resolve: () => ({ family: 'Arial', weight: 400, italic: false, ratio: 1 }) };
+const T = (ms: number): string => `0:00:${String(Math.floor(ms / 1000)).padStart(2, '0')}.${String(Math.floor((ms % 1000) / 10)).padStart(2, '0')}`;
+const ev = (s: number, e: number, tags: string, text = 'K'): string => `Dialogue: 0,${T(s)},${T(e)},Default,,0,0,0,,{\\an5\\pos(10,10)${tags}}${text}\n`;
+const ANIM = '\\blur2\\t(0,900,\\fscx150\\fscy150\\blur6)';
+
+const make = (text: string, o: { cap?: number; mode?: string } = {}) => {
+  const sc = parseScript(HEAD + text);
+  const tl = new Timeline(sc.events.map((e) => prepareLine(e, sc.styles, sc.info)));
+  const env = { layout: { width: 640, height: 360 }, styles: sc.styles, borderScale: 1, blurScale: 1, devScale: 1, fonts } as unknown as LineEnv;
+  const have = new Set<string>();
+  const path = {
+    mode: () => o.mode ?? 'canvas', busy: () => true,
+    complexity: (l: { event: { fragments: unknown[] } }) => ({ eligible: true, reason: '', score: 4, animated: new Set(l.event.fragments.length ? ['blur', 'fs', 'fscx'] : []) }),
+    cache: { peek: (k: string) => (have.has(k) ? {} : undefined), capBytes: o.cap ?? 96 << 20 },
+  } as unknown as CanvasPath;
+  let covers: ((t: number) => boolean) | null = null;
+  const lines = (): Lines => ({ startingIn: (a, b) => tl.startingIn(a, b), visibleAt: (t) => tl.visibleAt(t), startMs: (l) => tl.startMs(l), covers });
+  const taken: Entry[] = [];
+  let full = false;
+  const builder: Builder = { take: (e) => { if (full) return 'full'; taken.push(e); have.add(e.key); return 'done'; } };
+  return { env, path, lines, taken, builder, setCovers: (f: ((t: number) => boolean) | null) => { covers = f; }, setFull: (v: boolean) => { full = v; }, have };
+};
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('MinHeap', () => {
+  it('pops in priority order and keeps insertion order for ties', () => {
+    const h = new MinHeap<{ p: number; n: string }>((x) => x.p);
+    [[5, 'e'], [1, 'a'], [3, 'c'], [1, 'b'], [4, 'd']].forEach(([p, n]) => h.push({ p: p as number, n: n as string }));
+    const out: string[] = [];
+    while (h.size) out.push(h.pop()!.n);
+    expect(out.join('')).toBe('abcde');
+    expect(h.pop()).toBeUndefined();
+  });
+});
+
+describe('warm plan', () => {
+  it('builds in the order sprites are first drawn, not in the order events start', () => {
+    // A starts first but runs long (late frames); B starts a little later: B's first frame comes before A's later frames.
+    const m = make(ev(1000, 2800, ANIM, 'A') + ev(1200, 1300, '\\blur3', 'B'));
+    const p = new WarmPlanner();
+    p.step(m.path, 0, m.env, 1000 / 24, 1e9, m.lines(), m.builder);
+    const ms = m.taken.map((e) => e.ms);
+    expect(ms.length).toBeGreaterThan(3);
+    expect(ms).toEqual([...ms].sort((a, b) => a - b));
+    const b = m.taken.findIndex((e) => e.spec.text === 'B');
+    expect(m.taken.slice(b + 1).some((e) => e.spec.text === 'A')).toBe(true);
+  });
+
+  it('finishes in slices without planning or building a sprite twice', () => {
+    const m = make([0, 1, 2, 3].map((i) => ev(1000 + i, 2000, ANIM, `K${i}`)).join(''));
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => (clock += 1));
+    const p = new WarmPlanner();
+    let slices = 0, more = true;
+    while (more && slices < 400) { more = p.step(m.path, 0, m.env, 1000 / 24, 4, m.lines(), m.builder).more; slices++; }
+    expect(more).toBe(false);
+    expect(slices).toBeGreaterThan(1);
+    expect(new Set(m.taken.map((e) => e.key)).size).toBe(m.taken.length);
+    expect(m.taken.length).toBeGreaterThan(4);
+    expect(p.step(m.path, 0, m.env, 1000 / 24, 4, m.lines(), m.builder)).toEqual({ built: 0, more: false, waiting: false });
+  });
+
+  it('plans nothing for a quiet scene in auto mode', () => {
+    const m = make(ev(1000, 2000, ''), { mode: 'auto' });
+    (m.path as unknown as { busy: () => boolean }).busy = () => false;
+    const p = new WarmPlanner();
+    expect(p.step(m.path, 0, m.env, 41.7, 1e9, m.lines(), m.builder).built).toBe(0);
+  });
+
+  it('a seek starts the plan over at the new time (no replay of the time between), playing on does not', () => {
+    const m = make(ev(1000, 1500, '\\blur2') + ev(30000, 30500, '\\blur2', 'Z') + ev(40000, 40500, '\\blur2', 'Y'));
+    const p = new WarmPlanner();
+    p.step(m.path, 500, m.env, 41.7, 1e9, m.lines(), m.builder);
+    p.step(m.path, 540, m.env, 41.7, 1e9, m.lines(), m.builder);
+    expect(p.restarts).toBe(1);
+    expect(m.taken.map((e) => e.spec.text)).toEqual(['K']);
+    p.step(m.path, 29000, m.env, 41.7, 1e9, m.lines(), m.builder);
+    expect(p.restarts).toBe(2);
+    expect(m.taken.map((e) => e.spec.text)).toEqual(['K', 'Z']); // 1-30 s skipped, nothing planned beyond the 10 s horizon (Y)
+    p.step(m.path, 100, m.env, 41.7, 1e9, m.lines(), m.builder); // backwards
+    expect(p.restarts).toBe(3);
+    expect(p.frontier).toBeGreaterThanOrEqual(10000);
+  });
+
+  it('lines already running at a seek still get their later frames planned', () => {
+    const m = make(ev(1000, 3000, ANIM, 'R'));
+    const p = new WarmPlanner();
+    p.step(m.path, 1900, m.env, 1000 / 24, 1e9, m.lines(), m.builder);
+    expect(m.taken.length).toBeGreaterThan(0);
+    expect(m.taken.every((e) => e.ms >= 1900 - 42)).toBe(true);
+  });
+
+  it('does not plan past what the window has loaded, and picks the rest up when it arrives', () => {
+    const m = make(ev(1000, 1500, '\\blur2', 'A') + ev(6000, 6500, '\\blur2', 'B'));
+    m.setCovers((t) => t < 3000);
+    const p = new WarmPlanner();
+    p.step(m.path, 0, m.env, 41.7, 1e9, m.lines(), m.builder);
+    expect(m.taken.map((e) => e.spec.text)).toEqual(['A']);
+    expect(p.frontier).toBeLessThanOrEqual(3000);
+    m.setCovers(null);
+    p.step(m.path, 40, m.env, 41.7, 1e9, m.lines(), m.builder);
+    expect(m.taken.map((e) => e.spec.text)).toEqual(['A', 'B']);
+  });
+
+  it('plans no more than the cache can hold next to what is needed sooner, and continues as sprites fall due', () => {
+    const text = [0, 1, 2, 3, 4, 5].map((i) => ev(1000 + i * 1000, 1500 + i * 1000, `\\blur${i + 1}\\fs60`, `G${i}`)).join('');
+    const m = make(text, { cap: 6000 });
+    const p = new WarmPlanner();
+    const all = (t: number): void => { p.step(m.path, t, m.env, 41.7, 1e9, m.lines(), m.builder); };
+    all(0);
+    const first = m.taken.length;
+    expect(first).toBeGreaterThanOrEqual(1);
+    expect(first).toBeLessThan(6);
+    expect(p.aheadMB * 1048576).toBeLessThanOrEqual(3000 + 40000); // at most the share plus the one that always fits
+    for (let t = 1500; t <= 7000; t += 500) all(t);
+    expect(m.taken.length).toBe(6);
+    expect(m.taken.map((e) => e.ms)).toEqual([...m.taken.map((e) => e.ms)].sort((a, b) => a - b));
+  });
+
+  it('a full builder stops the slice, loses nothing and resumes', () => {
+    const m = make(ev(1000, 1500, '\\blur2', 'A') + ev(1100, 1600, '\\blur3', 'B'));
+    const p = new WarmPlanner();
+    m.setFull(true);
+    const r = p.step(m.path, 0, m.env, 41.7, 1e9, m.lines(), m.builder);
+    expect(r).toMatchObject({ built: 0, waiting: true });
+    m.setFull(false);
+    p.step(m.path, 10, m.env, 41.7, 1e9, m.lines(), m.builder);
+    expect(m.taken.map((e) => e.spec.text)).toEqual(['A', 'B']);
+  });
+});

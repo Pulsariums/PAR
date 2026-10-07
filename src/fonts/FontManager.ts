@@ -9,6 +9,7 @@ import { parseAll, parseFont, type ParsedFace } from './loader';
 import { createProbe, type FontProbe } from './probe';
 import { defaultRegistry, type FontRegistry, type RegisteredFace } from './registry';
 import { addMany, lowerKeys, toLoadedFont, toPoolFace, type Loaded } from './pool';
+import { shipFaces, type ShipFace } from './ship';
 import type { FontProvider } from './provider';
 import { resolveFont, type PoolFace, type Resolved } from './resolver';
 import type { AddFontOptions, AddFontsEntry, FontInput, FontSourceKind, FontSpec, LoadedFont } from './types';
@@ -19,6 +20,8 @@ import { WorkSet } from './work';
 export interface FontManagerOptions {
   /** Called (coalesced, once per tick) when the set of usable faces changed: the renderer must re-layout. */
   onChange: () => void;
+  /** A new window used a font, look or glyph not seen before; nothing that resolves changed, so the renderer keeps what it built. Default: `onChange`. */
+  onUsage?: () => void;
   registry?: FontRegistry;
   probe?: FontProbe;
   inflater?: Inflater;
@@ -86,7 +89,7 @@ export class FontManager implements FontEnv {
 
   /** Windowed script: folds a loaded window's fonts into the set (new fonts / glyphs are resolved and may be announced as missing). */
   extendUsage(add: Map<string, FontUse>, removed: readonly number[] = []): void {
-    if (mergeUsage(this.usage, add, removed)) { this.ext.refresh(); this.schedule(); }
+    if (mergeUsage(this.usage, add, removed)) { this.ext.refresh(); if (this.opts.onUsage) this.opts.onUsage(); else this.schedule(); }
   }
 
   /** Loads fonts given as input (File, Blob, bytes, URL, zip). TTC files yield one entry per face. */
@@ -100,9 +103,7 @@ export class FontManager implements FontEnv {
   }
 
   /** Adds several inputs; one failing file does not stop the others. */
-  addMany(specs: Iterable<FontSpec>): Promise<AddFontsEntry[]> {
-    return addMany((i, o) => this.add(i, o), specs);
-  }
+  addMany(specs: Iterable<FontSpec>): Promise<AddFontsEntry[]> { return addMany((i, o) => this.add(i, o), specs); }
 
   remove(id: string): boolean {
     const l = this.loaded.get(id);
@@ -113,14 +114,10 @@ export class FontManager implements FontEnv {
     return true;
   }
 
-  list(): LoadedFont[] {
-    return [...this.loaded].map(([k, l]) => toLoadedFont(k, l));
-  }
+  list(): LoadedFont[] { return [...this.loaded].map(([k, l]) => toLoadedFont(k, l)); }
 
   /** Installed fonts via the Local Font Access API (needs a user gesture); false when unavailable or denied. */
-  loadLocal(): Promise<boolean> {
-    return this.ext.loadLocal();
-  }
+  loadLocal(): Promise<boolean> { return this.ext.loadLocal(); }
 
   /** Forget "provider has no such font" answers and ask again for what is still missing (e.g. after the font library changed). */
   refreshProviders(): void {
@@ -142,6 +139,8 @@ export class FontManager implements FontEnv {
 
   get fontUsage(): ReadonlyMap<string, FontUse> { return this.usage; }
   get warnings(): string[] { return [...this.warns]; }
+  /** Loaded faces with their bytes (for the sprite workers). */
+  shipFaces(): ShipFace[] { return shipFaces(this.loaded); }
   /** Resolves when no font work is outstanding and the re-layout has run. */
   async idle(): Promise<void> {
     await this.work.idle();
