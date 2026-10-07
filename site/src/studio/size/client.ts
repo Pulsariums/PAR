@@ -9,13 +9,14 @@ export class JobCancelled extends Error {}
 
 /** Promise API over the size worker: encode / estimate jobs with progress and cancel, and the test-file generator. */
 export class SizeClient {
-  private readonly worker: Worker;
+  /** Null where Workers do not exist (blocked, ancient browser): playback does not need this client, so it must not throw on construction; jobs fail instead. */
+  private readonly worker: Worker | null;
   private seq = 0;
   private readonly waiting = new Map<number, { ok: (m: FromSizeWorker) => void; err: (e: Error) => void; progress?: (f: number | null) => void }>();
 
   constructor() {
-    this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-    this.worker.addEventListener('message', (e: MessageEvent<FromSizeWorker>) => {
+    this.worker = typeof Worker === 'function' ? new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }) : null;
+    this.worker?.addEventListener('message', (e: MessageEvent<FromSizeWorker>) => {
       const m = e.data;
       const w = this.waiting.get(m.id);
       if (!w) return;
@@ -24,16 +25,16 @@ export class SizeClient {
       if (m.op === 'error') w.err(m.aborted ? new JobCancelled() : new Error(m.message));
       else w.ok(m);
     });
-    this.worker.addEventListener('error', (e) => { this.waiting.forEach((w) => w.err(new Error(e.message))); this.waiting.clear(); });
+    this.worker?.addEventListener('error', (e) => { this.waiting.forEach((w) => w.err(new Error(e.message))); this.waiting.clear(); });
   }
 
-  private post(m: ToSizeWorker): void { this.worker.postMessage(m); }
+  private post(m: ToSizeWorker): void { this.worker?.postMessage(m); }
 
   open(blob: Blob): void { this.post({ op: 'open', blob }); }
 
   private start<T extends FromSizeWorker>(make: (id: number) => ToSizeWorker, progress?: (f: number | null) => void): { id: number; job: Job<T> } {
     const id = ++this.seq;
-    const promise = new Promise<T>((ok, err) => { this.waiting.set(id, { ok: ok as (m: FromSizeWorker) => void, err, progress }); this.post(make(id)); });
+    const promise = new Promise<T>((ok, err) => { if (!this.worker) { err(new Error('Web Workers are unavailable')); return; } this.waiting.set(id, { ok: ok as (m: FromSizeWorker) => void, err, progress }); this.post(make(id)); });
     return { id, job: { promise, cancel: () => { if (this.waiting.delete(id)) { this.post({ op: 'cancel', id }); } } } };
   }
 
@@ -48,5 +49,5 @@ export class SizeClient {
     return { promise: job.promise.then((m) => ({ blob: m.blob, ms: m.ms })), cancel: job.cancel };
   }
 
-  dispose(): void { this.worker.terminate(); this.waiting.clear(); }
+  dispose(): void { this.worker?.terminate(); this.waiting.clear(); }
 }
