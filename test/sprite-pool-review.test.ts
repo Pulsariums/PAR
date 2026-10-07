@@ -9,7 +9,7 @@ import { poolSize } from '../src/canvas/workers/size';
 import { bitmap, fakeWorker, hostDeps, spec, wait } from './helpers/fakeWorker';
 
 const face = (key: string, family: string, bytes = 8) => ({ key, family, weight: 400, italic: false, data: new Uint8Array(bytes) });
-const hooks = (o: Partial<PoolHooks> = {}): PoolHooks => ({ built: () => undefined, free: () => undefined, failed: () => undefined, ...o });
+const hooks = (o: Partial<PoolHooks> = {}): PoolHooks => ({ built: () => undefined, refused: () => undefined, free: () => undefined, failed: () => undefined, ...o });
 const FAM = (...f: string[]): string => f.map((x) => `"${x}"`).join(', ') + ', sans-serif';
 
 describe('faces: a sprite goes to a worker only when every font it may draw with is there', () => {
@@ -98,10 +98,10 @@ describe('pool: failures never turn into "unbuildable", never leave a job pendin
     while (pool.submit(`a${n}`, spec('A'))) n++;
     pool.flush();
     pool.invalidate();
-    expect(pool.capacity).toBe(0); // all 16 are still queued in the worker
+    expect(pool.capacity).toBe(0); // all 64 are still queued in the worker
     expect(pool.submit('fresh', spec('F'))).toBe(false);
     await wait();
-    expect(pool.capacity).toBe(16);
+    expect(pool.capacity).toBe(64);
   });
 
   it('results that arrive after destroy are closed, not delivered', async () => {

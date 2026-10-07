@@ -175,7 +175,21 @@ export interface RenderMetrics {
   /** How far ahead of the playhead the warm plan has looked, ms of subtitle time. */
   planLeadMs: number;
   evictions: number;
-  /** Blurs left out (below ~0.35 device px, or the frame ran out of sprite-building time). */
+  /** Items of the last frame whose sprite was not ready, the same over all frames (must stay 0 after warm-up), and frames not presented because of it. */
+  missing: number;
+  missedTotal: number;
+  held: number;
+  /** Sprites planned and not built yet; ms ahead of the playhead everything planned is built; ms the builders would need to be in time; measured build work per wall ms. */
+  pending: number;
+  readyMs: number;
+  deficitMs: number;
+  buildRate: number;
+  /** Times and total ms the video was held (buffering) so sprites could catch up. */
+  stalls: number;
+  stallMs: number;
+  /** Time the last frame spent drawing its sprites (ms). */
+  compositeMs: number;
+  /** Blurs drawn sharp because the sigma is below ~0.35 device px (imperceptible, by rule; nothing else is ever left out for time). */
   detailDropped: number;
   skipped: number;
   frameMs: { p50: number; p95: number; samples: number };

@@ -17,10 +17,10 @@ export const buildMetrics = (g: Geometry, live: Pick<PARMetrics, 'time' | 'activ
 });
 
 export const renderMetrics = (
-  r: { canvas: CanvasStats; domLines: number; canvasLines: number }, mode: RenderMetrics['mode'], frameMs: RenderMetrics['frameMs'],
+  r: { canvas: CanvasStats; domLines: number; canvasLines: number; stalls: number; stallMs: number }, mode: RenderMetrics['mode'], frameMs: RenderMetrics['frameMs'],
 ): RenderMetrics => ({
   mode, canvasSupported: canvasSupported(), domLines: r.domLines, canvasLines: r.canvasLines, canvasRuns: r.canvas.runs, runsMerged: r.canvas.runsMerged,
   drawn: r.canvas.drawn, fillMpx: r.canvas.fillMpx, shed: r.canvas.shed, shedBudgetMpx: r.canvas.shedBudgetMpx,
   sprites: r.canvas.sprites, spriteBytes: r.canvas.spriteBytes, spriteHits: r.canvas.spriteHits, spriteMisses: r.canvas.spriteMisses,
-  prewarmed: r.canvas.prewarmed, workers: r.canvas.workers, workerBuilt: r.canvas.workerBuilt, planQueued: r.canvas.planQueued, planLeadMs: r.canvas.leadMs, evictions: r.canvas.evictions, detailDropped: r.canvas.detailDropped, skipped: r.canvas.skipped, frameMs,
+  prewarmed: r.canvas.prewarmed, workers: r.canvas.workers, workerBuilt: r.canvas.workerBuilt, planQueued: r.canvas.planQueued, planLeadMs: r.canvas.leadMs, evictions: r.canvas.evictions, missing: r.canvas.missing, missedTotal: r.canvas.missedTotal, held: r.canvas.held, pending: r.canvas.pending, readyMs: r.canvas.readyMs, deficitMs: r.canvas.deficitMs, buildRate: r.canvas.rate, stalls: r.stalls, stallMs: Math.round(r.stallMs), compositeMs: r.canvas.compositeMs, detailDropped: r.canvas.detailDropped, skipped: r.canvas.skipped, frameMs,
 });

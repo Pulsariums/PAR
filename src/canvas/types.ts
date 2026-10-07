@@ -87,6 +87,12 @@ export interface PathStats {
   shedBudgetMpx: number;
   /** Runs beyond the canvas pool size that were merged into the last one (z-order approximated). */
   runsMerged: number;
+  /** Items of the last frame whose sprite was not ready when the frame needed it, the same summed over all frames, and frames not presented because of it (the previous picture stayed). */
+  missing: number;
+  missedTotal: number;
+  held: number;
+  /** Time the last frame spent drawing its finished sprites (ms). */
+  compositeMs: number;
 }
 
 /** Counters of the look-ahead: the warm plan and the sprite workers. */
@@ -99,6 +105,12 @@ export interface WarmStats {
   aheadMB: number;
   /** How far ahead of the playhead the plan has looked (ms of subtitle time). */
   leadMs: number;
+  /** Sprites planned and not available yet, and how far ahead of the playhead everything planned is available (ms; Infinity-capped at the plan's own lead). */
+  pending: number;
+  readyMs: number;
+  /** Measured build throughput (ms of estimated work per ms of wall time, 0 = none yet) and the wait (ms) the builders would need to get everything built before it is drawn. */
+  rate: number;
+  deficitMs: number;
   /** Main-thread wall ms of one planned-and-built sprite on this machine (0 = none measured). */
   buildMs: number;
 }

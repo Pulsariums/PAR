@@ -43,7 +43,8 @@ export class ByteLru<K, V> {
     this.total = 0;
   }
 
-  private trim(): void {
+  /** Drops least recently used entries until the total fits `capBytes` (call after lowering the cap). */
+  trim(): void {
     while (this.total > this.capBytes && this.map.size > 1) {
       const [k, e] = this.map.entries().next().value as [K, { v: V; bytes: number }];
       this.map.delete(k);

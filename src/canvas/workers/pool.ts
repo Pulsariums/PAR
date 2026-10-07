@@ -6,9 +6,9 @@ import type { FaceData, FromSprite, Job, ToSprite } from './protocol';
 
 export type { FaceInfo } from './faces';
 
-/** Jobs one worker may hold at once (queued in its mailbox or running, stale ones included): enough to keep it busy between two messages, few enough to stay urgent. */
-const PER_WORKER = 16;
-const BATCH = 8;
+/** Jobs one worker may hold at once (queued in its own priority queue or running): enough that it never idles while the page is busy drawing a heavy frame, few enough to stay urgent. */
+const PER_WORKER = 64;
+const BATCH = 16;
 /** A worker that holds jobs and has not answered for this long (ms of observed page time) is dead. */
 const STALL_MS = 8000;
 /** Face bytes per worker. */
@@ -17,6 +17,8 @@ const FACE_BUDGET = 64 << 20;
 export interface PoolHooks {
   /** A sprite arrived. Only real sprites: whatever a worker could not build is left to the main thread. */
   built(key: string, s: Sprite): void;
+  /** A worker could not build it (a face it does not carry, an exception, nothing came out): the owner builds it on the page thread. */
+  refused(key: string): void;
   /** Room for more jobs (a message was processed). */
   free(): void;
   /** The pool is unusable (worker error, unsupported, stalled): the owner falls back to the main thread. */
@@ -25,6 +27,7 @@ export interface PoolHooks {
 
 interface Slot { w: Worker; load: number; sent: Set<string>; ready: boolean; blur: boolean; waited: number }
 interface Out { key: string; spec: SpriteSpec }
+interface Staged extends Job { key: string }
 
 /**
  * Builds sprites in Workers (OffscreenCanvas) and gets them back as ImageBitmaps. The main thread decides what to build and in which
@@ -37,7 +40,7 @@ export class SpritePool {
   private readonly out = new Map<number, Out>();
   private readonly inflight = new Map<string, number>();
   private readonly refused = new Set<string>();
-  private readonly staged: Job[] = [];
+  private readonly staged: Staged[] = [];
   private readonly book: FaceBook;
   private seq = 0;
   private gen = 0;
@@ -58,8 +61,8 @@ export class SpritePool {
   /** Workers are starting (not ready yet, not failed). */
   get booting(): boolean { return !this.dead && !this.ready; }
   get pending(): number { return this.inflight.size; }
-  /** Ms since this key was handed to the pool (null: not on its way). */
-  age(key: string): number | null { const at = this.inflight.get(key); return at === undefined ? null : performance.now() - at; }
+  /** True while this key was handed to the pool and has not come back. */
+  has(key: string): boolean { return this.inflight.has(key); }
 
   private open(w: Worker): Slot {
     const slot: Slot = { w, load: 0, sent: new Set(), ready: false, blur: false, waited: 0 };
@@ -79,7 +82,7 @@ export class SpritePool {
       this.syncFaces(slot);
       this.hooks.free();
     } else if (m.op === 'faces') this.book.failed(m.failed);
-    else this.onBuilt(slot, m);
+    else if (m.op === 'dropped') { slot.load = Math.max(0, slot.load - m.n); this.hooks.free(); } else this.onBuilt(slot, m);
   }
 
   private onBuilt(slot: Slot, m: Extract<FromSprite, { op: 'built' }>): void {
@@ -90,12 +93,17 @@ export class SpritePool {
       // Stale (fonts changed or a seek: `invalidate`), or the family has failed in the worker since the job was sent: never cache these pixels.
       if (!o || m.gen !== this.gen) { it.bitmap?.close(); continue; }
       this.inflight.delete(o.key);
-      if (!this.book.allows(o.spec)) { it.bitmap?.close(); this.refused.add(o.key); continue; }
-      if (!it.bitmap) { this.refused.add(o.key); continue; }
+      if (!this.book.allows(o.spec)) { it.bitmap?.close(); this.refuse(o.key); continue; }
+      if (!it.bitmap) { this.refuse(o.key); continue; }
       this.received++;
       this.hooks.built(o.key, { canvas: it.bitmap, w: it.w, h: it.h, boxW: it.boxW, ox: it.ox, oy: it.oy, bytes: it.bytes });
     }
     this.hooks.free();
+  }
+
+  private refuse(key: string): void {
+    this.refused.add(key);
+    this.hooks.refused(key);
   }
 
   /** The faces the page has loaded (fonts changed): workers drop the old set and get the families the next sprites need. */
@@ -131,14 +139,14 @@ export class SpritePool {
     return this.dead ? 0 : this.slots.reduce((n, s) => n + (s.ready ? PER_WORKER - s.load : 0), 0) - this.staged.length;
   }
 
-  /** Queues a job; `flush()` sends what is queued. False when full. A key already on its way counts as taken. */
-  submit(key: string, spec: SpriteSpec): boolean {
+  /** Queues a job; `flush()` sends what is queued. False when full. A key already on its way counts as taken. `prio`: lowest is built first (the time the sprite is first drawn; -1 for one a frame waits for). */
+  submit(key: string, spec: SpriteSpec, prio = 0): boolean {
     if (this.inflight.has(key)) return true;
     if (this.capacity <= 0) return false;
     const id = ++this.seq;
     this.out.set(id, { key, spec });
     this.inflight.set(key, performance.now());
-    this.staged.push({ id, spec });
+    this.staged.push({ id, spec, prio, key });
     return true;
   }
 
@@ -146,11 +154,12 @@ export class SpritePool {
   flush(): void {
     this.watch();
     const ready = this.slots.filter((s) => s.ready && s.load < PER_WORKER);
+    if (this.staged.length > 1) this.staged.sort((a, b) => a.prio - b.prio);
     while (this.staged.length && ready.length && !this.dead) {
       const s = ready.reduce((a, b) => (b.load < a.load ? b : a));
       const batch = this.staged.splice(0, Math.min(BATCH, PER_WORKER - s.load));
       s.load += batch.length;
-      this.post(s, { op: 'build', gen: this.gen, jobs: batch }, []);
+      this.post(s, { op: 'build', gen: this.gen, jobs: batch.map(({ id, spec, prio }) => ({ id, spec, prio })) }, []);
       if (s.load >= PER_WORKER) ready.splice(ready.indexOf(s), 1);
     }
   }
@@ -163,12 +172,13 @@ export class SpritePool {
     for (const s of this.slots) if (s.load > 0 && (s.waited += dt) > STALL_MS) { this.fail('sprite worker stopped answering'); return; }
   }
 
-  /** Results of jobs sent before this call are dropped (fonts changed, or a seek moved the plan elsewhere). */
+  /** Results of jobs sent before this call are dropped (fonts changed, or a seek moved the plan elsewhere): the workers discard what they still hold unbuilt. */
   invalidate(): void {
     this.gen++;
     this.staged.length = 0;
     this.out.clear();
     this.inflight.clear();
+    for (const s of this.slots) if (s.load > 0) this.post(s, { op: 'drop', gen: this.gen });
   }
 
   private fail(reason: string): void {

@@ -111,22 +111,20 @@ describe('look-ahead and its workers', () => {
   });
 });
 
-describe('drawing a sprite a worker is still building', () => {
-  const item = { key: 'k', spec: { plates: [] } } as never;
+describe('the frame path never builds', () => {
+  const item = { key: 'k', alpha: 1, clip: [], spec: { plates: [] } } as never;
   const sprite = { canvas: { width: 1, height: 1 }, w: 1, h: 1, boxW: 1, ox: 0, oy: 0, bytes: 4 };
+  const resolve = (p: CanvasPath) => (p as unknown as { resolve(r: unknown): { missing: unknown[]; resolved: unknown[][] } }).resolve([{ layer: 0, index: 0, items: [item] }]);
 
-  it('draws nothing for it and asks for another pass, instead of building a second copy; a worker that is late or dead no longer holds the line back', () => {
+  it('a sprite that is not there is reported missing, never built, never reduced; a cached one is used', () => {
     const p = new CanvasPath({ insert: () => undefined } as never, () => 'canvas', 1 << 20);
-    const build = vi.spyOn(p, 'build').mockReturnValue(sprite as never);
-    const base = (p as unknown as { base(i: unknown, t0: number): unknown }).base.bind(p);
-    p.pending = () => 10;
-    expect(base(item, performance.now())).toBeNull();
-    expect(p.deferred).toBe(1);
-    expect(build).not.toHaveBeenCalled();
-    p.pending = () => 500;
-    expect(base(item, performance.now())).toBe(sprite);
-    p.pending = () => null;
-    expect(base(item, performance.now())).toBe(sprite);
-    expect(p.deferred).toBe(1);
+    const pre = vi.spyOn(p, 'prebuild');
+    const r = resolve(p);
+    expect(r.missing).toHaveLength(1);
+    expect(r.resolved[0][0]).toBeNull();
+    expect(pre).not.toHaveBeenCalled();
+    p.cache.store('k', () => sprite as never);
+    expect(resolve(p).resolved[0][0]).toBe(sprite);
+    expect(resolve(p).missing).toHaveLength(0);
   });
 });

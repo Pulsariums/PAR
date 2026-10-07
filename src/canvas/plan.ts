@@ -7,7 +7,7 @@ import type { LineEnv } from '../render/LineView';
 
 import { specKey } from './key';
 import { buildSpec, type Dropped } from './paint';
-import type { DrawItem } from './types';
+import type { DrawItem, SpriteSpec } from './types';
 
 /** Clip regions of a line at `t`: its rect/vector `\clip` (animated by `\t(\clip)`) and the separate vector clip. */
 const clipsAt = (line: PreparedLine, t: number): ClipShape[] => {
@@ -26,14 +26,20 @@ const MIN_BAKE_MS = 200;
 const isStill = (line: PreparedLine, animated: ReadonlySet<string>): boolean =>
   line.durationMs >= MIN_BAKE_MS && !line.event.lineTags.move && line.clipTransitions.length === 0 && !animated.has('fs') && !animated.has('fscx') && !animated.has('fscy');
 
+/** What the sprite of one event at `t` ms since line start is made of: its spec, cache key and the shared opacity (no placement, no clip). */
+export const specAt = (line: PreparedLine, t: number, env: LineEnv, animated: ReadonlySet<string>, dropped: Dropped): { spec: SpriteSpec; key: string; alpha: number } => {
+  const st = evalStates(line, t, env.styles)[0];
+  const { spec, alpha } = buildSpec(line.event.fragments[0].text, line.plated, st, env, line.kerning, animated, dropped);
+  return { spec, key: specKey(spec), alpha };
+};
+
 /**
  * The frame plan of one event: everything the canvas needs at `t` ms since line start, resolved from the same state evaluation
  * (`evalStates`, `positionAt`, `fadeAlphaAt`, `clipAt`) the DOM path uses. Pure: no canvas, no DOM.
  */
 export const planLine = (line: PreparedLine, t: number, env: LineEnv, animated: ReadonlySet<string>, dropped: Dropped): DrawItem => {
   const st = evalStates(line, t, env.styles)[0];
-  const text = line.event.fragments[0].text;
-  const { spec, alpha } = buildSpec(text, line.plated, st, env, line.kerning, animated, dropped);
+  const { spec, alpha } = buildSpec(line.event.fragments[0].text, line.plated, st, env, line.kerning, animated, dropped);
   const anchor = positionAt(line.event.lineTags, t, line.durationMs) ?? marginAnchor(line.an, line.margins, env.layout);
   const fade = fadeAlphaAt(line.event.lineTags, t, line.durationMs);
   const xr = xRatio(st);

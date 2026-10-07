@@ -21,9 +21,9 @@ export const kit = (text: string, o: { mode?: string } = {}) => {
   const path = {
     enabled: true, load: null, mode: () => o.mode ?? 'canvas', busy: () => true,
     complexity: () => ({ eligible: true, reason: '', score: 4, animated: new Set(['blur']) }),
-    cache: { peek: (k: string) => cache.get(k), put: (k: string, s: unknown) => { cache.set(k, s); return true; }, sweep: vi.fn(), capBytes: 96 << 20 },
+    cache: { peek: (k: string) => cache.get(k), has: (k: string) => cache.has(k), pin: () => true, unpin: () => undefined, pinnedBytes: 0, put: (k: string, s: unknown) => { cache.set(k, s); return true; }, sweep: vi.fn(), capBytes: 96 << 20 },
+    onMissing: () => undefined,
     prebuild: (k: string) => { cache.set(k, {}); built.push(k); },
-    pending: (() => null) as (k: string) => number | null,
   } as unknown as CanvasPath;
   const lines = (): Lines => ({ startingIn: (a, b) => tl.startingIn(a, b), visibleAt: (t) => tl.visibleAt(t), startMs: (l) => tl.startMs(l), covers: null });
   return { env, path, lines, cache, built };

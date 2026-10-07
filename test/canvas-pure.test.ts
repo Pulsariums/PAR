@@ -120,7 +120,7 @@ describe('frame plan equals direct evaluation', () => {
     const anim = line(text).l;
     const ts = sampleTimes(anim, 41.7);
     expect(ts[0]).toBe(0);
-    expect(ts.length).toBeLessThanOrEqual(24);
+    expect(ts.length).toBeGreaterThan(24); // every frame of its life: a quantised key changes class at any of them
     expect(ts[ts.length - 1]).toBeLessThan(anim.durationMs);
   });
 

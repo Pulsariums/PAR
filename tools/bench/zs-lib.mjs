@@ -39,10 +39,11 @@ export const synth = ({ seconds = 60, every = 2, n = 1100, seed = 7, animate = 0
 };
 
 /** Serves `dist` (the build under test), the script at /file and an empty stage page at /. */
-export const serve = (dist, file) => {
+export const serve = (dist, file, video = '') => {
   const srv = http.createServer((rq, res) => {
     const u = rq.url.split('?')[0];
     if (u === '/') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(`<body style="margin:0;background:#445"><div id="c" style="position:relative;width:${W}px;height:${H}px;background:#445;overflow:hidden"></div></body>`); }
+    if (u === '/video' && video) { const st = fs.statSync(video), m = /bytes=(\d+)-(\d*)/.exec(rq.headers.range || ''); const a = m ? +m[1] : 0, b = m && m[2] ? +m[2] : st.size - 1; res.writeHead(m ? 206 : 200, { 'content-type': 'video/webm', 'accept-ranges': 'bytes', 'content-length': b - a + 1, ...(m ? { 'content-range': `bytes ${a}-${b}/${st.size}` } : {}) }); return fs.createReadStream(video, { start: a, end: b }).pipe(res); }
     const f = u === '/file' ? file : path.join(dist, u.slice(1));
     if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { 'content-type': f.endsWith('.js') ? 'text/javascript' : 'application/octet-stream' });

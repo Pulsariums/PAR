@@ -10,7 +10,7 @@ import type { ParsedScript } from '../types/script';
 import { FontApi } from './FontApi';
 import { FrameStats } from './FrameStats';
 import { LoadMeter } from './LoadMeter';
-import { Refiner } from './Refiner';
+import { Stall } from './Stall';
 import { observeSize } from './observe';
 import { computeStage, deviceScale } from './stage';
 import { resolveOptions } from './options';
@@ -41,7 +41,7 @@ export class PARRenderer extends FontApi {
   private destroyed = false;
   private readonly frames = new FrameStats();
   private readonly load = new LoadMeter();
-  private readonly refiner = new Refiner(() => this.draw(this.now(), true));
+  private readonly stall = new Stall(() => this.opts.video, () => this.scene.deficit(this.lastMs));
   constructor(options: PAROptions) {
     super();
     this.opts = resolveOptions(options);
@@ -111,7 +111,7 @@ export class PARRenderer extends FontApi {
   }
 
   getMetrics(): PARMetrics {
-    return buildMetrics(this.geo, { time: this.lastMs / 1000, activeLines: this.scene.activeCount, running: this.scheduler.isRunning, render: renderMetrics(this.scene.renderStats, this.opts.renderMode, this.frames.snapshot()) });
+    return buildMetrics(this.geo, { time: this.lastMs / 1000, activeLines: this.scene.activeCount, running: this.scheduler.isRunning, render: renderMetrics({ ...this.scene.renderStats, stalls: this.stall.stalls, stallMs: this.stall.stallMs }, this.opts.renderMode, this.frames.snapshot()) });
   }
 
   /** Removes the overlay, listeners and loop; the instance is dead afterwards. */
@@ -137,11 +137,13 @@ export class PARRenderer extends FontApi {
     this.overlay = new Overlay(container, this.opts.zIndex);
     this.scene = new Scene(this.overlay, () => this.opts.renderMode, this.opts.spriteCacheMB * 1048576, debugWorkers);
     this.scene.setFaces(this.fonts.shipFaces());
+    this.scene.onReady = () => { if (!this.destroyed) this.draw(this.now(), false); };
     this.teardown.push(observeSize(container, video, () => this.invalidate()));
     if (video) {
       this.teardown.push(bindVideoEvents(video, {
         play: () => this.syncLoop(),
         pause: () => { this.syncLoop(); this.draw(this.now(), false); },
+        started: () => this.stall.userPlayed(),
         seek: () => { if (!this.scheduler.isRunning) this.draw(this.now(), false); },
         resize: () => this.invalidate(),
       }));
@@ -154,7 +156,7 @@ export class PARRenderer extends FontApi {
   private unmount(): void {
     this.scheduler.stop();
     this.load.stop();
-    this.refiner.cancel();
+    this.stall.dispose();
     this.teardown.forEach((undo) => undo());
     this.teardown = [];
     this.scene.dispose();
@@ -185,9 +187,15 @@ export class PARRenderer extends FontApi {
     this.host.update(ms);
     const forced = force || this.forceNext;
     if (!forced && ms === this.lastMs) return;
-    this.scene.setLoad(this.scheduler.isRunning ? this.load.late() : null);
-    this.frames.time(() => this.scene.render(ms, this.env, forced));
-    if (this.scene.needsRefine) this.refiner.request();
+    const running = this.scheduler.isRunning;
+    this.scene.setLoad(running ? this.load.late() : null);
+    // A frame is presented whole or not at all while the picture can wait for it (paused, seeking, a video the renderer may hold);
+    // a free-running custom clock cannot be held: it draws what is ready (the missing are counted) and the builders rush the rest.
+    const policy = (!running || (this.opts.video && this.scene.buffers)) && !this.scene.stuck ? 'hold' : 'partial';
+    let complete = true;
+    this.frames.time(() => { complete = this.scene.render(ms, this.env, forced, policy); });
+    if (running && this.opts.video && this.scene.buffers) this.stall.consider(this.scene.deficit(ms));
+    if (!complete && policy === 'hold') return; // held: `onReady` draws it again; the previous picture stays
     [this.forceNext, this.lastMs] = [false, ms];
   }
 

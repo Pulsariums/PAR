@@ -1,7 +1,7 @@
 import { evalStates, prepareLine, type PreparedLine } from '../anim/Prepared';
 import { collisionShift, type Placed } from '../layout/Collision';
 import { inflate, stackDirection } from '../layout/Stacking';
-import { CanvasPath } from '../canvas/CanvasPath';
+import { CanvasPath, type Policy } from '../canvas/CanvasPath';
 import type { SpriteWorkers } from '../canvas/workers/size';
 import type { CanvasStats, RenderMode } from '../canvas/types';
 import type { FaceInfo } from '../canvas/workers/pool';
@@ -51,8 +51,17 @@ export class Scene {
   /** Share of recent display frames that were late while playing, null when not playing (see `LoadMeter`). */
   setLoad(late: number | null): void { this.canvas.load = late; }
 
-  /** The last frame shipped reduced (see `Refiner`): draw it again. */
-  get needsRefine(): boolean { return this.canvas.deferred > 0; }
+  /** A frame that lacked sprites has them now (see `Lookahead.onReady`): the owner draws it again. */
+  set onReady(fn: () => void) { this.ahead.onReady = fn; }
+
+  /** Ms the playhead would have to wait for every planned sprite to be built before its frame; 0 = playing on is safe. */
+  deficit(t: number): number { return this.ahead.deficit(t); }
+
+  /** Sprite workers are running (page-thread building alone is too slow to buy time by holding the picture). */
+  get buffers(): boolean { return this.ahead.hasWorkers; }
+
+  /** Work is planned and nothing is working on it: a frame waiting for it would wait forever. */
+  get stuck(): boolean { return this.ahead.stuck; }
 
   setScript(script: ParsedScript | null): void {
     this.clear();
@@ -82,7 +91,9 @@ export class Scene {
   }
 
   /** Renders at integer ms `t`. `force` re-applies static lines too (after layout/option changes). */
-  render(t: number, env: LineEnv, force: boolean): void {
+  render(t: number, env: LineEnv, force: boolean, policy: Policy = 'partial'): boolean {
+    this.ahead.begin(t, env);
+    let complete = true;
     const all = this.covers && !this.covers(t) ? [] : this.timeline.visibleAt(t);
     const visible = this.hold ? all.filter((l) => !this.hold!.has(l.event.index)) : all;
     const route = this.canvas.route(visible, t);
@@ -97,10 +108,11 @@ export class Scene {
     this.canvasLines = route.filter(Boolean).length;
     if (this.canvasLines > 0 || this.canvasOn) {
       const t0 = performance.now();
-      this.canvas.render(visible.map((line, i) => ({ line, rel: t - this.timeline.startMs(line), canvas: route[i] })), env);
+      complete = this.canvas.render(visible.map((line, i) => ({ line, rel: t - this.timeline.startMs(line), canvas: route[i] })), env, policy);
       this.canvasOn = this.canvasLines > 0;
       this.ahead.note(t, env, performance.now() - t0);
     } else this.ahead.note(t, env, null); // No canvas line on screen: the next burst still needs its sprites, so look ahead now and then.
+    return complete;
   }
 
   private readonly startOf = (l: PreparedLine): number => this.timeline.startMs(l);

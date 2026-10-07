@@ -5,11 +5,13 @@ export interface VideoHandlers {
   pause(): void;
   /** Time jumped while possibly paused: render once. */
   seek(): void;
+  /** A `play` / `playing` event (optional): lets the owner tell a viewer's play from its own resume. */
+  started?(): void;
   /** Intrinsic size / metadata changed: re-measure the region. */
   resize(): void;
 }
 
-const MAP: Record<string, keyof VideoHandlers> = {
+const MAP: Record<string, 'play' | 'pause' | 'seek' | 'resize'> = {
   play: 'play',
   playing: 'play',
   pause: 'pause',
@@ -28,7 +30,7 @@ const MAP: Record<string, keyof VideoHandlers> = {
 /** Subscribes to the media events PAR needs; returns the unsubscribe function. */
 export const bindVideoEvents = (video: HTMLVideoElement, h: VideoHandlers): (() => void) => {
   const listeners = Object.entries(MAP).map(([ev, key]) => {
-    const fn = () => h[key]();
+    const fn = () => { if (key === 'play') h.started?.(); h[key](); };
     video.addEventListener(ev, fn);
     return [ev, fn] as const;
   });

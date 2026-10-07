@@ -1,8 +1,9 @@
 import type { CanvasPath } from '../canvas/CanvasPath';
 import { estimateBuildMs } from '../canvas/cost';
-import type { WarmStats } from '../canvas/types';
+import type { DrawItem, WarmStats } from '../canvas/types';
 import { SliceBudget } from '../canvas/warm/budget';
 import { WarmPlanner, type Builder, type Entry, type Lines } from '../canvas/warm/planner';
+import { Throughput } from '../canvas/warm/rate';
 import { createSpritePool } from '../canvas/workers/create';
 import type { SpritePool, FaceInfo } from '../canvas/workers/pool';
 import type { SpriteWorkers } from '../canvas/workers/size';
@@ -12,20 +13,26 @@ import type { LineEnv } from '../render/LineView';
 const IDLE_AFTER_MS = 120;
 /** Look-ahead time taken inside a render itself (ms); the rest of the work is done by the pump between frames. */
 const IN_FRAME_MS = 1.5;
+/** Time a frame spends handing the sprites it is missing to the builders (ms). */
+const URGENT_MS = 3;
 /** Without canvas lines on screen, the look-ahead runs on every this-many-th render. */
 const QUIET_EVERY = 6;
 /** While workers are starting, sprites needed later than this (ms ahead of the playhead) wait for them instead of being built on the page thread. */
 const BOOT_WAIT_MS = 1500;
+/** Safety margin (frames) between a sprite landing and the frame that draws it, for the deficit estimate. */
+const MARGIN_FRAMES = 2;
 
 /**
- * Builds the sprites the next seconds need, ahead of the frame that draws them: the warm plan (`WarmPlanner`) says what and in which
- * order, a slice budget learned from this machine's frames says how long to work between frames, and the builder is a Worker pool
- * when there is one (sprites go there as jobs, come back as bitmaps) with the main thread as the fallback that is always complete.
- * `note` runs in every render; when work is left a message-task pump carries on between frames.
+ * Builds the sprites the coming frames need, ahead of the frame that draws them. The warm plan (`WarmPlanner`) says what and in
+ * which order, as far ahead as the sprite memory allows; the builder is a Worker pool when there is one (jobs go there with their
+ * priority, bitmaps come back) and the page thread otherwise, in slices sized from this machine's frames (`SliceBudget`). Throughput is
+ * measured (`Throughput`), so how long the playhead would have to wait to never be late is known (`deficit`). A frame that finds a
+ * sprite missing reports it (`urgent`): it jumps the queue and `onReady` fires when everything that frame lacked has landed.
  */
 export class Lookahead {
-  private readonly planner = new WarmPlanner();
+  private readonly planner: WarmPlanner;
   private readonly budget = new SliceBudget();
+  private readonly rate = new Throughput(0.3);
   private pool: SpritePool | null = null;
   private poolOpt: SpriteWorkers | null = null;
   private poolTried = false;
@@ -41,42 +48,70 @@ export class Lookahead {
   private mainBuilt = 0;
   private mainEst = 0;
   private fromWorkers = 0;
+  private waiting = new Set<string>();
+  /** The plan has things to build and nothing is working on them (no job out, no slice coming): a frame waiting for them would wait forever. */
+  stuck = false;
+  /** A frame that was missing sprites now has all of them. */
+  onReady: () => void = () => undefined;
 
   constructor(private readonly path: CanvasPath, private readonly lines: () => Lines, private readonly workers: () => SpriteWorkers) {
-    path.pending = (key) => this.pool?.age(key) ?? null;
+    this.planner = new WarmPlanner(path);
+    path.onMissing = (items) => this.urgent(items);
   }
 
-  /** Called by every render. `spentMs`: what the canvas draw cost (null: no canvas line on screen). */
+  /** Start of a render at `t`: a jump of the playhead starts the plan over there (what the workers still build for the old one is not wanted). */
+  begin(t: number, env: LineEnv): void {
+    if (!this.path.enabled) return;
+    this.lastEnv = env;
+    if (this.planner.isSeek(t)) { this.pool?.invalidate(); this.planner.seek(t, this.lines()); this.waiting.clear(); this.rate.idle(); }
+    this.lastT = t;
+  }
+
+  /** End of a render. `spentMs`: what the canvas draw cost (null: no canvas line on screen). */
   note(t: number, env: LineEnv, spentMs: number | null): void {
     if (!this.path.enabled) return;
     const now = performance.now();
     if (spentMs === null && this.quiet++ % QUIET_EVERY !== 0) return;
-    [this.lastT, this.lastEnv] = [t, env];
+    this.begin(t, env);
     if (spentMs !== null) { this.budget.noteFrame(spentMs, this.lastRenderAt ? now - this.lastRenderAt : null); this.lastDrawAt = now; this.lastRenderAt = now; }
     this.run(IN_FRAME_MS, false);
+  }
+
+  /** The frame needed these and did not find them: they go to the front, workers get them now. */
+  private urgent(items: DrawItem[]): void {
+    if (!this.lastEnv) return;
+    this.waiting = new Set(items.map((i) => i.key));
+    for (const it of items) this.planner.urgent(it.key, it.spec, this.lastT);
+    this.run(URGENT_MS, false);
   }
 
   private run(budgetMs: number, exempt = true): void {
     const env = this.lastEnv;
     if (!env) return;
     this.syncOption();
-    if (this.replan) { this.planner.reset(); this.replan = false; }
-    // A seek starts a new plan: what the workers were still building for the old one is not wanted (nor counted against the ahead share).
-    if (this.planner.isSeek(this.lastT)) this.pool?.invalidate();
+    if (this.replan) { this.planner.seek(this.lastT, this.lines()); this.replan = false; }
     this.mainBuilt = 0;
     this.mainEst = 0;
     const t0 = performance.now();
-    const w = this.planner.step(this.path, this.lastT, env, env.frameMs ?? 41.7, budgetMs, this.lines(), this.builder(), exempt);
+    const w = this.planner.step(this.lastT, env, env.frameMs ?? 41.7, budgetMs, this.lines(), this.builder(), exempt);
     this.pool?.flush();
     if (this.mainBuilt > 0) this.budget.noteBuilds(this.mainBuilt, performance.now() - t0, this.mainEst);
+    this.measure();
+    this.stuck = this.planner.queued > 0 && !w.more && !w.waiting && this.planner.inFlight === 0 && w.built === 0;
     if (w.more) this.arm();
+  }
+
+  private measure(): void {
+    const c = this.planner.takeDone();
+    if (c > 0) this.rate.done(c);
+    if (this.planner.pending === 0) this.rate.idle();
   }
 
   /** Where an entry goes: a worker, the main thread, or nowhere yet (workers are starting and the sprite is not needed soon). */
   private route(e: Entry): 'pool' | 'wait' | 'main' {
     const pool = this.pool ?? this.spawn();
     if (!pool || pool.dead) return 'main';
-    if (pool.booting) return e.ms - this.lastT > BOOT_WAIT_MS ? 'wait' : 'main';
+    if (pool.booting) return e.ms - this.lastT > BOOT_WAIT_MS && e.prio >= 0 ? 'wait' : 'main';
     return pool.ready && pool.accepts(e.spec, e.key) ? 'pool' : 'main';
   }
 
@@ -86,17 +121,25 @@ export class Lookahead {
         const r = this.route(e);
         if (r === 'wait') return 'full';
         if (r === 'pool') {
-          if (!this.pool!.submit(e.key, e.spec)) return 'full';
+          if (!this.pool!.submit(e.key, e.spec, e.prio)) return 'full';
+          this.rate.busy();
           this.fromWorkers++;
           return 'done';
         }
         this.path.prebuild(e.key, e.spec);
         this.mainBuilt++;
         this.mainEst += estimateBuildMs(e.spec);
+        this.rate.busy();
+        this.noteLanded(e.key);
         return 'done';
       },
       cost: (e: Entry) => (this.route(e) === 'main' ? this.budget.scaled(estimateBuildMs(e.spec)) : 0),
     };
+  }
+
+  /** A sprite is available: when it was the last one a held frame lacked, the frame can be drawn. */
+  private noteLanded(key: string): void {
+    if (this.waiting.delete(key) && this.waiting.size === 0) this.onReady();
   }
 
   /** The option changed: the pool of the old one goes (a new one is started when something is first planned for it). */
@@ -113,12 +156,15 @@ export class Lookahead {
     this.poolTried = true;
     this.pool = createSpritePool(this.poolOpt ?? 'auto', {
       // Arrivals happen between frames, never inside a draw: bitmaps this one pushed out can be closed now (a paused or hidden page draws nothing to sweep them).
-      built: (k, s) => { this.path.cache.put(k, s); this.path.cache.sweep(); },
+      built: (k, s) => { this.path.cache.put(k, s, this.planner.ahead.wants(k)); this.path.cache.sweep(); this.planner.landed(k); this.measure(); this.noteLanded(k); },
+      // A worker could not build it (a face it lacks, an exception): the page thread does, same key, same pixels.
+      refused: (k) => { this.planner.requeue(k); this.arm(); },
       free: () => { if (this.planner.queued > 0) this.arm(); },
       // Whatever was handed to the dead workers will never arrive: plan again, the main thread builds it.
       failed: () => { this.pool = null; this.replan = true; this.arm(); },
     });
     this.pool?.setFaces(this.faces);
+    if (this.pool) this.rate.guess = Math.max(0.3, this.pool.size * 0.7);
     return this.pool;
   }
 
@@ -149,8 +195,22 @@ export class Lookahead {
     this.run(this.budget.slice(playing, playing ? this.path.load : null));
   }
 
+  /** Workers are building: only then can the builders be faster than the clock, so only then is holding the picture for them worth it. */
+  get hasWorkers(): boolean { return !!this.pool?.ready; }
+
+  /** Ms the playhead would have to wait (from `t`) for every planned sprite to be built before its frame, at the measured throughput. 0 = playing on is safe. */
+  deficit(t: number): number {
+    const frame = this.lastEnv?.frameMs ?? 41.7;
+    return this.planner.frontier.deficit(t, this.rate.value, MARGIN_FRAMES * frame);
+  }
+
   stats(): WarmStats {
-    return { workers: this.pool?.ready ? this.pool.size : 0, workerBuilt: this.pool?.received ?? 0, planQueued: this.planner.queued, aheadMB: Math.round(this.planner.aheadMB * 10) / 10, leadMs: Number.isFinite(this.planner.frontier) ? Math.round(this.planner.frontier - this.lastT) : 0, buildMs: Math.round(this.budget.perBuild * 1000) / 1000 };
+    const f = this.planner.planned;
+    return {
+      workers: this.pool?.ready ? this.pool.size : 0, workerBuilt: this.pool?.received ?? 0, planQueued: this.planner.queued, aheadMB: Math.round(this.planner.aheadMB * 10) / 10,
+      leadMs: Number.isFinite(f) ? Math.round(f - this.lastT) : 0, buildMs: Math.round(this.budget.perBuild * 1000) / 1000,
+      pending: this.planner.pending, readyMs: Math.min(1e9, Math.round(this.planner.readyUntil() - this.lastT)), rate: Math.round(this.rate.value * 1000) / 1000, deficitMs: Math.round(this.deficit(this.lastT)),
+    };
   }
 
   /** Fonts changed or the stage was rebuilt, or a new script: the plan and the jobs in flight are stale. */
@@ -162,6 +222,8 @@ export class Lookahead {
     this.armed = false;
     this.lastEnv = null;
     this.quiet = 0;
+    this.waiting.clear();
+    this.rate.idle();
   }
 
   dispose(): void {

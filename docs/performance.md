@@ -209,3 +209,22 @@ Suspected remaining bottlenecks (evidence only, not profiled with the CPU profil
 4. Draw-time `bake()`/builds at the burst frame itself remain (misses 125-350 per window) under the 8/16 ms budget.
 
 Caveats: software GL (no GPU, fill is more expensive than on an RTX 4060, builds relatively cheaper), 4 shared sandbox cores with other jobs running (the rig is noisy, about +-15 %), CDP throttling does not apply to Workers, `synth` is a model of the report, not the user's file.
+
+## Zero-wait sprites: pinned look-ahead, whole-frame presentation, buffering (fourth pass)
+
+Rule: the frame path only looks sprites up and draws them. It never builds, never draws a lower-quality sprite (the budget-driven blur drop and the 120 ms "draw nothing while a worker builds it" rule are gone) and never waits. What is not ready is reported to the look-ahead, goes to the front of the queue, and the frame is presented whole or not at all (`hold`: the previous picture stays) while the picture can wait (paused, seeking, a `video` the renderer may hold); a free-running custom `clock` cannot be held, so it draws what is ready and counts the rest (`missedTotal`).
+
+What changed (all internal, no new option): sampling is exact (one sample for an event no `\t` changes the sprite of, every frame for the others, on the real NTSC frame grid; before, `\t` colours and blurs between every 24th sampled frame were built at draw time); sprites promised to a later frame are pinned in the cache until their last frame (LRU used to evict built-ahead sprites before they were drawn, and the plan never rebuilt them); planning goes as far as the cache allows (pinned + in flight within 70 % of it, real bytes) instead of a fixed 10 s; workers keep a priority queue of 64 jobs each (urgent first, stale jobs dropped unbuilt on a seek); build throughput is measured, so the wait the playhead would need to never be late is known (`deficit`); with a `video`, the renderer pauses it for that wait and resumes (like a streaming player rebuffering; only if it paused it, bounded at 3 s, never hidden / seeking / paused); `getMetrics().render` gets `missing`, `missedTotal`, `held`, `stalls`, `stallMs`, `deficitMs`. One worker up to four cores (a second one slowed the bursts' own frames on 4 cores: p99 +20 ms in this rig).
+
+Measured with `tools/bench/zs-stutter.mjs` (synthetic report script: 1100 blurred particles every 2 s, 40 s, a real `<video>`, 4 cores, software Chromium; three interleaved runs, before = `10d29b1`):
+
+| after warm-up (t >= 8 s) | gap p99 ms | frames > 50 ms | blurs dropped | sprite builds at draw time | missed items | video held |
+|---|---|---|---|---|---|---|
+| before | 63 / 71 / 70 | 34 / 45 / 43 | 7167 / 7765 / 9017 | 6320 / 6301 / 7314 | n/a | 0 |
+| after | 51 / 44 / 56 | 18 / 6 / 27 | 0 / 0 / 0 | 1 / 0 / 0 | 1 / 0 / 0 | 1 stall, 50-80 ms |
+
+60 s, workers on: dropped blurs 28,467 -> 0, draw-time builds 17,517 -> 2, 5 holds totalling 1.1 s. Seek into a burst (video): dropped blurs 8,966 -> 0, complete frame after 413 ms, 5 holds, 1.0 s in total. Everything pre-built (the floor): p99 65 vs 67, max 72 vs 73 ms: the 50-60 ms frames of a 1100-sprite burst are software raster on the main thread, identical before and after; a GPU does not have them.
+
+Workers blocked (page-thread builds only, 40 s, 4 cores): before p99 69 / max 157 ms, 44 frames > 50 ms, 8,395 blurs dropped, 6,492 draw-time builds; after p99 42 / max 85 ms, 8 frames > 50 ms, 0 dropped, 0 draw-time builds, 0 missed. Holding the picture is only used while workers run: a first version that also buffered with page-thread builds held the video 98 s over a 60 s clip (the page thread builds too slowly to buy time), so without workers the frame draws what is ready and the builders still go first for what it lacked.
+
+Not solved, said plainly: (1) a machine whose builders are slower than the script's demand (about 2,200 new blurred sprites per 2 s) still has to buffer or lose items; the persistent IndexedDB cache that would remove that was **not done**. (2) With workers on, frames over 100 ms are within run noise of before (0-5 vs 0-2 per 40 s): they are the burst frames' software raster. (3) Persistent IndexedDB cache, video-less hosts that need the clock held, and the `pseek` bench scenario with a video were not done / not measured. (4) Sprites larger than 2048 px are still not drawn (`skipped`). Parity (`parity.mjs`): 11/11 identical, worker vs page-thread. No real GPU or phone was available.

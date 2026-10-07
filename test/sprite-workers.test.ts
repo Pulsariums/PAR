@@ -44,7 +44,8 @@ describe('pool size', () => {
     expect(poolSize('auto', 2, true)).toBe(1);
     expect(poolSize('auto', 1, true)).toBe(0); // one core: a worker would only take the page thread's time
     expect(poolSize('auto', undefined, true)).toBe(1);
-    expect(poolSize('auto', 4, true)).toBe(2);
+    expect(poolSize('auto', 4, true)).toBe(1); // measured: a second worker on four cores slows the bursts' own frames
+    expect(poolSize('auto', 6, true)).toBe(3);
     expect(poolSize('auto', 8, true)).toBe(4);
     expect(poolSize('auto', 32, true)).toBe(4);
     expect(poolSize('auto', 8, false)).toBe(0);
@@ -96,7 +97,7 @@ describe('sprite pool with a worker double', () => {
   it('delivers built sprites by key, in jobs sent after the fonts they need', async () => {
     const log: string[] = [];
     const got = new Map<string, unknown>();
-    const pool = new SpritePool(() => fakeWorker(deps(log)), 1, { built: (k, s) => got.set(k, s), free: () => undefined, failed: () => undefined });
+    const pool = new SpritePool(() => fakeWorker(deps(log)), 1, { built: (k, s) => got.set(k, s), refused: () => undefined, free: () => undefined, failed: () => undefined });
     pool.setFaces([{ key: 'f1', family: 'Berylium', weight: 400, italic: false, data: new Uint8Array(8) }]);
     await wait();
     expect(pool.ready).toBe(true);
@@ -120,7 +121,7 @@ describe('sprite pool with a worker double', () => {
     const closed: Array<ReturnType<typeof vi.fn>> = [];
     const d = deps(log);
     d.build = (s) => { const b = bitmap(); closed.push(b.close as never); return { bitmap: b, w: 1, h: 1, boxW: 1, ox: 0, oy: 0, bytes: 4 + s.text.length * 0 }; };
-    const pool = new SpritePool(() => fakeWorker(d), 1, { built: (k) => got.push(k), free: () => undefined, failed: () => undefined });
+    const pool = new SpritePool(() => fakeWorker(d), 1, { built: (k) => got.push(k), refused: () => undefined, free: () => undefined, failed: () => undefined });
     await wait();
     pool.submit('old', spec('A'));
     pool.flush();
@@ -133,7 +134,7 @@ describe('sprite pool with a worker double', () => {
   it('a worker that cannot do canvas text fails the pool so the main thread takes over', async () => {
     const reasons: string[] = [];
     const d = { ...deps([]), supported: () => false };
-    const pool = new SpritePool(() => fakeWorker(d), 1, { built: () => undefined, free: () => undefined, failed: (r) => reasons.push(r) });
+    const pool = new SpritePool(() => fakeWorker(d), 1, { built: () => undefined, refused: () => undefined, free: () => undefined, failed: (r) => reasons.push(r) });
     await wait();
     expect(pool.dead).toBe(true);
     expect(pool.ready).toBe(false);
@@ -142,7 +143,7 @@ describe('sprite pool with a worker double', () => {
   });
 
   it('leaves sprites of oversized fonts to the main thread', async () => {
-    const pool = new SpritePool(() => fakeWorker(deps([])), 1, { built: () => undefined, free: () => undefined, failed: () => undefined });
+    const pool = new SpritePool(() => fakeWorker(deps([])), 1, { built: () => undefined, refused: () => undefined, free: () => undefined, failed: () => undefined });
     await wait();
     pool.setFaces([{ key: 'big', family: 'HugeCJK', weight: 400, italic: false, data: { byteLength: 30 << 20, slice: () => new Uint8Array(1) } as unknown as Uint8Array }]);
     expect(pool.accepts(spec('A', '"HugeCJK", sans-serif'), 'k1')).toBe(false);
@@ -150,11 +151,11 @@ describe('sprite pool with a worker double', () => {
   });
 
   it('holds back when every worker already has its share', async () => {
-    const pool = new SpritePool(() => fakeWorker(deps([])), 1, { built: () => undefined, free: () => undefined, failed: () => undefined });
+    const pool = new SpritePool(() => fakeWorker(deps([])), 1, { built: () => undefined, refused: () => undefined, free: () => undefined, failed: () => undefined });
     await wait();
     let n = 0;
     while (pool.submit(`k${n}`, spec('A'))) n++;
-    expect(n).toBe(16);
+    expect(n).toBe(64);
   });
 });
 

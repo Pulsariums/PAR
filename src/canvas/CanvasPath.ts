@@ -2,21 +2,19 @@ import type { PreparedLine } from '../anim/Prepared';
 import type { LineEnv } from '../render/LineView';
 import type { Overlay } from '../render/Overlay';
 
-import { bake, bakeable, bakeKey, type Baked } from './bake';
-import { CanvasLayer, type Run } from './CanvasLayer';
+import { bakeable, bakeKey, type Baked } from './bake';
+import { CanvasLayer, type Resolved, type Run } from './CanvasLayer';
 import { ShedController } from './shed';
 import { analyzeLine, chooseMode, type Complexity } from './eligibility';
 import type { Dropped } from './paint';
 import { planLine } from './plan';
-import { construct } from './construct';
 import { canvasSupported, type Sprite } from './raster';
 import { SpriteCache } from './SpriteCache';
+import { buildAhead } from './mainBuild';
 import type { DrawItem, PathStats, RenderMode, SpriteSpec } from './types';
 
-/** Time one frame may spend building sprites it needs now; then blurs are left out (counted); at twice that, new sprites wait for the next frame. */
-export const BUILD_BUDGET_MS = 8;
-/** A sprite a worker is building is waited for this long (ms since it was handed over); after that the frame builds it itself, so a slow or dead worker never leaves a line out. */
-export const PENDING_WAIT_MS = 120;
+/** What a frame does when a sprite it needs is not ready: `hold` presents nothing new (the previous frame stays, nothing is half drawn), `partial` draws what is ready. Neither builds anything. */
+export type Policy = 'hold' | 'partial';
 
 export interface Routed {
   line: PreparedLine;
@@ -25,7 +23,11 @@ export interface Routed {
   canvas: boolean;
 }
 
-/** The canvas path of a scene: decides which lines it draws (sticky per line), plans and draws them, owns the sprite cache. */
+/**
+ * The canvas path of a scene: decides which lines it draws (sticky per line), plans and draws them, owns the sprite cache.
+ * The frame path is a lookup and a draw: it never builds a sprite, never measures text and never waits. What is not ready is
+ * reported (`onMissing`) to the look-ahead, which builds it first; the frame is then held or drawn without it (`Policy`).
+ */
 export class CanvasPath {
   private readonly layer: CanvasLayer;
   readonly cache: SpriteCache<Sprite>;
@@ -40,10 +42,12 @@ export class CanvasPath {
   private readonly shedding = new ShedController();
   /** Share of recent display frames that came late while playing (null = not playing: full quality). */
   load: number | null = null;
-  /** Items of the last frame that were drawn reduced or not at all because the frame ran out of build time. */
-  deferred = 0;
-  /** Ms since a sprite was handed to a worker (null: it is not on its way). Set by the look-ahead that owns the workers. */
-  pending: (key: string) => number | null = () => null;
+  /** Items of the last frame whose sprites were not ready, items missed in all frames, frames held back. */
+  missing = 0;
+  missedTotal = 0;
+  held = 0;
+  /** Set by the look-ahead: the items a frame needed and did not find. */
+  onMissing: (items: DrawItem[]) => void = () => undefined;
 
   constructor(overlay: Overlay, readonly mode: () => RenderMode, capBytes: number) {
     this.layer = new CanvasLayer(overlay);
@@ -81,10 +85,9 @@ export class CanvasPath {
     return out;
   }
 
-  /** Draws the canvas lines of this frame; `seq` is the whole visible sequence, so DOM lines split the canvas lines into runs. */
-  render(seq: readonly Routed[], env: LineEnv): void {
+  /** Draws the canvas lines of this frame; `seq` is the whole visible sequence, so DOM lines split the canvas lines into runs. True when the frame is complete (every sprite was ready and it was drawn). */
+  render(seq: readonly Routed[], env: LineEnv, policy: Policy = 'partial'): boolean {
     const f = env.devScale ?? 1;
-    this.deferred = 0;
     // Sprites carry their scale in the key; the first render must keep what the look-ahead built before any canvas line was on screen.
     if (this.scale !== 0 && f !== this.scale) this.cache.clear();
     this.scale = f;
@@ -101,59 +104,39 @@ export class CanvasPath {
       open.items.push(it);
     }
     this.runs = runs.length;
-    const t0 = performance.now();
+    const { resolved, missing } = this.resolve(runs);
+    this.missing = missing.length;
+    this.missedTotal += missing.length;
+    if (missing.length) this.onMissing(missing);
+    if (missing.length && policy === 'hold') { this.held++; return false; }
     if (this.load === null) this.shedding.reset();
     else this.shedding.update(this.load, this.layer.demandPx, this.layer.stagePx, this.layer.compositeMs);
-    this.layer.draw(runs, (it) => this.sprite(it, t0), this.shedding.budget);
+    this.layer.draw(runs, resolved, this.shedding.budget);
+    return missing.length === 0;
   }
 
-  /** Sprite of an item; past the build budget the blur is dropped (sharp sprites are far cheaper to build). */
-  private sprite(it: DrawItem, t0: number): Sprite | Baked | null {
-    const sp = this.base(it, t0);
-    const c = sp ? bakeable(it) : null;
-    // Past the build budget the clip is applied on the draw instead of baking (same pixels, no build time).
-    if (!sp || !c || performance.now() - t0 >= BUILD_BUDGET_MS) return sp;
-    const key = bakeKey(it, c);
-    const hit = this.cache.peek(key);
-    if (hit !== undefined) return hit as Baked | null;
-    return this.cache.getOrBuild(key, () => bake(it, sp, c)) as Baked | null;
+  /** The bitmaps of a frame: looked up, never built. The clip-cut version of a sprite is used when the look-ahead made it (the same pixels as clipping on the draw). */
+  private resolve(runs: Run[]): { resolved: Resolved; missing: DrawItem[] } {
+    const missing: DrawItem[] = [];
+    const resolved = runs.map((run) => run.items.map((it): Sprite | Baked | null => {
+      if (it.alpha < 0.004) return null;
+      const sp = this.cache.lookup(it.key);
+      if (sp === undefined) { missing.push(it); return null; }
+      if (!sp) { this.skipped++; return null; }
+      const c = bakeable(it);
+      return (c && (this.cache.peek(bakeKey(it, c)) as Baked | null | undefined)) || sp;
+    }));
+    return { resolved, missing };
   }
 
-  private base(it: DrawItem, t0: number): Sprite | null {
-    const hit = this.cache.peek(it.key);
-    if (hit !== undefined) { this.cache.hits++; if (!hit) this.skipped++; return hit; }
-    // A worker is already building it: draw nothing for now (the frame is marked reduced and drawn again), never build it twice or block on it.
-    const wait = this.pending(it.key);
-    if (wait !== null && wait < PENDING_WAIT_MS) { this.deferred++; return null; }
-    const spent = performance.now() - t0;
-    if (spent < BUILD_BUDGET_MS) return this.build(it.key, it.spec);
-    // Far over budget (a burst of new events): draw the rest next frame instead of freezing this one; counted in `skipped`.
-    if (spent >= 2 * BUILD_BUDGET_MS) { this.skipped++; this.deferred++; return null; }
-    const sharp: SpriteSpec = { ...it.spec, plates: it.spec.plates.map((p) => ({ ...p, blur: 0 })) };
-    if (sharp.plates.some((p, i) => p.blur !== it.spec.plates[i].blur)) { this.dropped.blur++; this.deferred++; }
-    return this.build(`${it.key}#sharp`, sharp);
-  }
-
-  build(key: string, spec: SpriteSpec): Sprite | null {
-    const s = this.cache.getOrBuild(key, () => this.construct(spec));
-    if (!s) this.skipped++;
-    return s;
-  }
-
-  /** Builds a sprite; plain single-colour ones are tinted from a shared white mask kept in the cache (see `construct.ts`). */
-  private construct(spec: SpriteSpec): Sprite | null {
-    return construct(spec, { peek: (k) => this.cache.peek(k), store: (k, build) => this.cache.store(k, build, false) });
-  }
-
-  /** Lookahead build: not counted as a draw-time miss. */
-  prebuild(key: string, spec: SpriteSpec): void {
-    this.cache.store(key, () => this.construct(spec));
-  }
+  /** Look-ahead build (page thread): not counted as a draw-time miss. */
+  prebuild(key: string, spec: SpriteSpec): void { buildAhead(this.cache, key, spec); }
 
   stats(): PathStats {
     return {
       sprites: this.cache.size, spriteBytes: this.cache.bytes, spriteHits: this.cache.hits, spriteMisses: this.cache.misses, prewarmed: this.cache.prewarmed,
       evictions: this.cache.evictions, detailDropped: this.dropped.blur, skipped: this.skipped, runs: this.runs, runsMerged: this.merged, drawn: this.layer.drawn, shed: this.layer.shed, shedBudgetMpx: this.shedding.budget < Infinity ? Math.round(this.shedding.budget / 1e4) / 100 : 0, fillMpx: Math.round(this.layer.fillPx / 1e4) / 100,
+      missing: this.missing, missedTotal: this.missedTotal, held: this.held, compositeMs: Math.round(this.layer.compositeMs * 100) / 100,
     };
   }
 
@@ -162,7 +145,7 @@ export class CanvasPath {
     this.cache.clear();
     this.cache.sweep();
     this.modes.clear();
-    this.layer.draw([], () => null);
+    this.layer.draw([], []);
   }
 
   destroy(): void {

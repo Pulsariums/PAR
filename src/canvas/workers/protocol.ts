@@ -3,7 +3,8 @@ import type { SpriteSpec } from '../types';
 /** A font face the worker registers (`FontFace` from the bytes the main thread already loaded). */
 export interface FaceData { key: string; family: string; weight: number; italic: boolean; data: ArrayBuffer }
 
-export interface Job { id: number; spec: SpriteSpec }
+/** `prio`: the worker builds the lowest first (the page sends the time the sprite is first drawn; a sprite a frame is waiting for goes before everything). */
+export interface Job { id: number; spec: SpriteSpec; prio: number }
 
 export interface Built {
   id: number;
@@ -16,7 +17,10 @@ export interface Built {
 export type ToSprite =
   | { op: 'init' }
   | { op: 'fonts'; add: FaceData[]; remove: string[] }
-  | { op: 'build'; gen: number; jobs: Job[] };
+  /** Jobs join the worker's own queue, built by priority in slices between messages. */
+  | { op: 'build'; gen: number; jobs: Job[] }
+  /** Queued jobs of an older generation are not wanted (a seek or a font change): drop them without building. */
+  | { op: 'drop'; gen: number };
 
 /** Sprite worker -> main thread. */
 export type FromSprite =
@@ -24,4 +28,6 @@ export type FromSprite =
   | { op: 'ready'; ok: boolean; blur: boolean }
   /** Faces (keys) the worker could not register: sprites with those families would be drawn in a fallback font, so the pool stops taking them. */
   | { op: 'faces'; failed: string[] }
-  | { op: 'built'; gen: number; items: Built[] };
+  | { op: 'built'; gen: number; items: Built[] }
+  /** `n` queued jobs were discarded unbuilt (they belonged to an older generation). */
+  | { op: 'dropped'; n: number };
