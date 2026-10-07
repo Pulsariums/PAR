@@ -3,6 +3,7 @@ import type { ClipShape } from '../render/clipCss';
 import type { Overlay } from '../render/Overlay';
 
 import type { Baked } from './bake';
+import { pickShed, type Candidate } from './shed';
 import type { Sprite } from './raster';
 import type { DrawItem } from './types';
 
@@ -14,6 +15,7 @@ export interface Run {
 }
 
 const DEG = Math.PI / 180;
+const isBaked = (sp: Sprite | Baked): sp is Baked => 'x' in sp;
 const MAX_PATHS = 1024;
 
 interface Slot {
@@ -84,10 +86,20 @@ export class CanvasLayer {
     return p;
   }
 
-  /** Draws the runs (canvas i = run i) and frees the canvases no run needs. `sprite` resolves an item's bitmap (null = skip it). */
-  draw(runs: Run[], sprite: (it: DrawItem) => Sprite | Baked | null): void {
+  /** Items of the last frame that were left out to meet the pixel budget (see `shed.ts`), and the ids of the ones left out last frame. */
+  shed = 0;
+  private shedIds = new Set<string>();
+
+  /**
+   * Draws the runs (canvas i = run i) and frees the canvases no run needs. `sprite` resolves an item's bitmap (null = skip it).
+   * `budget` caps the pixels filled in one frame: past it the least visible items are left out (Infinity = draw everything).
+   */
+  draw(runs: Run[], sprite: (it: DrawItem) => Sprite | Baked | null, budget = Infinity): void {
     this.drawn = 0;
     this.fillPx = 0;
+    this.shed = 0;
+    const resolved = runs.map((run) => run.items.map((it) => (it.alpha < 0.004 ? null : sprite(it))));
+    const left = this.leave(runs, resolved, budget);
     runs.forEach((run, i) => {
       const s = this.slot(i);
       if (!s) return;
@@ -101,21 +113,46 @@ export class CanvasLayer {
         this.overlay.insert(s.el, run.layer, run.index);
         s.attached = true;
       }
-      for (const it of run.items) {
-        if (it.alpha < 0.004) continue;
-        const sp = sprite(it);
-        if (!sp) continue;
+      run.items.forEach((it, k) => {
+        const sp = resolved[i][k];
+        if (!sp || left.has(it)) return;
         this.drawn++;
         this.fillPx += sp.w * sp.h;
-        if ('x' in sp) this.baked(s.ctx, it, sp);
+        if (isBaked(sp)) this.baked(s.ctx, it, sp);
         else this.item(s.ctx, it, sp);
-      }
+      });
     });
     for (let i = runs.length; i < this.slots.length; i++) {
       const s = this.slots[i];
       if (s.dirty) { s.ctx.setTransform(1, 0, 0, 1, 0, 0); s.ctx.clearRect(0, 0, s.el.width, s.el.height); s.dirty = false; }
       if (s.attached) { s.el.remove(); s.attached = false; delete s.el.dataset.parRun; }
     }
+  }
+
+  /** Backing-store pixels of one canvas (the stage). */
+  get stagePx(): number { return this.size.w * this.size.h; }
+
+  /** Pixels the frame would fill with everything drawn (what the budget is compared with). */
+  demandPx = 0;
+
+  /** The items to leave out for `budget` (none when it fits). */
+  private leave(runs: Run[], resolved: Array<Array<Sprite | Baked | null>>, budget: number): Set<DrawItem> {
+    const cand: Candidate[] = [];
+    const items: DrawItem[] = [];
+    runs.forEach((run, i) => run.items.forEach((it, k) => {
+      const sp = resolved[i][k];
+      if (!sp) return;
+      cand.push({ area: sp.w * sp.h, alpha: it.alpha, wasShed: this.shedIds.has(it.id) });
+      items.push(it);
+    }));
+    this.demandPx = cand.reduce((n, c) => n + c.area, 0);
+    const picked = pickShed(cand, budget);
+    const out = new Set<DrawItem>();
+    const ids = new Set<string>();
+    picked.forEach((j) => { out.add(items[j]); ids.add(items[j].id); });
+    this.shedIds = ids;
+    this.shed = out.size;
+    return out;
   }
 
   private baked(ctx: CanvasRenderingContext2D, it: DrawItem, sp: Baked): void {

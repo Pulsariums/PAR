@@ -82,6 +82,9 @@ export interface CanvasStats {
   /** Items drawn and device pixels covered (megapixels, sprite rectangles incl. transparent margin) in the last frame. */
   drawn: number;
   fillMpx: number;
+  /** Items left out of the last frame to meet the pixel budget, and the budget in megapixels (0 = no limit). */
+  shed: number;
+  shedBudgetMpx: number;
   /** Runs beyond the canvas pool size that were merged into the last one (z-order approximated). */
   runsMerged: number;
 }

@@ -4,6 +4,7 @@ import type { Overlay } from '../render/Overlay';
 
 import { bake, bakeable, bakeKey, type Baked } from './bake';
 import { CanvasLayer, type Run } from './CanvasLayer';
+import { ShedController } from './shed';
 import { analyzeLine, chooseMode, type Complexity } from './eligibility';
 import type { Dropped } from './paint';
 import { planLine } from './plan';
@@ -34,6 +35,9 @@ export class CanvasPath {
   private merged = 0;
   private runs = 0;
   private busyUntil = -1;
+  private readonly shedding = new ShedController();
+  /** Share of recent display frames that came late while playing (null = not playing: full quality). */
+  load: number | null = null;
   /** Items of the last frame that were drawn reduced or not at all because the frame ran out of build time. */
   deferred = 0;
 
@@ -91,7 +95,9 @@ export class CanvasPath {
     }
     this.runs = runs.length;
     const t0 = performance.now();
-    this.layer.draw(runs, (it) => this.sprite(it, t0));
+    if (this.load === null) this.shedding.reset();
+    else this.shedding.update(this.load, this.layer.demandPx, this.layer.stagePx);
+    this.layer.draw(runs, (it) => this.sprite(it, t0), this.shedding.budget);
   }
 
   /** Sprite of an item; past the build budget the blur is dropped (sharp sprites are far cheaper to build). */
@@ -144,7 +150,7 @@ export class CanvasPath {
   stats(): CanvasStats {
     return {
       sprites: this.cache.size, spriteBytes: this.cache.bytes, spriteHits: this.cache.hits, spriteMisses: this.cache.misses, prewarmed: this.cache.prewarmed,
-      evictions: this.cache.evictions, detailDropped: this.dropped.blur, skipped: this.skipped, runs: this.runs, runsMerged: this.merged, drawn: this.layer.drawn, fillMpx: Math.round(this.layer.fillPx / 1e4) / 100,
+      evictions: this.cache.evictions, detailDropped: this.dropped.blur, skipped: this.skipped, runs: this.runs, runsMerged: this.merged, drawn: this.layer.drawn, shed: this.layer.shed, shedBudgetMpx: this.shedding.budget < Infinity ? Math.round(this.shedding.budget / 1e4) / 100 : 0, fillMpx: Math.round(this.layer.fillPx / 1e4) / 100,
     };
   }
 

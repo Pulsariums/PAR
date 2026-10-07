@@ -96,6 +96,14 @@ Steady state improved as well (`run.mjs`, 72 frames at 24 fps then 5 s of free p
 
 What is *not* verified: a GPU. Software raster is bound by fill (a 1000-sprite 72x72 micro-benchmark costs 80-90 ms whether drawn with Canvas 2D or instanced WebGL in this rig, recording is 2-3 ms), so this pass reduces the work (pixels, builds, DOM) rather than the cost of a draw call; on a GPU the per-frame cost should be lower still, but the stutter you see there is most likely the builds, which this pass addresses. `getMetrics().render` now also reports `drawn` and `fillMpx` of the last frame (shown in the Studio Metrics panel) to read it off a real machine.
 
+## Load shedding (third pass)
+
+Sustained overload is handled by feedback, not by hope. `LoadMeter` runs its own rAF probe while the loop runs (the render loop may be driven by video frame callbacks, whose spacing says nothing about the main thread) and reports the share of the last 30 display frames that came more than 1.5 frames late; the display frame is the 10th percentile of what it saw, so a machine that is always slow cannot hide behind its own median. `ShedController` turns that into a pixel budget per frame: nothing is limited until frames come late; then the budget is cut to 85 % of what the last frame filled (every 6 renders while the lateness lasts, never below a quarter of the stage) and grows 8 % per step when frames are on time again until it switches off. Over budget, `pickShed` leaves out the items with the lowest weight `alpha / (1 + area / 4000)` first (faint and large: glows and blur margins), with a bias that keeps an item out once it was left out, so nothing flickers. Paused video, a stopped loop and a machine that keeps up never shed. Counted: `getMetrics().render.shed` (items left out of the last frame) and `shedBudgetMpx` (0 = no limit), shown in the Studio Metrics panel.
+
+Result on the real file, 22.6-25 s window (the one with sustained load): gap p99 94 -> 44 ms, frames over 50 ms 5 -> 1, 233 faint items left out in 60 frames. The other two windows never trigger it.
+
+What it cannot do: a single frame that is expensive *by itself* (the first frame of a group of 1,000 px glows, 5+ Mpx of fill) is late before anything can be measured; feedback only protects the frames after it. Those remain (one 90-120 ms frame in 4 s in the software rig, mostly in the first second after playback starts, when nothing is built yet).
+
 ## Caveats
 
 Software Chromium only; fonts of the sample are not installed, so both paths use the same fallback font; the first draw of a never-seen heavy moment after a seek still shows the scene over a few frames (sprites are built under the budget), after a cold decode of 0.3-0.6 s in the Worker.

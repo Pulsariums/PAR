@@ -9,6 +9,7 @@ import type { ParsedScript } from '../types/script';
 
 import { FontApi } from './FontApi';
 import { FrameStats } from './FrameStats';
+import { LoadMeter } from './LoadMeter';
 import { Refiner } from './Refiner';
 import { observeSize } from './observe';
 import { computeStage, deviceScale } from './stage';
@@ -38,6 +39,7 @@ export class PARRenderer extends FontApi {
   private lastRaw = 0;
   private destroyed = false;
   private readonly frames = new FrameStats();
+  private readonly load = new LoadMeter();
   private readonly refiner = new Refiner(() => this.draw(this.now(), true));
   constructor(options: PAROptions) {
     super();
@@ -148,6 +150,7 @@ export class PARRenderer extends FontApi {
 
   private unmount(): void {
     this.scheduler.stop();
+    this.load.stop();
     this.refiner.cancel();
     this.teardown.forEach((undo) => undo());
     this.teardown = [];
@@ -158,8 +161,8 @@ export class PARRenderer extends FontApi {
   /** Runs the loop only while something can change: a playing video, or a free-running custom clock. */
   private syncLoop(): void {
     const { video, clock } = this.opts;
-    if (video ? isPlaying(video) : clock !== null) this.scheduler.start();
-    else this.scheduler.stop();
+    if (video ? isPlaying(video) : clock !== null) { this.scheduler.start(); this.load.start(); }
+    else { this.scheduler.stop(); this.load.stop(); }
   }
 
   private now(): number { return this.opts.clock ? this.opts.clock() : this.opts.video ? this.opts.video.currentTime : this.lastRaw; }
@@ -179,6 +182,7 @@ export class PARRenderer extends FontApi {
     this.host.update(ms);
     const forced = force || this.forceNext;
     if (!forced && ms === this.lastMs) return;
+    this.scene.setLoad(this.scheduler.isRunning ? this.load.late() : null);
     this.frames.time(() => this.scene.render(ms, this.env, forced));
     if (this.scene.needsRefine) this.refiner.request();
     [this.forceNext, this.lastMs] = [false, ms];

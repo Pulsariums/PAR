@@ -160,6 +160,9 @@ export interface RenderMetrics {
   /** Canvas items drawn in the last frame and the device pixels their rectangles covered (megapixels). */
   drawn: number;
   fillMpx: number;
+  /** Items left out of the last frame because frames were running late (the least visible first), and the pixel budget in megapixels (0 = no limit). */
+  shed: number;
+  shedBudgetMpx: number;
   sprites: number;
   spriteBytes: number;
   spriteHits: number;

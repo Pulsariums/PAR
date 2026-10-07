@@ -40,12 +40,12 @@ const r = await page.evaluate(async ({ from, to, fps, mode }) => {
   const rows = []; let last = s0, prev = p.getMetrics().render;
   while (from + (performance.now() - s0) / 1000 < to) {
     await raf(); const now = performance.now(); const m = p.getMetrics(); const x = m.render;
-    rows.push({ t: from + (now - s0) / 1000, gap: now - last, act: m.activeLines, drawn: x.drawn, dSkip: x.skipped - prev.skipped, dDrop: x.detailDropped - prev.detailDropped, dMiss: x.spriteMisses - prev.spriteMisses, dWarm: x.prewarmed - prev.prewarmed });
+    rows.push({ t: from + (now - s0) / 1000, gap: now - last, act: m.activeLines, drawn: x.drawn, fill: x.fillMpx, shed: x.shed, budget: x.shedBudgetMpx, dSkip: x.skipped - prev.skipped, dDrop: x.detailDropped - prev.detailDropped, dMiss: x.spriteMisses - prev.spriteMisses, dWarm: x.prewarmed - prev.prewarmed });
     last = now; prev = x;
   }
   return rows;
 }, { from, to, fps, mode });
-if (process.argv.includes('--rows')) for (const x of r) if (x.dMiss > 8 || x.dSkip > 0 || x.gap > 45) console.log(`  t=${x.t.toFixed(2)} gap=${x.gap.toFixed(0)} act=${x.act} drawn=${x.drawn} miss=${x.dMiss} skip=${x.dSkip} warm=${x.dWarm}`);
+if (process.argv.includes('--rows')) for (const x of r) if (x.dMiss > 8 || x.dSkip > 0 || x.gap > 45 || x.shed > 0) console.log(`  t=${x.t.toFixed(2)} gap=${x.gap.toFixed(0)} act=${x.act} drawn=${x.drawn} fill=${x.fill}Mpx shed=${x.shed}/${x.budget} miss=${x.dMiss} skip=${x.dSkip} warm=${x.dWarm}`);
 const q = (a, p) => a.slice().sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))];
 const gaps = r.map((x) => x.gap);
 const peak = r.reduce((b, x) => (x.act > b.act ? x : b), r[0]);
@@ -54,6 +54,6 @@ console.log(JSON.stringify({
   from, to, frames: r.length, gapP50: +q(gaps, .5).toFixed(1), gapP95: +q(gaps, .95).toFixed(1), gapP99: +q(gaps, .99).toFixed(1), gapMax: +Math.max(...gaps).toFixed(1),
   over50: gaps.filter((g) => g > 50).length, over100: gaps.filter((g) => g > 100).length,
   peakActive: peak.act, peakAt: +peak.t.toFixed(2), skippedTotal: r.reduce((a, x) => a + x.dSkip, 0), framesWithSkips: skipFrames.length,
-  worstSkip: Math.max(0, ...r.map((x) => x.dSkip)), droppedBlurTotal: r.reduce((a, x) => a + x.dDrop, 0), missTotal: r.reduce((a, x) => a + x.dMiss, 0), warmTotal: r.reduce((a, x) => a + x.dWarm, 0),
+  worstSkip: Math.max(0, ...r.map((x) => x.dSkip)), shedFrames: r.filter((x) => x.shed > 0).length, shedItems: r.reduce((a, x) => a + x.shed, 0), droppedBlurTotal: r.reduce((a, x) => a + x.dDrop, 0), missTotal: r.reduce((a, x) => a + x.dMiss, 0), warmTotal: r.reduce((a, x) => a + x.dWarm, 0),
 }));
 await browser.close(); srv.close();

@@ -50,6 +50,7 @@ export const studioPanelsEn = {
   'st.m.sprites': 'Sprite cache',
   'st.m.cache': 'Cache',
   'st.m.drawn': 'Drawn last frame (items / pixels)',
+  'st.m.shed': 'Left out under load',
   'st.m.dropped': 'Detail dropped / skipped',
   'st.m.frameMs': 'Frame time p50 / p95',
   'st.heavy': 'Heavy scene: up to {n} lines at once. Particles are drawn on a canvas. If playback stutters, lower the render FPS (Advanced) or close other tabs.',

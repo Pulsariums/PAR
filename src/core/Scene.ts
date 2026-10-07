@@ -57,6 +57,9 @@ export class Scene {
 
   private canvasLines = 0;
 
+  /** Share of recent display frames that were late while playing, null when not playing (see `LoadMeter`). */
+  setLoad(late: number | null): void { this.canvas.load = late; }
+
   /** The last frame shipped reduced (see `Refiner`): draw it again. */
   get needsRefine(): boolean { return this.canvas.deferred > 0; }
 
