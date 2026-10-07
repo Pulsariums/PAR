@@ -92,6 +92,8 @@ The table above is a steady-state view. Playing *into* a burst (`tools/bench/bur
 
 Reading: the burst frames themselves (1,000+ events appearing within a few frames) are now clean in the first and second windows: nothing deferred, no frame of the burst over 60 ms. The longest gaps that remain are cold ones: a single frame in the first second after playback starts (nothing built yet, 60-70 sprites at once) or a group of large glyphs that appears right after a burst, before the pump got to it. Seeking into a burst is cold by definition: the sprites it needs are built at that frame under the 8/16 ms budget and finished on the next turns. Seek latency and the storm check are unchanged within run noise (`seek.mjs`: 0 wrong final frames, single seeks 237-465 ms cold).
 
+Steady state improved as well (`run.mjs`, 72 frames at 24 fps then 5 s of free play, same rig, before -> after): draw call p50 7.3 -> 3.4 ms at 52.6 s and 10.9 -> 3.9 ms at 23.4 s (the per-frame re-baking is gone), step p95 128 -> 113 ms and 133 -> 115 ms, free-play 52.0 -> 55.2 fps and 47.2 -> 50.6 fps, rAF gap p95 38.6 -> 32.8 ms and 49.5 -> 35.1 ms.
+
 What is *not* verified: a GPU. Software raster is bound by fill (a 1000-sprite 72x72 micro-benchmark costs 80-90 ms whether drawn with Canvas 2D or instanced WebGL in this rig, recording is 2-3 ms), so this pass reduces the work (pixels, builds, DOM) rather than the cost of a draw call; on a GPU the per-frame cost should be lower still, but the stutter you see there is most likely the builds, which this pass addresses. `getMetrics().render` now also reports `drawn` and `fillMpx` of the last frame (shown in the Studio Metrics panel) to read it off a real machine.
 
 ## Caveats
