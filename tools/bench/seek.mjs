@@ -4,9 +4,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-const require = createRequire('/opt/node22/lib/node_modules/');
-const { chromium } = require('playwright');
+import { chromium } from './pw.mjs';
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1] ?? true; };
 const dist = path.resolve(arg('dist', 'dist')), parFile = path.resolve(arg('par', ''));
 const N = +arg('n', 30), gap = +arg('gap', 50), fps = +arg('fps', 24), mode = arg('mode', 'auto-default'), useWorker = process.argv.includes('--worker'), rounds = +arg('rounds', 3);

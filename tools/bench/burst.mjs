@@ -3,9 +3,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-const require = createRequire('/opt/node22/lib/node_modules/');
-const { chromium } = require('playwright');
+import { chromium } from './pw.mjs';
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1] ?? true; };
 const dist = path.resolve(arg('dist', 'dist')), par = path.resolve(arg('par', ''));
 const from = +arg('from', 7), to = +arg('to', 10.5), fps = +arg('fps', 24), mode = arg('mode', 'auto-default');

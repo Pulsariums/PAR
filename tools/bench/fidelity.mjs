@@ -3,9 +3,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-const require = createRequire('/opt/node22/lib/node_modules/');
-const { chromium } = require('playwright');
+import { chromium } from './pw.mjs';
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1] ?? true; };
 const dist = path.resolve(arg('dist', 'dist')), fontFile = path.resolve(arg('font', ''));
 const save = arg('save', '');

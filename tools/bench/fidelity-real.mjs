@@ -2,9 +2,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-const require = createRequire('/opt/node22/lib/node_modules/');
-const { chromium } = require('playwright');
+import { chromium } from './pw.mjs';
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1] ?? true; };
 const dist = path.resolve(arg('dist', 'dist')), parFile = path.resolve(arg('par', ''));
 const times = String(arg('times', '9.3,23.6,52.9,5.97,700.3')).split(',').map(Number), save = arg('save', '');
