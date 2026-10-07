@@ -36,7 +36,7 @@ const bytes = (r: () => number, n: number): Uint8Array => Uint8Array.from({ leng
 
 const outcome = async (f: () => Promise<Uint8Array> | Uint8Array): Promise<string> => {
   try {
-    return Buffer.from(await f()).toString('base64');
+    return [...(await f())].join(',');
   } catch (e) {
     return `ERR ${(e as Error).message}`;
   }
