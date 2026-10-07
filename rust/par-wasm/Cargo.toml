@@ -1,0 +1,21 @@
+[package]
+name = "par-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Pulsar ASS Renderer: pure-compute kernels (XPAR entropy coder) compiled to WebAssembly. no_std, no dependencies, plain extern C ABI."
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+overflow-checks = false

@@ -81,6 +81,8 @@
     "xpar": "node tools/xpar/run.mjs cli",
     "xpar:bench": "node tools/xpar/run.mjs bench",
     "xpar:gen": "node tools/xpar/run.mjs gen-bench",
+    "build:wasm": "node tools/xpar/wasm-build.mjs",
+    "check:wasm": "node tools/xpar/wasm-build.mjs --check",
     "build:site": "vite build --config vite.site.config.ts",
     "preview:site": "vite preview --config vite.site.config.ts --port 4173"
   },

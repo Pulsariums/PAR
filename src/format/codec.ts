@@ -1,5 +1,6 @@
 import { fail } from './errors';
-import { rcDecode, rcDecodeFlat, rcEncode, rcEncodeFlat } from './rc';
+import { rcDecodeFlat, rcEncodeFlat } from './rc';
+import { rcDecodeFast, rcEncodeFast } from './rcFast';
 
 /** Entropy coders. The id is stored per block, so a file may mix them and old readers fail with a clear error. */
 export const CODEC_STORED = 0;
@@ -58,7 +59,7 @@ export const inflateRaw = async (data: Uint8Array, rawLen: number): Promise<Uint
 export const encodeBlock = async (raw: Uint8Array, codec: number): Promise<Uint8Array> => {
   if (codec === CODEC_STORED) return raw;
   if (codec === CODEC_DEFLATE) return deflateRaw(raw);
-  if (codec === CODEC_RC) return rcEncode(raw);
+  if (codec === CODEC_RC) return rcEncodeFast(raw);
   if (codec === CODEC_RCF) return rcEncodeFlat(raw);
   return fail('UNSUPPORTED', `unknown codec ${codec}`);
 };
@@ -70,7 +71,7 @@ export const decodeBlock = async (data: Uint8Array, codec: number, rawLen: numbe
     return data;
   }
   if (codec === CODEC_DEFLATE) return inflateRaw(data, rawLen);
-  if (codec === CODEC_RC) return rcDecode(data, rawLen);
+  if (codec === CODEC_RC) return rcDecodeFast(data, rawLen);
   if (codec === CODEC_RCF) return rcDecodeFlat(data, rawLen);
   return fail('UNSUPPORTED', `unknown codec ${codec}`);
 };

@@ -8,15 +8,15 @@ import { SymbolCoder } from './rcSym';
  * its key (field kind, tag id, argument index) and the previous values of that stream; numeric streams are coded
  * as numbers (zero flag, bit length, mantissa), the string stream as bytes. Context-mixed adaptive binary range coder.
  */
-const KEY_STR = 4;
+export const KEY_STR = 4;
 
-interface Layout {
+export interface Layout {
   keys: number[];
   lens: number[];
   head: number;
 }
 
-const readTable = (r: ByteReader): { keys: number[]; lens: number[]; total: number } => {
+export const readTable = (r: ByteReader): { keys: number[]; lens: number[]; total: number } => {
   const n = r.uv();
   if (n > LIMITS.maxStreams) fail('LIMIT', 'too many streams in a block');
   const keys: number[] = [];
@@ -31,7 +31,7 @@ const readTable = (r: ByteReader): { keys: number[]; lens: number[]; total: numb
   return { keys, lens, total };
 };
 
-const readLayout = (raw: Uint8Array): Layout => {
+export const readLayout = (raw: Uint8Array): Layout => {
   const r = new ByteReader(raw);
   const t = readTable(r);
   if (t.total !== r.left) fail('CORRUPT', 'stream table does not match the block size');
@@ -90,12 +90,19 @@ export const rcEncode = (raw: Uint8Array): Uint8Array => {
   return out;
 };
 
-export const rcDecode = (data: Uint8Array, rawLen: number): Uint8Array => {
+/** Validates the stream table of a coded block against the declared raw size. */
+export const decodeHead = (data: Uint8Array, rawLen: number): { keys: number[]; lens: number[]; head: number } => {
   if (rawLen > LIMITS.maxChunkRaw) fail('LIMIT', 'block too large');
   const r = new ByteReader(data);
   const t = readTable(r);
   const head = r.pos;
   if (head + t.total !== rawLen) fail('CORRUPT', 'stream table does not match the declared size');
+  return { keys: t.keys, lens: t.lens, head };
+};
+
+export const rcDecode = (data: Uint8Array, rawLen: number): Uint8Array => {
+  const { keys, lens, head } = decodeHead(data, rawLen);
+  const t = { keys, lens };
   const out = new Uint8Array(rawLen);
   out.set(data.subarray(0, head));
   const sc = new SymbolCoder(rawLen, null, new Decoder(data, head));

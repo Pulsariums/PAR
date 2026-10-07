@@ -2,13 +2,7 @@
  * Binary range coder (carry-less, 32 bit, 12 bit probabilities) and a three-input logistic mixing predictor.
  * The caller supplies three context hashes per symbol and a node id per binary decision.
  */
-const STRETCH = new Float32Array(4096);
-const SQUASH = new Float32Array(4096);
-for (let i = 0; i < 4096; i++) {
-  const p = (i + 0.5) / 4096;
-  STRETCH[i] = Math.log(p / (1 - p));
-  SQUASH[i] = 1 / (1 + Math.exp(-((i - 2048) / 170.667)));
-}
+import { SQUASH, STRETCH } from './rcTables';
 
 const MAX_BITS = 22;
 const T0 = new Uint16Array(1 << MAX_BITS);

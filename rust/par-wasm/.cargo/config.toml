@@ -1,0 +1,6 @@
+[build]
+target = "wasm32-unknown-unknown"
+
+[target.wasm32-unknown-unknown]
+# Baseline WebAssembly 1.0 (no bulk memory, no reference types): runs in every engine that has WebAssembly at all.
+rustflags = ["-C", "target-cpu=mvp", "-C", "target-feature=+nontrapping-fptoint,+sign-ext", "-C", "link-arg=--export=__heap_base", "-C", "link-arg=-zstack-size=65536"]

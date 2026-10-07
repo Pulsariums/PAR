@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import { decodeChunk } from '../../src/format/chunk';
 import { decodeBlock } from '../../src/format/codec';
 import { openXpar } from '../../src/format';
+import { setWasmEnabled } from '../../src/wasm/load';
 
 /** `prof <file.xpar>`: split decode time into entropy decoding vs. structure decoding. */
+if (process.env.NO_WASM) setWasmEnabled(false);
 const x = new Uint8Array(readFileSync(process.argv[2]));
 const f = await openXpar(x);
 let tEnt = 0, tStr = 0, raw = 0, ev = 0;

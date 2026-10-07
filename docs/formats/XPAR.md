@@ -169,7 +169,7 @@ worker and posted to the main thread.
   decode of such a file needs the chunks that overlap in line numbers in memory at once (worst case: the whole file).
 * Lines whose `Format:` differs from the standard V4+ layout are stored verbatim (exact, no modelling gain).
 * Chunks restart their statistics: smaller chunks seek faster and compress worse (measured below).
-* Decoding speed is bounded by the entropy coder (see the numbers); `codec: 'deflate'` decodes about 3x faster for
+* Decoding speed is bounded by the entropy coder (see the numbers; a WebAssembly build of it makes decoding about 1.3x faster, see [../wasm.md](../wasm.md)); `codec: 'deflate'` decodes about 3x faster for
   about 10-25 % more bytes.
 * Embedded fonts (`EncodeOptions.fonts`, `xpar encode/par bake --font file|dir`) are **lossless**: whole files, never subset or re-encoded. A font is deflated only when that saves at least 3 % (WOFF, WOFF2 and most CJK fonts are compressed already and stay as they are); `file.fonts[i].read()` returns the original bytes and checks the CRC-32. Identical fonts (name, size, crc) are stored once. `fromXpar` hands the fonts to the player as ordinary `[Fonts]` data, so a converted file plays with its fonts without a second step. `xpar fonts file.xpar [outDir]` lists or extracts them.
 
