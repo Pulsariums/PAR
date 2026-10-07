@@ -11,6 +11,7 @@ import { VideoFpsState } from './fpsState';
 import { initFontShelf } from './fontShelf';
 import { initLayoutPanel } from './layoutPanel';
 import { initEditor } from './editor';
+import { initPerf } from './perf/ui';
 import { initFontLib } from './fontLib';
 import { initFontsReport } from './fontsReport';
 import { initReference } from './reference';
@@ -71,6 +72,7 @@ export const initStudio = (root: HTMLElement): void => {
   });
   const examples = initExamples(sizes, (files, select) => subs.add(files, select), status);
   initEditor(subs, status);
+  initPerf({ player, session: () => session, choices: () => { const a = advanced.values(); return { renderMode: a.renderMode, fps: a.fps, videoFps: a.videoFps }; } });
   // The fonts report and the library manager load when their fold is first opened: the watch view never pays for them.
   const fontsFold = $('stFonts');
   let fontsReport: ReturnType<typeof initFontsReport> | null = null;
