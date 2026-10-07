@@ -27,6 +27,11 @@
       "import": "./dist/source.js",
       "require": "./dist/source.cjs"
     },
+    "./optimize": {
+      "types": "./dist/types/optimize/index.d.ts",
+      "import": "./dist/optimize.js",
+      "require": "./dist/optimize.cjs"
+    },
     "./worker": "./dist/source.worker.js",
     "./global": "./dist/par.global.js",
     "./package.json": "./package.json"
@@ -63,7 +68,7 @@
   "scripts": {
     "dev": "vite --config vite.site.config.ts",
     "build": "npm run build:lib && npm run build:types",
-    "build:lib": "vite build && vite build --config vite.fontlib.config.ts && vite build --config vite.source.config.ts && vite build --config vite.worker.config.ts",
+    "build:lib": "vite build && vite build --config vite.fontlib.config.ts && vite build --config vite.source.config.ts && vite build --config vite.worker.config.ts && vite build --config vite.optimize.config.ts",
     "build:types": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

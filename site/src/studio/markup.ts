@@ -1,6 +1,7 @@
 import { ADVANCED_HTML } from './advanced';
 import { LAYOUT_HTML, METRICS_HTML } from './panelsMarkup';
 import { EDITOR_HTML, FONTS_HTML } from './labPanels';
+import { OPTIMIZE_HTML } from './optimize/ui';
 import { PERF_HTML } from './perf/ui';
 import { REFERENCE_HTML } from './reference';
 import { transportMarkup } from './transportMarkup';
@@ -44,6 +45,6 @@ export const STUDIO_HTML = `
     <div class="st-lab">${ADVANCED_HTML}</div>
     <div id="stFontPrompt" class="fontprompt"></div>
     <p class="hint" data-i18n="st.keys"></p>
-    <div class="st-lab">${EDITOR_HTML}${FONTS_HTML}${METRICS_HTML}${PERF_HTML}${LAYOUT_HTML}${REFERENCE_HTML}</div>
+    <div class="st-lab">${EDITOR_HTML}${OPTIMIZE_HTML}${FONTS_HTML}${METRICS_HTML}${PERF_HTML}${LAYOUT_HTML}${REFERENCE_HTML}</div>
   </div>
 </div>`;
