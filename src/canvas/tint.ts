@@ -1,4 +1,4 @@
-import { specKey } from './paint';
+import { specKey } from './key';
 import { makeSurface, type Sprite } from './raster';
 import type { SpriteSpec } from './types';
 

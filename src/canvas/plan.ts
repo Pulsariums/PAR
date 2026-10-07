@@ -5,7 +5,8 @@ import { clipShape, type ClipShape } from '../render/clipCss';
 import { xRatio } from '../render/textCss';
 import type { LineEnv } from '../render/LineView';
 
-import { buildSpec, specKey, type Dropped } from './paint';
+import { specKey } from './key';
+import { buildSpec, type Dropped } from './paint';
 import type { DrawItem } from './types';
 
 /** Clip regions of a line at `t`: its rect/vector `\clip` (animated by `\t(\clip)`) and the separate vector clip. */

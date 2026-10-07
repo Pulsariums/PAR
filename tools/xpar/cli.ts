@@ -7,12 +7,16 @@ const USAGE = `xpar <command>
   xpar info   <file.xpar|file.par>
   xpar verify <in.ass> [--codec ...]        encode + decode + SHA-256 compare
   par  bake   <in.ass> <out.par> --fps N [--font file|dir]...   lossy render-baked format (see docs/formats/PAR.md)
+  par  analyze  <in.ass> [--json] [--fps N] [--width PX]   bursts, sprite keys, canvas eligibility, unused styles (docs/performance.md)
   par  optimize <in.ass> <out.ass> --fps N [--mode exact|invisible|loose]   frame-by-frame runs -> \move / \t (docs/optimize.md)`;
 
 const [cmd, ...rest] = process.argv.slice(2);
 const table: Record<string, (a: string[]) => Promise<void>> = { encode, decode, info, verify, fonts };
 try {
-  if (cmd === 'optimize') {
+  if (cmd === 'analyze') {
+    const { analyzeCmd } = await import('./cmd-analyze');
+    await analyzeCmd(rest);
+  } else if (cmd === 'optimize') {
     const { optimizeCmd } = await import('./cmd-optimize');
     await optimizeCmd(rest);
   } else if (cmd === 'bake' || cmd === 'par') {

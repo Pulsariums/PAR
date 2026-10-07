@@ -5,32 +5,9 @@ import type { CanvasPath } from './CanvasPath';
 import { AUTO_LOAD } from './eligibility';
 import type { Dropped } from './paint';
 import { planLine } from './plan';
+import { sampleTimes } from './sprites';
 
-/** Most frames of one event that are sampled for sprites. */
-const MAX_SAMPLES = 24;
-
-/**
- * Times (ms since line start) to sample so every sprite variant the event will need is seen: one for static events, the video frame
- * grid otherwise. With `startMs` (the event's absolute start) the samples sit on the frames that will actually be drawn: frames are
- * at whole multiples of `frameMs`, not at the event's start offset, and quantisation boundaries make the two grids differ.
- */
-export const sampleTimes = (line: PreparedLine, frameMs: number, startMs?: number): number[] => {
-  if (!line.animated) return [0];
-  const step = Math.max(frameMs, line.durationMs / MAX_SAMPLES);
-  const out: number[] = [];
-  if (startMs === undefined) {
-    for (let t = 0; t < line.durationMs && out.length < MAX_SAMPLES; t += step) out.push(Math.round(t));
-    return out;
-  }
-  const every = Math.max(1, Math.round(step / frameMs));
-  for (let k = Math.ceil(startMs / frameMs); out.length < MAX_SAMPLES; k += every) {
-    const rel = Math.max(0, Math.round(k * frameMs) - startMs);
-    if (rel >= line.durationMs && out.length > 0) break;
-    out.push(rel);
-    if (rel >= line.durationMs) break;
-  }
-  return out;
-};
+export { sampleTimes };
 
 export interface WarmState {
   /** Events whose sprites are all built. */

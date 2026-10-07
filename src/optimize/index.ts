@@ -2,14 +2,13 @@ import { printEvent, modelFields } from '../format/chunk';
 import { frameMs, frameRate } from '../core/time';
 import { parseScript } from '../parser/ScriptParser';
 
-import { findStyle } from '../parser/StyleParser';
-
-import { buildChains, type TolFor } from './chains';
+import { buildChains } from './chains';
 import { emitText } from './emit';
 import { toOptEvent, type OptEvent } from './events';
+import { tolerances } from './find';
 import { segment } from './fit';
 import { placeCandidates, type Candidate, type Plain, type Spot } from './order';
-import { fitAllowed, geometryOf, type Geo } from './tolerance';
+import { geometryOf, type Geo } from './tolerance';
 import type { OptimizeOptions, OptimizeResult, OptimizeStats } from './types';
 import { worstError } from './verify';
 
@@ -58,9 +57,7 @@ export const optimizeAss = async (input: string, opt: OptimizeOptions): Promise<
 
   const script = parseScript(lines.filter((l) => !isDialogue(l) && !l.startsWith('Comment: ')).join('\n'));
   const rate = frameRate(opt.fps);
-  const styleOf = (e: OptEvent) => findStyle(script.styles, e.m.style);
-  const tolWith = (kinds: OptEvent['kinds'], geo: Geo) => (slot: number, v: number): number => fitAllowed(kinds[slot], v, geo, mode);
-  const tolFor: TolFor = (kinds, sample) => tolWith(kinds, geometryOf([sample], styleOf(sample)));
+  const { styleOf, tolWith, tolFor } = tolerances(script.styles, mode);
   const events: OptEvent[] = [];
   const plain: Plain[] = [];
   const spotOf = (e: OptEvent, geo: Geo): Spot | undefined => {

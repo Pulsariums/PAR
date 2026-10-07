@@ -11,6 +11,7 @@ import { VideoFpsState } from './fpsState';
 import { initFontShelf } from './fontShelf';
 import { initLayoutPanel } from './layoutPanel';
 import { initEditor } from './editor';
+import { initAnalyze } from './analyze/ui';
 import { initOptimize } from './optimize/ui';
 import { initPerf } from './perf/ui';
 import { initFontLib } from './fontLib';
@@ -74,6 +75,7 @@ export const initStudio = (root: HTMLElement): void => {
   const examples = initExamples(sizes, (files, select) => subs.add(files, select), status);
   initEditor(subs, status);
   initOptimize({ session: () => session, add: (f, s) => subs.add(f, s), videoFps: () => fps.detected ?? fps.picked, status });
+  initAnalyze({ session: () => session, videoFps: () => fps.detected ?? fps.picked });
   initPerf({ player, session: () => session, choices: () => { const a = advanced.values(); return { renderMode: a.renderMode, fps: a.fps, videoFps: a.videoFps }; } });
   // The fonts report and the library manager load when their fold is first opened: the watch view never pays for them.
   const fontsFold = $('stFonts');

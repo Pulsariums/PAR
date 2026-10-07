@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { prepareLine, evalStates } from '../src/anim/Prepared';
 import { fadeAlphaAt, positionAt } from '../src/anim/LineAnim';
 import { analyzeLine, AUTO_LOAD, chooseMode } from '../src/canvas/eligibility';
-import { specKey } from '../src/canvas/paint';
+import { specKey } from '../src/canvas/key';
 import { planLine } from '../src/canvas/plan';
 import { qRatio, qSigma, qSize, colourCss } from '../src/canvas/quant';
 import { maskOf } from '../src/canvas/tint';
