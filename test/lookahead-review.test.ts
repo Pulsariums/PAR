@@ -87,6 +87,8 @@ describe('look-ahead and its workers', () => {
   it('a hidden tab does not pump', async () => {
     const k = kit(Array.from({ length: 60 }, (_v, i) => ev(1000 + i * 50, 1800 + i * 50, `\\blur${2 + (i % 5)}\\fs${30 + i}`, `K${i}`)).join(''));
     const la = new Lookahead(k.path, k.lines, () => 'off');
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => (clock += 0.25)); // every look costs time: no slice finishes the plan
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
     la.note(0, k.env, 1);
     const before = k.built.length;
@@ -94,7 +96,7 @@ describe('look-ahead and its workers', () => {
     pump(la);
     expect(k.built.length).toBe(before);
     Object.defineProperty(document, 'hidden', { value: false, configurable: true });
-    pump(la);
+    for (let i = 0; i < 40 && k.built.length === before; i++) pump(la);
     expect(k.built.length).toBeGreaterThan(before);
   });
 
