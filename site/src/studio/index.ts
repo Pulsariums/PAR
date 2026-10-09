@@ -44,13 +44,20 @@ export const initStudio = (root: HTMLElement): void => {
   const player = new Player($('stStage'), $<HTMLCanvasElement>('stCard'), $<HTMLVideoElement>('stVid'), '');
   const fps = new VideoFpsState();
   let session: StudioSession | null = null;
+  let prepared = false;
   let client: SizeClient | null = null;
   const sizes = (): SizeClient => (client ??= new SizeClient());
 
   const layout = initLayoutPanel(player.par, () => exporter.playRes());
   const exporter = initExportPanel($('stExport'), sizes, layout.defaultSize);
   const stats = initStats(player, () => fps.steps);
-  const transport = initTransport(player, () => fps.steps, (to) => stats.seeked(to), () => session?.source ?? null);
+  const transport = initTransport(player, () => fps.steps, (to) => stats.seeked(to), () => session?.source ?? null, async () => {
+    if (prepared) return;
+    status(t('st.preparing'));
+    await player.par.prepare();
+    prepared = true;
+    status(session ? t('st.subReady', { name: session.name, n: session.source.eventCount.toLocaleString('en-US') }) : '');
+  });
   const advanced = initAdvanced(player.par, fps, () => exporter.setVideoFps(fps.option));
   const mode = (): void => { $('stMode').textContent = t(`st.mode.${studioMode(player.hasVideo, session !== null)}`); };
 
@@ -59,6 +66,7 @@ export const initStudio = (root: HTMLElement): void => {
     status,
     session: (s) => {
       session = s;
+      prepared = false;
       if (!s) stats.opened();
       exporter.setSession(s);
       fonts.setUsed(s ? [...s.source.script.styles.values()].map((x) => x.fontName) : []);

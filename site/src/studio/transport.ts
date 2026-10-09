@@ -9,7 +9,7 @@ import { nextStart, prevStart } from './neighbors';
 const editable = (el: EventTarget | null): boolean => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName) && !(el instanceof HTMLInputElement && el.type === 'range'));
 
 /** Timeline controls (ids `st*` of `transportMarkup`): play / pause, scrub, +-1 s / 5 s / 1 frame, previous / next line, speed, loop, keys. Polled from the Studio loop. */
-export const initTransport = (player: Player, videoFps: () => number, onSeek: (t: number) => void, source: () => SubtitleSource | null) => {
+export const initTransport = (player: Player, videoFps: () => number, onSeek: (t: number) => void, source: () => SubtitleSource | null, beforePlay?: () => Promise<void>) => {
   const p = 'st';
   const play = $<HTMLButtonElement>(`${p}Play`);
   const seek = $<HTMLInputElement>(`${p}Seek`);
@@ -32,7 +32,15 @@ export const initTransport = (player: Player, videoFps: () => number, onSeek: (t
     const to = await (dir > 0 ? nextStart(src, tr().time) : prevStart(src, tr().time));
     if (to !== null) go(to);
   };
-  const toggle = (): void => { if (tr().playing) tr().pause(); else { if (tr().time >= dur() - 1e-3) tr().seek(0); tr().play(); } label(); };
+  let preparing = false;
+  const toggle = (): void => {
+    if (tr().playing || preparing) { if (tr().playing) tr().pause(); return; }
+    if (tr().time >= dur() - 1e-3) tr().seek(0);
+    if (!beforePlay) { tr().play(); label(); return; }
+    preparing = true;
+    play.disabled = true;
+    void beforePlay().finally(() => { preparing = false; play.disabled = false; tr().play(); label(); });
+  };
   const label = (): void => { play.textContent = t(tr().playing ? 'st.pause' : 'st.play'); };
 
   play.addEventListener('click', toggle);

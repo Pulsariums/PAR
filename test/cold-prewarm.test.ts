@@ -5,7 +5,7 @@ import { analyzeLine } from '../src/canvas/eligibility';
 import { planLine } from '../src/canvas/plan';
 import { SpriteCache } from '../src/canvas/SpriteCache';
 import { spriteRequestSamples } from '../src/canvas/sprites';
-import { Expander, MAX_SLICE_REQUESTS } from '../src/canvas/warm/expand';
+import { Expander, MAX_SLICE_REQUESTS, PREPARE_LINE_THRESHOLD } from '../src/canvas/warm/expand';
 import { WarmPlanner, type Builder, type Entry } from '../src/canvas/warm/planner';
 import { COLD_RANGE_MS, Lookahead } from '../src/core/Lookahead';
 import { ev, kit } from './helpers/warmKit';
@@ -16,6 +16,24 @@ const dense = (start = 2000): string => Array.from({ length: 16 }, (_, i) => ev(
 afterEach(() => vi.restoreAllMocks());
 
 describe('bounded cold-scene prewarming', () => {
+  it('forces preparation when a pending scene exceeds the temperature threshold', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const makeDense = (count: number) => kit(Array.from({ length: count }, (_, i) => ev(1000, 1500, '', `K${i}`)).join(''), { mode: 'auto' });
+    const run = (count: number): number => {
+      const k = makeDense(count);
+      k.path.busy = () => false;
+      k.path.complexity = () => ({ eligible: true, reason: '', score: 0, animated: new Set() });
+      const expander = new Expander();
+      expander.restart(0, k.lines());
+      const requests: number[] = [];
+      expander.run(k.path, 0, k.env, 1000 / 24, k.lines(), 2000, () => true, () => 1000, (r) => requests.push(r.ms));
+      return requests.length;
+    };
+    expect(PREPARE_LINE_THRESHOLD).toBe(50);
+    expect(run(PREPARE_LINE_THRESHOLD)).toBe(0);
+    expect(run(PREPARE_LINE_THRESHOLD + 1)).toBeGreaterThan(0);
+  });
+
   it('defers work until after render, then first arrival finds exact sprites in the shared cache', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0);
     const k = kit(dense(), { mode: 'auto' });

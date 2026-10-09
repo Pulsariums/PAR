@@ -153,6 +153,29 @@ export class PARRenderer extends FontApi {
     this.invalidate();
   }
 
+  /**
+   * Gives the warm planner a short head start before playback. The promise is bounded so a source
+   * that cannot provide more coverage never leaves the transport permanently locked.
+   */
+  prepare(): Promise<void> {
+    this.assertAlive();
+    this.invalidate();
+    const started = performance.now();
+    return new Promise((resolve) => {
+      const check = (): void => {
+        if (this.destroyed) { resolve(); return; }
+        const render = this.getMetrics().render;
+        const lead = render.planLeadMs;
+        const sourceReady = Number.isFinite(this.lastMs) && this.host.covers(this.lastMs);
+        const densePrepared = render.pending === 0 && lead >= 4000;
+        const lightScene = sourceReady && render.pending === 0 && render.planQueued === 0 && lead === 0;
+        if (densePrepared || lightScene || performance.now() - started >= 8000) { resolve(); return; }
+        requestAnimationFrame(check);
+      };
+      requestAnimationFrame(check);
+    });
+  }
+
   getMetrics(): PARMetrics {
     return buildMetrics(this.geo, { time: this.lastMs / 1000, activeLines: this.scene.activeCount, running: this.scheduler.isRunning, render: renderMetrics({ ...this.scene.renderStats, stalls: this.stall.stalls, stallMs: this.stall.stallMs }, this.opts.renderMode, this.frames.snapshot()) });
   }

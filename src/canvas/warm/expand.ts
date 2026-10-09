@@ -15,6 +15,8 @@ export interface Lines {
 const CHUNK_MS = 500;
 /** Per slice, including duplicate samples and cheap eligibility checks. */
 export const MAX_SLICE_REQUESTS = 128;
+/** Dense scenes are prepared before their first visible frame. */
+export const PREPARE_LINE_THRESHOLD = 50;
 
 /** Walks loaded windows, using cheap eligibility scores before deriving exact, resumable sprite requests. */
 export class Expander {
@@ -88,7 +90,7 @@ export class Expander {
       this.pending = [...new Set([...lines.visibleAt(a), ...lines.startingIn(a, b)])];
       this.from = a;
       this.end = b;
-      this.wantedChunk = path.mode() === 'canvas' || path.busy(t);
+      this.wantedChunk = this.pending.length > PREPARE_LINE_THRESHOLD || path.mode() === 'canvas' || path.busy(t);
       this.deciding = !this.wantedChunk;
       this.score = 0;
     }
