@@ -48,6 +48,8 @@ export const initStudio = (root: HTMLElement): void => {
   let session: StudioSession | null = null;
   let prepared = false;
   let prepareToken = 0;
+  let sourceBusy = false;
+  const transportPlaying = (): boolean => player.transport.playing;
   let client: SizeClient | null = null;
   const sizes = (): SizeClient => (client ??= new SizeClient());
 
@@ -152,6 +154,15 @@ export const initStudio = (root: HTMLElement): void => {
     player.tick();
     transport.update();
     monitor.tick();
+    // Honest source state: a seek that outruns the window shows what it is actually waiting for.
+    if (session && !transportPlaying()) {
+      const st = player.par.getSourceStats();
+      const busy = st.windowEvents === 0 && (st.loading || st.windowRange === null);
+      if (busy !== sourceBusy) {
+        sourceBusy = busy;
+        status(busy ? t('st.srcLoading') : t('st.subReady', { name: session.name, n: session.source.eventCount.toLocaleString('en-US') }));
+      }
+    }
     // The watch view measures nothing: no metrics, no layout panel, so the only work is PAR's own.
     if (view === 'lab') {
       const m = player.par.getMetrics();

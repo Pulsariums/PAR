@@ -34,7 +34,7 @@ export const initTransport = (player: Player, videoFps: () => number, onSeek: (t
   };
   let preparing = false, gate = 0;
   const toggle = (): void => {
-    if (preparing) { preparing = false; gate++; tr().play(); label(); return; } // a press during preparation skips the wait
+    if (preparing) { preparing = false; gate++; player.par.cancelPrepare(); tr().play(); label(); return; } // a press during preparation skips the wait
     if (tr().playing) { tr().pause(); label(); return; }
     if (tr().time >= dur() - 1e-3) tr().seek(0);
     if (!beforePlay) { tr().play(); label(); return; }

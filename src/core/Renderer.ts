@@ -49,6 +49,7 @@ export class PARRenderer extends FontApi {
   private readonly load = new LoadMeter();
   private readonly stall = new Stall(() => this.opts.video, () => this.scene.deficit(this.lastMs));
   private seekBufferUntilMs = 0;
+  private prepareSeq = 0;
   constructor(options: PAROptions) {
     super();
     this.opts = resolveOptions(options);
@@ -159,16 +160,18 @@ export class PARRenderer extends FontApi {
   /**
    * Prepares the loaded subtitle before playback. `source` walks the time range through its window and
    * builds every dense scene. The gate is bounded: after the budget it stops walking (what the look-ahead
-   * planned in between frames remains in the shared sprite cache), and as soon as playback starts it returns.
+   * planned in between frames remains in the shared sprite cache), and a press (see `cancelPrepare`) ends it.
    */
   async prepare(mode: 'dense' | 'source' = 'source', onProgress?: (doneMs: number, endMs: number) => void): Promise<void> {
     this.assertAlive();
     this.scene.setWarmRange(this.opts.warmRangeSeconds * 1000);
     this.invalidate();
+    const seq = ++this.prepareSeq;
     const started = performance.now();
     const gateMs = mode === 'source' ? 20_000 : 8_000;
     const endMs = Math.max(0, Math.round((this.host.sourceDuration ?? 0) * 1000));
-    const stopped = (): boolean => this.destroyed || this.scheduler.isRunning || performance.now() - started >= gateMs;
+    // A playing video ends the walk; the card clock does not run the scheduler, so there `cancelPrepare` ends it.
+    const stopped = (): boolean => this.destroyed || seq !== this.prepareSeq || (this.opts.video !== null && this.scheduler.isRunning) || performance.now() - started >= gateMs;
     const frameReady = (): Promise<boolean> => new Promise((resolve) => {
       const done = (): void => {
         if (this.destroyed) { resolve(true); return; }
@@ -191,10 +194,14 @@ export class PARRenderer extends FontApi {
         }
       }
       onProgress?.(endMs, endMs);
+      this.draw(this.now(), true); // back to the real playhead once the walk ends or is skipped
       return;
     }
     while (!(await frameReady()) && !stopped()) { /* bounded between-frame planning continues */ }
   }
+
+  /** Ends a running pre-play walk: the viewer's press always wins over the preparation. */
+  cancelPrepare(): void { this.prepareSeq++; }
 
   getMetrics(): PARMetrics {
     return buildMetrics(this.geo, { time: this.lastMs / 1000, activeLines: this.scene.activeCount, running: this.scheduler.isRunning, render: renderMetrics({ ...this.scene.renderStats, stalls: this.stall.stalls, stallMs: this.stall.stallMs }, this.opts.renderMode, this.frames.snapshot()) });
