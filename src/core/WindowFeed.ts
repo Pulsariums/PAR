@@ -84,6 +84,15 @@ export class WindowFeed {
     else if (backward && tMs - this.lo < this.back / 8 && this.lo > 0) this.load(tMs - this.back, this.lo);
   }
 
+  /** Moves the loaded window to a preparation point without waiting for the playhead. */
+  prepare(tMs: number): void {
+    if (this.dead || performance.now() < this.retryAt) return;
+    const a = Math.max(0, tMs - this.back);
+    const b = Math.min(msOf(this.source.duration) + 1, tMs + this.ahead);
+    if (this.covers(tMs) && this.lo <= a && this.hi >= b) return;
+    if (!this.req || this.req.a > b || this.req.b < a) this.load(a, b);
+  }
+
   stats(): SourceStatsReport {
     const s: SourceStats = this.source.stats?.() ?? { bytesRead: 0, decodeMs: 0 };
     return {

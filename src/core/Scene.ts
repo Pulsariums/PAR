@@ -80,6 +80,18 @@ export class Scene {
   /** Explicit seeks cancel warming even for jumps smaller than the playback discontinuity threshold. */
   cancelWarm(): void { this.ahead.clear(); }
 
+  /** How far ahead live preparation plans (subtitle milliseconds). */
+  setWarmRange(ms: number): void { this.ahead.setRange(ms); }
+
+  /** Everything currently planned that is not built yet. */
+  warmPending(): number { return this.ahead.stats().pending + this.ahead.stats().planQueued; }
+
+  /** Whether the frame at `tMs` can be drawn from already built sprites and source events. */
+  readyAt(tMs: number): boolean {
+    const stats = this.ahead.stats();
+    return stats.pending === 0 && stats.planQueued === 0 && (!this.covers || this.covers(tMs));
+  }
+
   /** Work is planned and nothing is working on it: a frame waiting for it would wait forever. */
   get stuck(): boolean { return this.ahead.stuck; }
 

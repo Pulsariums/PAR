@@ -45,6 +45,7 @@ export const initStudio = (root: HTMLElement): void => {
   const fps = new VideoFpsState();
   let session: StudioSession | null = null;
   let prepared = false;
+  let prepareToken = 0;
   let client: SizeClient | null = null;
   const sizes = (): SizeClient => (client ??= new SizeClient());
 
@@ -53,8 +54,10 @@ export const initStudio = (root: HTMLElement): void => {
   const stats = initStats(player, () => fps.steps);
   const transport = initTransport(player, () => fps.steps, (to) => stats.seeked(to), () => session?.source ?? null, async () => {
     if (prepared) return;
+    const token = prepareToken;
     status(t('st.preparing'));
-    await player.par.prepare();
+    await player.par.prepare('source');
+    if (token !== prepareToken) return;
     prepared = true;
     status(session ? t('st.subReady', { name: session.name, n: session.source.eventCount.toLocaleString('en-US') }) : '');
   });
@@ -66,6 +69,7 @@ export const initStudio = (root: HTMLElement): void => {
     status,
     session: (s) => {
       session = s;
+      prepareToken++;
       prepared = false;
       if (!s) stats.opened();
       exporter.setSession(s);

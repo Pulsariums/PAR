@@ -46,6 +46,9 @@ export class ScriptHost {
 
   get info(): ScriptInfo | null { return this.full?.info ?? this.win?.info ?? null; }
   get styles(): Map<string, AssStyle> { return this.full?.styles ?? this.win?.styles ?? new Map(); }
+
+  /** Duration of the loaded source, seconds; zero when none is loaded. */
+  get sourceDuration(): number { return this.feed?.source.duration ?? this.full?.events.reduce((m, e) => Math.max(m, e.end), 0) ?? 0; }
   get script(): ParsedScript | null {
     if (this.full) return this.full;
     return this.win ? { ...this.win, events: this.feed?.events ?? [] } : null;
@@ -93,6 +96,15 @@ export class ScriptHost {
   /** Called on every draw with the integer ms about to be drawn. */
   update(tMs: number): void {
     if (this.ready) this.feed?.update(tMs);
+  }
+
+  /** Loads all events of a parsed text source: preparation can then walk the whole timeline. */
+  prepareSource(tMs: number): void {
+    if (this.full && !this.feed) {
+      if (!this.ready) { this.ready = true; this.d.changed(); }
+      return;
+    }
+    if (this.ready) this.feed?.prepare(tMs);
   }
 
   stats(): SourceStatsReport {

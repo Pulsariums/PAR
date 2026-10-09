@@ -17,8 +17,8 @@ const QUIET_EVERY = 6;
 const BOOT_WAIT_MS = 1500;
 /** Safety margin (frames) between a sprite landing and the frame that draws it, for the deficit estimate. */
 const MARGIN_FRAMES = 2;
-/** Only prepare exact work in the next four seconds, using small between-frame slices. */
-export const COLD_RANGE_MS = 4000;
+/** Default look-ahead window (ms), adjustable at runtime through `range`. */
+export const COLD_RANGE_MS = 30000;
 export const COLD_SLICE_MS = 4;
 
 /**
@@ -35,6 +35,7 @@ export class Lookahead {
   private pool: SpritePool | null = null;
   private poolOpt: SpriteWorkers | null = null;
   private poolTried = false;
+  private range = COLD_RANGE_MS;
   private replan = false;
   private faces: FaceInfo[] = [];
   private armed = false;
@@ -57,6 +58,11 @@ export class Lookahead {
   constructor(private readonly path: CanvasPath, private readonly lines: () => Lines, private readonly workers: () => SpriteWorkers) {
     this.planner = new WarmPlanner(path);
     path.onMissing = (items) => this.urgent(items);
+  }
+
+  /** How far ahead (subtitle ms) live preparation plans. */
+  setRange(ms: number): void {
+    this.range = Math.max(1000, Math.min(300_000, ms));
   }
 
   /** Start of a render at `t`: a jump of the playhead starts the plan over there (what the workers still build for the old one is not wanted). */
@@ -98,7 +104,7 @@ export class Lookahead {
     this.mainBuilt = 0;
     this.mainEst = 0;
     const t0 = performance.now();
-    const w = this.planner.step(this.lastT, env, env.frameMs ?? 41.7, budgetMs, this.lines(), this.builder(), exempt, COLD_RANGE_MS);
+    const w = this.planner.step(this.lastT, env, env.frameMs ?? 41.7, budgetMs, this.lines(), this.builder(), exempt, this.range);
     this.pool?.flush();
     if (this.mainBuilt > 0) this.budget.noteBuilds(this.mainBuilt, performance.now() - t0, this.mainEst);
     this.measure();

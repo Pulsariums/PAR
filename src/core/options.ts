@@ -31,6 +31,11 @@ export const validateWindow = (w: number): number => {
   return w;
 };
 
+export const validateWarmRange = (w: number): number => {
+  if (!finite(w) || w < 1 || w > 300) throw new RangeError('PAR: warmRangeSeconds must be a number in 1..300');
+  return w;
+};
+
 export const validateMode = (m: unknown): 'auto' | 'dom' | 'canvas' => {
   if (m === 'auto' || m === 'dom' || m === 'canvas') return m;
   throw new TypeError(`PAR: renderMode must be 'auto', 'dom' or 'canvas'`);
@@ -70,6 +75,8 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     providerTimeout: patch.providerTimeout ?? prev?.providerTimeout ?? 5000,
     onMissingFonts: patch.onMissingFonts !== undefined ? patch.onMissingFonts : prev?.onMissingFonts ?? null,
     windowSeconds: validateWindow(patch.windowSeconds ?? prev?.windowSeconds ?? 12),
+    warmRangeSeconds: validateWarmRange(patch.warmRangeSeconds ?? prev?.warmRangeSeconds ?? 30),
+    seekBuffer: patch.seekBuffer ?? prev?.seekBuffer ?? true,
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
     renderMode: validateMode(patch.renderMode ?? prev?.renderMode ?? 'auto'),
     spriteCacheMB: finite(patch.spriteCacheMB) && patch.spriteCacheMB > 0 ? patch.spriteCacheMB : prev?.spriteCacheMB ?? 96,

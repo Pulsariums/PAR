@@ -8,6 +8,8 @@ export interface SnippetInput {
   videoFps: number | null;
   timeOffset: number;
   renderMode: 'auto' | 'dom' | 'canvas';
+  warmRangeSeconds?: number;
+  seekBuffer?: boolean;
 }
 
 /** The `create(...)` call equivalent to the current choices (defaults omitted). */
@@ -20,6 +22,8 @@ export const buildSnippet = (s: SnippetInput): string => {
   if (s.videoFps !== null && s.videoFps > 0) lines.push(`  videoFps: ${s.videoFps},`);
   if (s.timeOffset !== 0) lines.push(`  timeOffset: ${s.timeOffset},`);
   if (s.renderMode !== 'auto') lines.push(`  renderMode: '${s.renderMode}',`);
+  if (s.warmRangeSeconds !== undefined && s.warmRangeSeconds !== 30) lines.push(`  warmRangeSeconds: ${s.warmRangeSeconds},`);
+  if (s.seekBuffer === false) lines.push('  seekBuffer: false,');
   return `import { create } from 'pulsar-ass-renderer';\n\nconst par = create({\n${lines.join('\n')}\n});`;
 };
 

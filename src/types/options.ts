@@ -86,6 +86,10 @@ export interface PAROptions {
   onMissingFonts?: MissingFontsHandler | null;
   /** `subtitle` given as a `SubtitleSource`: seconds of events kept in memory (about 1/6 behind the playhead, the rest ahead). Default 12. Read when a source is loaded. */
   windowSeconds?: number;
+  /** How far ahead (subtitle seconds) live preparation may plan. Default 30; adjustable at runtime. */
+  warmRangeSeconds?: number;
+  /** Whether presenting a new time waits for its one-second preparation buffer. Default true. */
+  seekBuffer?: boolean;
   /** CSS z-index of the overlay. Default 1. */
   zIndex?: number;
   /**
@@ -116,6 +120,8 @@ export interface ResolvedOptions {
   providerTimeout: number;
   onMissingFonts: MissingFontsHandler | null;
   windowSeconds: number;
+  warmRangeSeconds: number;
+  seekBuffer: boolean;
   zIndex: number;
   renderMode: 'auto' | 'dom' | 'canvas';
   spriteCacheMB: number;

@@ -48,6 +48,7 @@ export class PARRenderer extends FontApi {
   private lastVideoFrame: VideoFrameMetadata | undefined;
   private readonly load = new LoadMeter();
   private readonly stall = new Stall(() => this.opts.video, () => this.scene.deficit(this.lastMs));
+  private seekBufferUntilMs = 0;
   constructor(options: PAROptions) {
     super();
     this.opts = resolveOptions(options);
@@ -132,6 +133,7 @@ export class PARRenderer extends FontApi {
       this.scheduler.setMetadataCapture(loggerEnabled);
       this.host.bind();
     } else if (this.opts.zIndex !== prev.zIndex) this.overlay.setZIndex(this.opts.zIndex);
+    if (this.opts.warmRangeSeconds !== prev.warmRangeSeconds || this.opts.spriteCacheMB !== prev.spriteCacheMB) this.scene.setWarmRange(this.opts.warmRangeSeconds * 1000);
     if (patch.subtitle !== undefined) this.setSubtitle(patch.subtitle);
     this.scheduler.configure(this.opts.fps, this.opts.video);
     this.syncLoop();
@@ -154,26 +156,38 @@ export class PARRenderer extends FontApi {
   }
 
   /**
-   * Gives the warm planner a short head start before playback. The promise is bounded so a source
-   * that cannot provide more coverage never leaves the transport permanently locked.
+   * Prepares the loaded subtitle before playback. `source` walks the complete time range through its
+   * window and builds every dense scene. The promise is bounded so a blocked source never locks playback.
    */
-  prepare(): Promise<void> {
+  async prepare(mode: 'dense' | 'source' = 'source'): Promise<void> {
     this.assertAlive();
+    this.scene.setWarmRange(this.opts.warmRangeSeconds * 1000);
     this.invalidate();
     const started = performance.now();
-    return new Promise((resolve) => {
-      const check = (): void => {
-        if (this.destroyed) { resolve(); return; }
+    const endMs = Math.max(0, Math.round((this.host.sourceDuration ?? 0) * 1000));
+    const frameReady = (): Promise<boolean> => new Promise((resolve) => {
+      const done = (): void => {
+        if (this.destroyed) { resolve(true); return; }
         const render = this.getMetrics().render;
-        const lead = render.planLeadMs;
         const sourceReady = Number.isFinite(this.lastMs) && this.host.covers(this.lastMs);
-        const densePrepared = render.pending === 0 && lead >= 4000;
-        const lightScene = sourceReady && render.pending === 0 && render.planQueued === 0 && lead === 0;
-        if (densePrepared || lightScene || performance.now() - started >= 8000) { resolve(); return; }
-        requestAnimationFrame(check);
+        resolve(sourceReady && render.pending === 0 && render.planQueued === 0);
       };
-      requestAnimationFrame(check);
+      requestAnimationFrame(done);
     });
+    if (mode === 'source') {
+      const step = Math.max(1000, this.opts.windowSeconds * 1000);
+      for (let windowMs = 0; windowMs <= endMs && !this.destroyed && performance.now() - started < 120_000; windowMs += step) {
+        this.host.prepareSource(windowMs);
+        this.draw(windowMs / 1000, false);
+        while (!(await frameReady())) {
+          this.host.prepareSource(windowMs);
+          this.draw(windowMs / 1000, false);
+          if (this.destroyed || performance.now() - started >= 120_000) break;
+        }
+      }
+      return;
+    }
+    while (!(await frameReady()) && performance.now() - started < 8000) { /* bounded between-frame planning continues */ }
   }
 
   getMetrics(): PARMetrics {
@@ -215,14 +229,21 @@ export class PARRenderer extends FontApi {
     };
     this.teardown.push(observeSize(container, video, () => this.invalidate()));
     if (video) {
-      const cancelWarm = (): void => { this.scene.cancelWarm(); this.logger.segment(); };
+      const cancelWarm = (): void => {
+        this.scene.cancelWarm();
+        this.logger.segment();
+        this.seekBufferUntilMs = this.opts.seekBuffer ? this.lastMs + 1000 : 0;
+      };
       video.addEventListener('seeking', cancelWarm);
       this.teardown.push(() => video.removeEventListener('seeking', cancelWarm));
       this.teardown.push(bindVideoEvents(video, {
         play: () => this.syncLoop(),
         pause: () => { this.syncLoop(); this.draw(this.now(), false); },
         started: () => this.stall.userPlayed(),
-        seek: () => { if (!this.scheduler.isRunning) this.draw(this.now(), false); },
+        seek: () => {
+          this.seekBufferUntilMs = this.opts.seekBuffer ? timeToMs(this.opts.video?.currentTime ?? this.now(), this.opts.videoFps) + 1000 : 0;
+          if (!this.scheduler.isRunning) this.draw(this.now(), false);
+        },
         resize: () => this.invalidate(),
       }));
     }
@@ -285,13 +306,20 @@ export class PARRenderer extends FontApi {
       return;
     }
     const running = this.scheduler.isRunning;
+    const sourceCovered = this.host.covers(ms);
     this.scene.setLoad(running ? this.load.late() : null);
+    const seekBufferReady = !sourceCovered || this.scene.warmPending() > 0 || !this.scene.readyAt(ms);
+    // After a seek, presentation waits for a one-second buffer while the planner computes ahead independently.
+    const seekBufferWaiting = this.seekBufferUntilMs > 0 && ms <= this.seekBufferUntilMs && !seekBufferReady;
+    if (this.seekBufferUntilMs !== 0 && (ms > this.seekBufferUntilMs || seekBufferReady)) this.seekBufferUntilMs = 0;
     // A frame is presented whole or not at all while the picture can wait for it (paused, seeking, a video the renderer may hold);
     // a free-running custom clock cannot be held: it draws what is ready (the missing are counted) and the builders rush the rest.
-    const policy = (!running || (this.opts.video && this.scene.buffers)) && !this.scene.stuck ? 'hold' : 'partial';
+    // While the warm-up window is active, source gaps are held rather than presented with a partial picture.
+    const presentationHold = !running || seekBufferWaiting || (this.opts.video && this.scene.buffers);
     let complete = true;
     const source = measuring ? this.host.stats() : null;
-    const sourceReady = measuring ? this.host.covers(ms) : false;
+    const sourceReady = measuring ? sourceCovered : false;
+    const policy = presentationHold && !this.scene.stuck ? 'hold' : 'partial';
     const renderStart = measuring ? performance.now() : 0;
     this.frames.time(() => { complete = this.scene.render(ms, this.env, forced, policy, generation, raw); });
     if (this.diagnostics.active) {

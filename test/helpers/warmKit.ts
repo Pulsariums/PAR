@@ -19,7 +19,7 @@ export const kit = (text: string, o: { mode?: string } = {}) => {
   const cache = new Map<string, unknown>();
   const built: string[] = [];
   const path = {
-    enabled: true, load: null, mode: () => o.mode ?? 'canvas', busy: () => true,
+    enabled: true, load: null, pending: 0, mode: () => o.mode ?? 'canvas', busy: () => true,
     complexity: () => ({ eligible: true, reason: '', score: 4, animated: new Set(['blur']) }),
     cache: { peek: (k: string) => cache.get(k), has: (k: string) => cache.has(k), pin: () => true, unpin: () => undefined, pinnedBytes: 0, put: (k: string, s: unknown) => { cache.set(k, s); return true; }, sweep: vi.fn(), capBytes: 96 << 20 },
     onMissing: () => undefined,
