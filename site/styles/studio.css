@@ -38,6 +38,7 @@
 
 /* Live monitor: compact rolling graphs beside the player. */
 .st-mon { display: grid; gap: 6px; }
+.st-mon h3 { margin: 0; font-size: 13px; }
 .st-mon-num { margin: 0; font-size: 11px; }
 .st-sparks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .st-spark { display: grid; grid-template-columns: 5.5em 1fr 5.5em; gap: 6px; align-items: center; font-size: 11px; }

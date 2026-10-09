@@ -30,26 +30,24 @@ const SAMPLE_MS = 170;
 /** Long tasks are a coarse main-thread-load signal (entryTypes: longtask). */
 const LT_LOOKBACK_MS = 1000;
 
-/** Left column tracks the preparation flow, right column the machine. */
+/** Left column tracks the preparation flow, right column the machine. A plain card (not `<details>`): jsdom queues a toggle task for an `open` fold. */
 export const MONITOR_HTML = `
-<details class="st-fold" open>
-  <summary><span data-i18n="st.mon"></span></summary>
-  <div class="st-mon">
-    <p class="hint mono st-mon-num" id="stMonNum">—</p>
-    <p class="hint mono st-mon-gpu" id="stMonGpu">GPU: —</p>
-    <div class="st-sparks">
-      <div class="st-spark" data-label="ready"><span data-i18n="st.monReady"></span><canvas></canvas><b class="mono">—</b></div>
-      <div class="st-spark" data-label="fps"><span data-i18n="st.monFps"></span><canvas></canvas><b class="mono">—</b></div>
-      <div class="st-spark" data-label="pend"><span data-i18n="st.monPend"></span><canvas></canvas><b class="mono">—</b></div>
-      <div class="st-spark" data-label="par"><span data-i18n="st.monPar"></span><canvas></canvas><b class="mono">—</b></div>
-      <div class="st-spark" data-label="gpu"><span data-i18n="st.monGpu"></span><canvas></canvas><b class="mono">—</b></div>
-      <div class="st-spark" data-label="lag"><span data-i18n="st.monLag"></span><canvas></canvas><b class="mono">—</b></div>
-      <div class="st-spark" data-label="cpu"><span data-i18n="st.monCpu"></span><canvas></canvas><b class="mono">—</b></div>
-      <div class="st-spark" data-label="lines"><span data-i18n="st.monLines"></span><canvas></canvas><b class="mono">—</b></div>
-    </div>
-    <p class="hint" data-i18n="st.monHint"></p>
+<div class="st-mon">
+  <h3 data-i18n="st.mon"></h3>
+  <p class="hint mono st-mon-num" id="stMonNum">—</p>
+  <p class="hint mono st-mon-gpu" id="stMonGpu">GPU: —</p>
+  <div class="st-sparks">
+    <div class="st-spark" data-label="ready"><span data-i18n="st.monReady"></span><canvas></canvas><b class="mono">—</b></div>
+    <div class="st-spark" data-label="fps"><span data-i18n="st.monFps"></span><canvas></canvas><b class="mono">—</b></div>
+    <div class="st-spark" data-label="pend"><span data-i18n="st.monPend"></span><canvas></canvas><b class="mono">—</b></div>
+    <div class="st-spark" data-label="par"><span data-i18n="st.monPar"></span><canvas></canvas><b class="mono">—</b></div>
+    <div class="st-spark" data-label="gpu"><span data-i18n="st.monGpu"></span><canvas></canvas><b class="mono">—</b></div>
+    <div class="st-spark" data-label="lag"><span data-i18n="st.monLag"></span><canvas></canvas><b class="mono">—</b></div>
+    <div class="st-spark" data-label="cpu"><span data-i18n="st.monCpu"></span><canvas></canvas><b class="mono">—</b></div>
+    <div class="st-spark" data-label="lines"><span data-i18n="st.monLines"></span><canvas></canvas><b class="mono">—</b></div>
   </div>
-</details>`;
+  <p class="hint" data-i18n="st.monHint"></p>
+</div>`;
 
 class Spark {
   private readonly data: number[] = [];
