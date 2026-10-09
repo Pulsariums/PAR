@@ -44,7 +44,7 @@ export const studioEn = {
   'st.emptyF': 'No fonts yet. Add font files or a zip; they stay in your browser and PAR uses them.',
   'st.vErr': 'This browser cannot play this file (unsupported container or codec). Try mp4 (H.264) or webm.',
   'st.subBad': 'Not an ASS, XPAR or PAR file: {name}',
-  'st.subReady': 'Subtitle ready: {name} ({n} events).', 'st.preparing': 'Preparing dense subtitle scenes…',
+  'st.subReady': 'Subtitle ready: {name} ({n} events).', 'st.preparing': 'Preparing scenes {cur}/{total} s — press Play to skip',
   'st.used': 'in use',
   'st.fontsErr': 'Fonts added: {n}. Errors: {e}',
   'st.exPar': 'Export PAR (.{fps}fps.par)',

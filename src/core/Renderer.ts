@@ -157,15 +157,18 @@ export class PARRenderer extends FontApi {
   }
 
   /**
-   * Prepares the loaded subtitle before playback. `source` walks the complete time range through its
-   * window and builds every dense scene. The promise is bounded so a blocked source never locks playback.
+   * Prepares the loaded subtitle before playback. `source` walks the time range through its window and
+   * builds every dense scene. The gate is bounded: after the budget it stops walking (what the look-ahead
+   * planned in between frames remains in the shared sprite cache), and as soon as playback starts it returns.
    */
-  async prepare(mode: 'dense' | 'source' = 'source'): Promise<void> {
+  async prepare(mode: 'dense' | 'source' = 'source', onProgress?: (doneMs: number, endMs: number) => void): Promise<void> {
     this.assertAlive();
     this.scene.setWarmRange(this.opts.warmRangeSeconds * 1000);
     this.invalidate();
     const started = performance.now();
+    const gateMs = mode === 'source' ? 20_000 : 8_000;
     const endMs = Math.max(0, Math.round((this.host.sourceDuration ?? 0) * 1000));
+    const stopped = (): boolean => this.destroyed || this.scheduler.isRunning || performance.now() - started >= gateMs;
     const frameReady = (): Promise<boolean> => new Promise((resolve) => {
       const done = (): void => {
         if (this.destroyed) { resolve(true); return; }
@@ -177,18 +180,20 @@ export class PARRenderer extends FontApi {
     });
     if (mode === 'source') {
       const step = Math.max(1000, this.opts.windowSeconds * 1000);
-      for (let windowMs = 0; windowMs <= endMs && !this.destroyed && performance.now() - started < 120_000; windowMs += step) {
+      for (let windowMs = 0; windowMs <= endMs && !stopped(); windowMs += step) {
+        onProgress?.(Math.min(windowMs, endMs), endMs);
         this.host.prepareSource(windowMs);
         this.draw(windowMs / 1000, false);
         while (!(await frameReady())) {
           this.host.prepareSource(windowMs);
           this.draw(windowMs / 1000, false);
-          if (this.destroyed || performance.now() - started >= 120_000) break;
+          if (stopped()) break;
         }
       }
+      onProgress?.(endMs, endMs);
       return;
     }
-    while (!(await frameReady()) && performance.now() - started < 8000) { /* bounded between-frame planning continues */ }
+    while (!(await frameReady()) && !stopped()) { /* bounded between-frame planning continues */ }
   }
 
   getMetrics(): PARMetrics {

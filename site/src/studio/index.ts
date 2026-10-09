@@ -60,8 +60,10 @@ export const initStudio = (root: HTMLElement): void => {
     const m = advanced.values().prepareMode;
     if (m === 'off') { prepared = true; return; }
     const token = prepareToken;
-    status(t('st.preparing'));
-    await player.par.prepare(m);
+    status(t('st.preparing', { cur: 0, total: 0 }));
+    await player.par.prepare(m, (cur, total) => {
+      if (token === prepareToken) status(t('st.preparing', { cur: Math.round(cur / 1000), total: Math.round(total / 1000) }));
+    });
     if (token !== prepareToken) return;
     prepared = true;
     status(session ? t('st.subReady', { name: session.name, n: session.source.eventCount.toLocaleString('en-US') }) : '');

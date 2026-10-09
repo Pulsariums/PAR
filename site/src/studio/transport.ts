@@ -32,14 +32,20 @@ export const initTransport = (player: Player, videoFps: () => number, onSeek: (t
     const to = await (dir > 0 ? nextStart(src, tr().time) : prevStart(src, tr().time));
     if (to !== null) go(to);
   };
-  let preparing = false;
+  let preparing = false, gate = 0;
   const toggle = (): void => {
-    if (tr().playing || preparing) { if (tr().playing) tr().pause(); return; }
+    if (preparing) { preparing = false; gate++; tr().play(); label(); return; } // a press during preparation skips the wait
+    if (tr().playing) { tr().pause(); label(); return; }
     if (tr().time >= dur() - 1e-3) tr().seek(0);
     if (!beforePlay) { tr().play(); label(); return; }
     preparing = true;
-    play.disabled = true;
-    void beforePlay().finally(() => { preparing = false; play.disabled = false; tr().play(); label(); });
+    const g = ++gate;
+    void Promise.resolve(beforePlay()).finally(() => {
+      if (g !== gate) return; // the viewer already started: their choice stands
+      preparing = false;
+      tr().play();
+      label();
+    });
   };
   const label = (): void => { play.textContent = t(tr().playing ? 'st.pause' : 'st.play'); };
 

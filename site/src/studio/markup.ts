@@ -37,12 +37,12 @@ export const STUDIO_HTML = `
     ${transportMarkup()}
   </div>
   <div class="st-side">
+    <section class="st-panel" id="stMonitor"></section>
     <div class="seg block st-tabs" role="tablist" data-i18n-attr="aria-label:st.shelves">
       ${SHELVES.map((s, i) => `<button type="button" role="tab" id="stTab${s}" data-shelf="${s}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" aria-controls="stShelf${s}" data-i18n="${KEY[s]}"></button>`).join('')}
     </div>
     ${SHELVES.map((s, i) => `<section class="st-panel st-shelf${i === 0 ? ' on' : ''}" id="stShelf${s}" role="tabpanel" aria-labelledby="stTab${s}"></section>`).join('')}
     <section class="st-panel st-lab" id="stExport"></section>
-    <section class="st-panel" id="stMonitor"></section>
   </div>
   <div class="st-panels">
     <div class="st-lab">${ADVANCED_HTML}</div>

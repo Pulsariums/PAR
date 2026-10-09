@@ -44,7 +44,7 @@ export const studioTr = {
   'st.emptyF': 'Henüz font yok. Font dosyası veya zip ekleyin; tarayıcınızda kalır ve PAR kullanır.',
   'st.vErr': 'Bu tarayıcı bu dosyayı oynatamıyor (desteklenmeyen kapsayıcı veya kodek). mp4 (H.264) veya webm deneyin.',
   'st.subBad': 'ASS, XPAR veya PAR dosyası değil: {name}',
-  'st.subReady': 'Altyazı hazır: {name} ({n} olay).', 'st.preparing': 'Yoğun altyazı sahneleri hazırlanıyor…',
+  'st.subReady': 'Altyazı hazır: {name} ({n} olay).', 'st.preparing': 'Sahneler hazırlanıyor {cur}/{total} sn — atlamak için Oynat’a basın',
   'st.used': 'kullanımda',
   'st.fontsErr': 'Eklenen font: {n}. Hatalar: {e}',
   'st.exPar': 'PAR aktar (.{fps}fps.par)',
