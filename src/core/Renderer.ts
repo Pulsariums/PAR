@@ -134,6 +134,7 @@ export class PARRenderer extends FontApi {
       this.host.bind();
     } else if (this.opts.zIndex !== prev.zIndex) this.overlay.setZIndex(this.opts.zIndex);
     if (this.opts.warmRangeSeconds !== prev.warmRangeSeconds || this.opts.spriteCacheMB !== prev.spriteCacheMB) this.scene.setWarmRange(this.opts.warmRangeSeconds * 1000);
+    if (this.opts.temperature !== prev.temperature) this.scene.setTemperature(this.opts.temperature);
     if (patch.subtitle !== undefined) this.setSubtitle(patch.subtitle);
     this.scheduler.configure(this.opts.fps, this.opts.video);
     this.syncLoop();
@@ -221,6 +222,8 @@ export class PARRenderer extends FontApi {
     const { container, video } = this.opts;
     this.overlay = new Overlay(container, this.opts.zIndex);
     this.scene = new Scene(this.overlay, () => this.opts.renderMode, this.opts.spriteCacheMB * 1048576, debugWorkers);
+    this.scene.setWarmRange(this.opts.warmRangeSeconds * 1000);
+    this.scene.setTemperature(this.opts.temperature);
     this.scene.setFaces(this.fonts.shipFaces());
     this.scene.onReady = (epoch, generation) => {
       queueMicrotask(() => {

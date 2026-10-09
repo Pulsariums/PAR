@@ -83,6 +83,9 @@ export class Scene {
   /** How far ahead live preparation plans (subtitle milliseconds). */
   setWarmRange(ms: number): void { this.ahead.setRange(ms); }
 
+  /** Scenes with more pending lines than this are force-prepared (temperature). */
+  setTemperature(n: number): void { this.ahead.setTemperature(n); }
+
   /** Everything currently planned that is not built yet. */
   warmPending(): number { return this.ahead.stats().pending + this.ahead.stats().planQueued; }
 

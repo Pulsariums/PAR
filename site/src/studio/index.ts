@@ -14,6 +14,7 @@ import { initEditor } from './editor';
 import { initAnalyze } from './analyze/ui';
 import { initOptimize } from './optimize/ui';
 import { initPerf } from './perf/ui';
+import { initMonitor } from './monitor';
 import { initFontLib } from './fontLib';
 import { initFontsReport } from './fontsReport';
 import { initReference } from './reference';
@@ -28,6 +29,7 @@ import { initTransport } from './transport';
 import { initVideoShelf } from './videoShelf';
 import { loadView, onViewRequest, saveView, type View } from '../view';
 import { presetById } from '../presets';
+import { isDark } from '../theme';
 
 const SUB_FILE = /\.(ass|ssa|txt|xpar|par)$/i;
 
@@ -52,16 +54,28 @@ export const initStudio = (root: HTMLElement): void => {
   const layout = initLayoutPanel(player.par, () => exporter.playRes());
   const exporter = initExportPanel($('stExport'), sizes, layout.defaultSize);
   const stats = initStats(player, () => fps.steps);
+  const advanced = initAdvanced(player.par, fps, () => exporter.setVideoFps(fps.option));
   const transport = initTransport(player, () => fps.steps, (to) => stats.seeked(to), () => session?.source ?? null, async () => {
     if (prepared) return;
+    const m = advanced.values().prepareMode;
+    if (m === 'off') { prepared = true; return; }
     const token = prepareToken;
     status(t('st.preparing'));
-    await player.par.prepare('source');
+    await player.par.prepare(m);
     if (token !== prepareToken) return;
     prepared = true;
     status(session ? t('st.subReady', { name: session.name, n: session.source.eventCount.toLocaleString('en-US') }) : '');
   });
-  const advanced = initAdvanced(player.par, fps, () => exporter.setVideoFps(fps.option));
+  const monitor = initMonitor(player, $('stMonitor'));
+  const themeBtn = $<HTMLButtonElement>('stTheme');
+  const syncTheme = (): void => { themeBtn.setAttribute('aria-pressed', String(isDark())); };
+  themeBtn.addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('par.theme', next); } catch { /* storage unavailable */ }
+    syncTheme();
+  });
+  syncTheme();
   const mode = (): void => { $('stMode').textContent = t(`st.mode.${studioMode(player.hasVideo, session !== null)}`); };
 
   const fonts = initFontShelf($('stShelfFonts'), player, status);
@@ -135,6 +149,7 @@ export const initStudio = (root: HTMLElement): void => {
   const loop = (): void => {
     player.tick();
     transport.update();
+    monitor.tick();
     // The watch view measures nothing: no metrics, no layout panel, so the only work is PAR's own.
     if (view === 'lab') {
       const m = player.par.getMetrics();

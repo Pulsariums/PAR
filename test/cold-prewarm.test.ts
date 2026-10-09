@@ -60,7 +60,7 @@ describe('bounded cold-scene prewarming', () => {
     la.dispose();
   });
 
-  it('resumes dense animation samples under the per-slice bound and does not expand beyond four seconds', () => {
+  it('resumes dense animation samples under the per-slice bound and does not expand beyond the configured range', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0);
     const k = kit(ev(1000, 59000, '\\t(0,58000,\\blur100)', 'A') + dense(9000));
     const expander = new Expander();
@@ -79,6 +79,7 @@ describe('bounded cold-scene prewarming', () => {
     const line = k.lines().visibleAt(at)[0];
     const key = planLine(line, at - k.lines().startMs(line), k.env, k.path.complexity(line).animated, { blur: 0 }).key;
     const la = new Lookahead(k.path, k.lines, () => 'off');
+    la.setRange(4000); // the runtime default is wider; this checks the bound is honoured
     la.note(0, k.env, null);
     for (let i = 0; i < 20; i++) pump(la);
     expect(k.cache.has(key)).toBe(false);

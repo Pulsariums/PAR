@@ -18,6 +18,7 @@ export const STUDIO_HTML = `
     <button type="button" data-view="watch" aria-pressed="true" data-i18n="st.view.watch"></button>
     <button type="button" data-view="lab" aria-pressed="false" data-i18n="st.view.lab"></button>
   </div>
+  <button type="button" class="icon-btn" id="stTheme" data-i18n-attr="aria-label:theme.toggle,title:theme.toggle" aria-label="Toggle theme">◐</button>
 </div>
 <p class="lead sm" data-i18n="st.sub"></p>
 <div class="st" id="st" data-view="watch">
@@ -41,6 +42,7 @@ export const STUDIO_HTML = `
     </div>
     ${SHELVES.map((s, i) => `<section class="st-panel st-shelf${i === 0 ? ' on' : ''}" id="stShelf${s}" role="tabpanel" aria-labelledby="stTab${s}"></section>`).join('')}
     <section class="st-panel st-lab" id="stExport"></section>
+    <section class="st-panel" id="stMonitor"></section>
   </div>
   <div class="st-panels">
     <div class="st-lab">${ADVANCED_HTML}</div>

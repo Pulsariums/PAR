@@ -88,6 +88,8 @@ export interface PAROptions {
   windowSeconds?: number;
   /** How far ahead (subtitle seconds) live preparation may plan. Default 30; adjustable at runtime. */
   warmRangeSeconds?: number;
+  /** Temperature: scenes whose pending lines exceed this are force-prepared ahead of their first frame. Default 50. */
+  temperature?: number;
   /** Whether presenting a new time waits for its one-second preparation buffer. Default true. */
   seekBuffer?: boolean;
   /** CSS z-index of the overlay. Default 1. */
@@ -121,6 +123,7 @@ export interface ResolvedOptions {
   onMissingFonts: MissingFontsHandler | null;
   windowSeconds: number;
   warmRangeSeconds: number;
+  temperature: number;
   seekBuffer: boolean;
   zIndex: number;
   renderMode: 'auto' | 'dom' | 'canvas';

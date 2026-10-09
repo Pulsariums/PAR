@@ -15,12 +15,14 @@ export interface Lines {
 const CHUNK_MS = 500;
 /** Per slice, including duplicate samples and cheap eligibility checks. */
 export const MAX_SLICE_REQUESTS = 128;
-/** Dense scenes are prepared before their first visible frame. */
+/** Dense scenes are prepared before their first visible frame (default temperature; `setTemperature` adjusts it). */
 export const PREPARE_LINE_THRESHOLD = 50;
 
 /** Walks loaded windows, using cheap eligibility scores before deriving exact, resumable sprite requests. */
 export class Expander {
   frontier = NaN;
+  /** Scenes whose pending line count exceeds this are prepared even when the canvas is idle. */
+  temperature = PREPARE_LINE_THRESHOLD;
   /** Current chunk's boundary, also while admission pauses at a queue/time bound. */
   get pendingUntil(): number { return Number.isFinite(this.end) ? this.end : this.frontier; }
   private pending: PreparedLine[] = [];
@@ -90,7 +92,7 @@ export class Expander {
       this.pending = [...new Set([...lines.visibleAt(a), ...lines.startingIn(a, b)])];
       this.from = a;
       this.end = b;
-      this.wantedChunk = this.pending.length > PREPARE_LINE_THRESHOLD || path.mode() === 'canvas' || path.busy(t);
+      this.wantedChunk = this.pending.length > this.temperature || path.mode() === 'canvas' || path.busy(t);
       this.deciding = !this.wantedChunk;
       this.score = 0;
     }

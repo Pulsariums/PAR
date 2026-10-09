@@ -36,6 +36,11 @@ export const validateWarmRange = (w: number): number => {
   return w;
 };
 
+export const validateTemperature = (v: number): number => {
+  if (!finite(v) || v < 1) throw new RangeError('PAR: temperature must be a number >= 1');
+  return Math.max(1, Math.floor(v));
+};
+
 export const validateMode = (m: unknown): 'auto' | 'dom' | 'canvas' => {
   if (m === 'auto' || m === 'dom' || m === 'canvas') return m;
   throw new TypeError(`PAR: renderMode must be 'auto', 'dom' or 'canvas'`);
@@ -76,6 +81,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     onMissingFonts: patch.onMissingFonts !== undefined ? patch.onMissingFonts : prev?.onMissingFonts ?? null,
     windowSeconds: validateWindow(patch.windowSeconds ?? prev?.windowSeconds ?? 12),
     warmRangeSeconds: validateWarmRange(patch.warmRangeSeconds ?? prev?.warmRangeSeconds ?? 30),
+    temperature: validateTemperature(patch.temperature ?? prev?.temperature ?? 50),
     seekBuffer: patch.seekBuffer ?? prev?.seekBuffer ?? true,
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
     renderMode: validateMode(patch.renderMode ?? prev?.renderMode ?? 'auto'),

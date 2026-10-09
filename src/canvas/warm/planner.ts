@@ -75,6 +75,8 @@ export class WarmPlanner {
 
   get queued(): number { return this.heap.size; }
   get pending(): number { return this.frontier.size; }
+  /** Scenes whose pending line count exceeds this are force-prepared (the temperature setting). */
+  setTemperature(n: number): void { this.expander.temperature = Math.max(1, n); }
   /** Everything starting up to here is planned. */
   get planned(): number { return this.expander.frontier; }
   get aheadMB(): number { return (this.path.cache.pinnedBytes + this.inflightBytes) / 1048576; }

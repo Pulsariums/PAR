@@ -28,6 +28,8 @@ export const ADVANCED_HTML = `
     <input id="stOffset" type="number" step="0.1" value="0" inputmode="decimal" /></label>
   <label class="fld"><span data-i18n="st.advWarmRange"></span>
     <select id="stWarmRange">${opts(WARM_RANGE_MARKS)}</select></label>
+  <label class="fld"><span data-i18n="st.advTemp"></span>
+    <input id="stTemp" type="number" min="1" step="1" value="50" inputmode="numeric" /></label>
   <label class="fld"><span data-i18n="st.advPrepare"></span>
     <select id="stPrepareMode">${(['source', 'dense', 'off'] as const).map((v) => `<option value="${v}">${t(PREPARE_LABELS[v])}</option>`).join('')}</select></label>
 </div>`;
@@ -39,6 +41,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
   const video = $<HTMLSelectElement>('stVideoFps');
   const offset = $<HTMLInputElement>('stOffset');
   const range = $<HTMLSelectElement>('stWarmRange');
+  const temp = $<HTMLInputElement>('stTemp');
   const prepare = $<HTMLSelectElement>('stPrepareMode');
 
   const modeValue = (): PrepareMode => readMode(prepare.value);
@@ -47,6 +50,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
   video.addEventListener('change', () => { fps.picked = video.value === '' ? null : Number(video.value); par.setOptions({ videoFps: fps.option }); onVideoFps(); });
   offset.addEventListener('change', () => { const v = Number(offset.value); par.setOptions({ timeOffset: Number.isFinite(v) ? v : 0 }); });
   range.addEventListener('change', () => { const v = Number(range.value); par.setOptions({ warmRangeSeconds: Number.isFinite(v) ? v : 30 }); });
+  temp.addEventListener('change', () => { const v = Number(temp.value); par.setOptions({ temperature: Number.isFinite(v) && v >= 1 ? Math.floor(v) : 50 }); });
   prepare.addEventListener('change', () => par.setOptions({ seekBuffer: modeValue() !== 'off' }));
 
   /** The "auto" entry of the video FPS select names the measured rate; call after the video (or the language) changed. */
@@ -64,6 +68,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
     videoFps: fps.option,
     timeOffset: Number.isFinite(Number(offset.value)) ? Number(offset.value) : 0,
     warmRangeSeconds: Number.isFinite(Number(range.value)) ? Number(range.value) : 30,
+    temperature: Number.isFinite(Number(temp.value)) && Number(temp.value) >= 1 ? Math.floor(Number(temp.value)) : 50,
     prepareMode: modeValue(),
   });
   return { sync, values };

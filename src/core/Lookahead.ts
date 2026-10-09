@@ -65,6 +65,9 @@ export class Lookahead {
     this.range = Math.max(1000, Math.min(300_000, ms));
   }
 
+  /** Force-prepare scenes above this pending line count (temperature). */
+  setTemperature(n: number): void { this.planner.setTemperature(n); }
+
   /** Start of a render at `t`: a jump of the playhead starts the plan over there (what the workers still build for the old one is not wanted). */
   begin(t: number, env: LineEnv): void {
     if (!this.path.enabled) return;
