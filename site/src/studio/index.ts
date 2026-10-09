@@ -76,7 +76,7 @@ export const initStudio = (root: HTMLElement): void => {
   initEditor(subs, status);
   initOptimize({ session: () => session, add: (f, s) => subs.add(f, s), videoFps: () => fps.detected ?? fps.picked, status });
   initAnalyze({ session: () => session, videoFps: () => fps.detected ?? fps.picked });
-  initPerf({ player, session: () => session, choices: () => { const a = advanced.values(); return { renderMode: a.renderMode, fps: a.fps, videoFps: a.videoFps }; } });
+  const perf = initPerf({ player, session: () => session, choices: () => { const a = advanced.values(); return { renderMode: a.renderMode, fps: a.fps, videoFps: a.videoFps }; } });
   // The fonts report and the library manager load when their fold is first opened: the watch view never pays for them.
   const fontsFold = $('stFonts');
   let fontsReport: ReturnType<typeof initFontsReport> | null = null;
@@ -100,6 +100,7 @@ export const initStudio = (root: HTMLElement): void => {
   }, SUB_FILE);
 
   const setView = (v: View, remember = true): void => {
+    if (v === 'watch') perf.stop();
     view = v;
     root.querySelector<HTMLElement>('#st')!.dataset.view = v;
     root.querySelectorAll<HTMLButtonElement>('#stView [data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === v)));

@@ -44,8 +44,36 @@ export class MinHeap<T> {
 
   clear(): void { this.a.length = 0; this.seq = 0; }
 
+  /** Apply a rare priority update, then restore heap order. */
+  update(match: (v: T) => boolean, change: (v: T) => void): boolean {
+    let changed = false;
+    for (const e of this.a) {
+      if (!match(e.v)) continue;
+      change(e.v);
+      e.p = this.prio(e.v);
+      changed = true;
+    }
+    if (!changed) return false;
+    for (let i = (this.a.length >> 1) - 1; i >= 0; i--) this.down(i);
+    return true;
+  }
+
   private less(i: number, j: number): boolean {
     const x = this.a[i], y = this.a[j];
     return x.p < y.p || (x.p === y.p && x.n < y.n);
+  }
+
+  private down(start: number): void {
+    const a = this.a;
+    let i = start;
+    for (;;) {
+      const l = 2 * i + 1, r = l + 1;
+      let m = i;
+      if (l < a.length && this.less(l, m)) m = l;
+      if (r < a.length && this.less(r, m)) m = r;
+      if (m === i) break;
+      [a[i], a[m]] = [a[m], a[i]];
+      i = m;
+    }
   }
 }

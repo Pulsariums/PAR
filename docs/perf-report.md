@@ -17,6 +17,9 @@ Nothing is sent anywhere. The report has no file name and no subtitle text: only
 * **Canvas path**: `lines` events on screen, `drawn` items the canvas path drew, `fill` the pixels those draws covered (megapixels), `draw call p95` the renderer's own timing of one draw. `shed` frames are frames where PAR left the faintest items out because frames were running late (see docs/performance.md); `sprite misses` are sprites built while drawing (they cost frame time), `skipped` items not drawn because their sprite was not ready, `blurs dropped` blurs left out under the build budget.
 * **Worst frames**: the 20 slowest frames at least 300 ms apart (one stutter is one entry), with the subtitle time, so a bad second can be found in the file.
 * **Not playing the whole time**: the run included a pause; the averages then mix paused and playing frames.
+* **Diagnostics**: when present, the `diagnostics` section groups nearby late frames into hotspots and gives a best-effort cause. `confidence` describes how strongly the measured evidence supports that cause; it is not a guarantee. The frame budget is derived from the selected render/video fps.
+* **Hotspot evidence**: `gapMs` is the observed frame gap, `budgetMs` is the expected frame interval, `renderMs` is the renderer timing proxy, `longTaskMs` is overlapping main-thread long-task time, `fillMpx` is canvas fill volume, `compositeMs` is compositor time, `spriteMisses` is sprite work during drawing, `pending` and `deficitMs` describe look-ahead pressure, and `sourceLoading` / `decodeMs` describe source pressure.
+* **Cause labels**: `main-thread/dom`, `canvas/fill/composite`, `sprite-build/cache`, `source/decode/window`, `worker/lookahead`, and `scheduler/unknown` are diagnostic buckets for triage, not proof of a single bottleneck. A browser without long-task support or with unavailable renderer timings may leave evidence at zero.
 
 ## JSON schema
 
@@ -31,6 +34,13 @@ frames        count, fpsAvg, gap {p50,p90,p95,p99,max}, over33, over50, over100,
 render        lines/drawn/fillMpx {p50,max}, drawMsP95, shedFrames, shedItemsMax, spriteMisses, skipped, detailDropped
 seconds[]     { sec, frames, gapP95, gapMax, lines, drawn, fillMpx, misses }   one row per second of the run
 worst[]       { at (ms into the run), media (s), gap, lines, drawn, fillMpx, shed }
+diagnostics   { schema "par-perf-diagnostics/1", budgetMs, hotspotCount, longTaskOverlapMs,
+                hotspots[], limitations[] }                                  optional
+hotspots[]    { at, media, durationMs, frames, cause, confidence, evidence }
+evidence      { gapMs, budgetMs, renderMs, longTaskMs, fillMpx, compositeMs,
+                spriteMisses, pending, deficitMs, sourceLoading, decodeMs }
 ```
+
+`diagnostics` is additive to `par-perf/1`; consumers that do not understand it can ignore the section. `limitations` records missing measurements or caveats for the run. The report remains local-only and contains no file name or subtitle text.
 
 Code: `site/src/studio/perf/` (`recorder.ts` collects frames, `report.ts` builds the report and the summary, `scan.ts` finds busy moments, `ui.ts` is the fold). Tests: `test/perf-report.test.ts`.

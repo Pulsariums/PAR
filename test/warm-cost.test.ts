@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 import { SliceBudget } from '../src/canvas/warm/budget';
 import { WarmPlanner, type Builder, type Entry } from '../src/canvas/warm/planner';
@@ -18,6 +18,12 @@ const rig = (cost: number) => {
 };
 
 describe('an entry that would overrun the slice', () => {
+  beforeEach(() => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it('never starts inside a frame, is taken first by a slice between frames, and the rest waits for the next one', () => {
     const { k, taken, b, p } = rig(5);
     const inFrame = step(k, p, b, 1.5, false);

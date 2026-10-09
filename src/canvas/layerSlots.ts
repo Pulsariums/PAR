@@ -8,6 +8,11 @@ export interface Slot {
   dirty: boolean;
 }
 
+export interface SlotProfile {
+  stateChange(): void;
+  drawOp(): void;
+}
+
 /**
  * The pool of canvas elements the canvas path draws into: one per run of consecutive canvas events, each as large as the stage
  * (layout size) with a device-resolution backing store, created on demand, attached at their z-order position, cleared and
@@ -17,8 +22,11 @@ export class Slots {
   private readonly list: Slot[] = [];
   private size = { w: 0, h: 0, f: 0 };
   private layout: Size = { width: 0, height: 0 };
+  private profile: SlotProfile | null = null;
 
   constructor(private readonly overlay: Overlay, readonly max: number) {}
+
+  setProfile(profile: SlotProfile | null): void { this.profile = profile; }
 
   /** Device pixels per layout unit and the backing store's size in pixels. */
   get f(): number { return this.size.f; }
@@ -64,7 +72,9 @@ export class Slots {
     const s = this.slot(i);
     if (!s) return null;
     s.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.profile?.stateChange();
     s.ctx.clearRect(0, 0, s.el.width, s.el.height);
+    this.profile?.drawOp();
     s.dirty = true;
     const key = `${layer}:${index}`;
     if (!s.attached || s.el.dataset.parRun !== key) {
@@ -80,7 +90,13 @@ export class Slots {
   closeFrom(from: number): void {
     for (let i = from; i < this.list.length; i++) {
       const s = this.list[i];
-      if (s.dirty) { s.ctx.setTransform(1, 0, 0, 1, 0, 0); s.ctx.clearRect(0, 0, s.el.width, s.el.height); s.dirty = false; }
+      if (s.dirty) {
+        s.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.profile?.stateChange();
+        s.ctx.clearRect(0, 0, s.el.width, s.el.height);
+        this.profile?.drawOp();
+        s.dirty = false;
+      }
       if (s.attached) { s.el.remove(); s.attached = false; delete s.el.dataset.parRun; }
     }
   }

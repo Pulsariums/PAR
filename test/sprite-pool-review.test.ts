@@ -91,17 +91,17 @@ describe('pool: failures never turn into "unbuildable", never leave a job pendin
     expect(pool.accepts(spec('A', FAM('Arial')), 'b')).toBe(true);
   });
 
-  it('a seek or font change does not make the pool forget the jobs the workers still hold (no unbounded mailbox)', async () => {
+  it('releases logical capacity for stale generations while the worker drains its old mailbox', async () => {
     const pool = new SpritePool(() => fakeWorker(hostDeps()), 1, hooks());
     await wait();
     let n = 0;
     while (pool.submit(`a${n}`, spec('A'))) n++;
     pool.flush();
     pool.invalidate();
-    expect(pool.capacity).toBe(0); // all 64 are still queued in the worker
-    expect(pool.submit('fresh', spec('F'))).toBe(false);
+    expect(pool.capacity).toBe(16);
+    expect(pool.submit('fresh', spec('F'))).toBe(true);
     await wait();
-    expect(pool.capacity).toBe(64);
+    expect(pool.capacity).toBe(15);
   });
 
   it('results that arrive after destroy are closed, not delivered', async () => {

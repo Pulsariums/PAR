@@ -11,8 +11,6 @@ import type { LineEnv } from '../render/LineView';
 
 /** No frame drawn for this long (ms) = nothing is playing: idle slices may be long. */
 const IDLE_AFTER_MS = 120;
-/** Look-ahead time taken inside a render itself (ms); the rest of the work is done by the pump between frames. */
-const IN_FRAME_MS = 1.5;
 /** Time a frame spends handing the sprites it is missing to the builders (ms). */
 const URGENT_MS = 3;
 /** Without canvas lines on screen, the look-ahead runs on every this-many-th render. */
@@ -21,6 +19,9 @@ const QUIET_EVERY = 6;
 const BOOT_WAIT_MS = 1500;
 /** Safety margin (frames) between a sprite landing and the frame that draws it, for the deficit estimate. */
 const MARGIN_FRAMES = 2;
+/** Only prepare exact work in the next four seconds, using small between-frame slices. */
+export const COLD_RANGE_MS = 4000;
+export const COLD_SLICE_MS = 4;
 
 /**
  * Builds the sprites the coming frames need, ahead of the frame that draws them. The warm plan (`WarmPlanner`) says what and in
@@ -39,6 +40,7 @@ export class Lookahead {
   private replan = false;
   private faces: FaceInfo[] = [];
   private armed = false;
+  private paintTask: number | null = null;
   private gen = 0;
   private lastDrawAt = 0;
   private lastRenderAt = 0;
@@ -63,7 +65,7 @@ export class Lookahead {
   begin(t: number, env: LineEnv): void {
     if (!this.path.enabled) return;
     this.lastEnv = env;
-    if (this.planner.isSeek(t)) { this.pool?.invalidate(); this.planner.seek(t, this.lines()); this.waiting.clear(); this.rate.idle(); }
+    if (this.planner.isSeek(t)) { this.clear(); this.lastEnv = env; this.planner.seek(t, this.lines()); }
     this.lastT = t;
   }
 
@@ -74,14 +76,18 @@ export class Lookahead {
     if (spentMs === null && this.quiet++ % QUIET_EVERY !== 0) return;
     this.begin(t, env);
     if (spentMs !== null) { this.budget.noteFrame(spentMs, this.lastRenderAt ? now - this.lastRenderAt : null); this.lastDrawAt = now; this.lastRenderAt = now; }
-    this.run(IN_FRAME_MS, false);
+    // Background planning starts after paint; only a frame's missing sprites are urgent.
+    this.arm();
   }
 
   /** The frame needed these and did not find them: they go to the front, workers get them now. */
   private urgent(items: DrawItem[]): void {
     if (!this.lastEnv) return;
     this.waiting = new Set(items.map((i) => i.key));
-    for (const it of items) this.planner.urgent(it.key, it.spec, this.lastT);
+    for (const it of items) {
+      this.planner.urgent(it.key, it.spec, this.lastT);
+      this.pool?.prioritize(it.key);
+    }
     this.run(URGENT_MS, false);
   }
 
@@ -93,7 +99,7 @@ export class Lookahead {
     this.mainBuilt = 0;
     this.mainEst = 0;
     const t0 = performance.now();
-    const w = this.planner.step(this.lastT, env, env.frameMs ?? 41.7, budgetMs, this.lines(), this.builder(), exempt);
+    const w = this.planner.step(this.lastT, env, env.frameMs ?? 41.7, budgetMs, this.lines(), this.builder(), exempt, COLD_RANGE_MS);
     this.pool?.flush();
     if (this.mainBuilt > 0) this.budget.noteBuilds(this.mainBuilt, performance.now() - t0, this.mainEst);
     this.measure();
@@ -157,9 +163,18 @@ export class Lookahead {
     this.pool = createSpritePool(this.poolOpt ?? 'auto', {
       // Arrivals happen between frames, never inside a draw: bitmaps this one pushed out can be closed now (a paused or hidden page draws nothing to sweep them).
       built: (k, s) => { this.path.cache.put(k, s, this.planner.ahead.wants(k)); this.path.cache.sweep(); this.planner.landed(k); this.measure(); this.noteLanded(k); },
+      builtBatch: (items) => {
+        for (const { key, sprite } of items) {
+          this.path.cache.put(key, sprite, this.planner.ahead.wants(key));
+          this.planner.landed(key);
+          this.noteLanded(key);
+        }
+        this.path.cache.sweep();
+        this.measure();
+      },
       // A worker could not build it (a face it lacks, an exception): the page thread does, same key, same pixels.
       refused: (k) => { this.planner.requeue(k); this.arm(); },
-      free: () => { if (this.planner.queued > 0) this.arm(); },
+      free: () => { if (this.lastEnv) this.arm(); },
       // Whatever was handed to the dead workers will never arrive: plan again, the main thread builds it.
       failed: () => { this.pool = null; this.replan = true; this.arm(); },
     });
@@ -179,20 +194,26 @@ export class Lookahead {
     this.armed = true;
     const gen = this.gen;
     const run = (): void => { if (gen === this.gen) this.pump(); };
-    if (typeof MessageChannel === 'undefined') { setTimeout(run, 0); return; }
-    // A message task, not `setTimeout(0)`: timers are clamped to 4 ms once nested, which left the pump idle two thirds of the time.
-    const ch = new MessageChannel();
-    ch.port1.onmessage = () => { ch.port1.close(); run(); };
-    ch.port2.postMessage(0);
+    const task = (): void => {
+      if (gen !== this.gen) return;
+      this.paintTask = null;
+      if (typeof MessageChannel === 'undefined') { setTimeout(run, 0); return; }
+      const ch = new MessageChannel();
+      ch.port1.onmessage = () => { ch.port1.close(); ch.port2.close(); run(); };
+      ch.port2.postMessage(0);
+    };
+    // rAF alone runs before paint; the message task after it keeps cold work off first paint.
+    if (typeof requestAnimationFrame === 'function') this.paintTask = requestAnimationFrame(task);
+    else setTimeout(task, 0);
   }
 
-  /** One slice between frames: sized from what recent frames cost while frames are drawn, long when nothing was drawn lately. */
+  /** One bounded slice between frames, reduced further when recent frames are under load. */
   private pump(): void {
     this.armed = false;
     // A hidden tab draws nothing and the playhead does not move: the plan has what it needs, no more CPU for it.
     if (!this.lastEnv || !this.path.enabled || (typeof document !== 'undefined' && document.hidden)) return;
     const playing = performance.now() - this.lastDrawAt < IDLE_AFTER_MS;
-    this.run(this.budget.slice(playing, playing ? this.path.load : null));
+    this.run(Math.min(COLD_SLICE_MS, this.budget.slice(playing, playing ? this.path.load : null)));
   }
 
   /** Workers are building: only then can the builders be faster than the clock, so only then is holding the picture for them worth it. */
@@ -215,12 +236,14 @@ export class Lookahead {
 
   /** Fonts changed or the stage was rebuilt, or a new script: the plan and the jobs in flight are stale. */
   clear(): void {
+    this.gen++;
+    if (this.paintTask !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.paintTask);
+    this.paintTask = null;
+    this.armed = false;
+    this.lastEnv = null;
     this.planner.reset();
     this.pool?.invalidate();
     this.replan = false;
-    this.gen++;
-    this.armed = false;
-    this.lastEnv = null;
     this.quiet = 0;
     this.waiting.clear();
     this.rate.idle();

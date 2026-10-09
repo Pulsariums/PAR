@@ -74,6 +74,34 @@ describe('report', () => {
     expect(summaryText(buildReport(run(fs), { ...env, softwareGpu: true }, setup, null))).toContain('[SOFTWARE rendering]');
   });
 
+  it('keeps logger detail bounded, text-free, and separates timing domains', () => {
+    const fs = [
+      frame(0, { at: 0, lines: 180, diagnostics: {
+        serial: 1, observedAt: 100, media: 1, presented: true, held: false, sceneMs: 8, renderMs: 9, domMs: 2, canvasMs: 3, eventCount: 180,
+        canvas: { drawImages: 1, drawOps: 2, stateChanges: 1, spriteLookups: 2, spriteHits: 1, spriteMisses: 1, jsMs: 4, signature: 'x' },
+        candidates: [{ id: 'event-1', index: 1, start: 0, end: 2, path: 'canvas', style: 'Default' }],
+      }, render: { domLines: 20, canvasLines: 160, spriteHits: 1, spriteMisses: 2, workers: 1, workerBuilt: 1, planQueued: 0, planLeadMs: 1, pending: 0, readyMs: 0, deficitMs: 0, buildRate: 1, missing: 0, missedTotal: 0, held: 0, compositeMs: 5, stalls: 0, stallMs: 0, evictions: 0 }, source: { windowEvents: 2, loading: false, bytesRead: 1, decodeMs: 6, indexMs: 1 },
+      }),
+      frame(800, { at: 800, lines: 160, gap: 800, diagnostics: { serial: 2, observedAt: 800, media: 2, presented: true, held: false, sceneMs: 10, renderMs: 11, domMs: 3, canvasMs: 4, eventCount: 160 } }),
+    ];
+    const r = buildReport(run(fs, {
+      lineEvents: [{ at: 100, media: 1, mediaTime: 1, sessionId: 2, generation: 3, epoch: 4, id: 'event-1', index: 1, start: 100, end: 102, path: 'canvas', outcome: 'rendered' }],
+      videoFrames: [{ at: 0, media: 1 }, { at: 40, media: 1.04 }],
+    }), env, setup, null);
+    expect(r.logger.schema).toBe('par-logger/1');
+    expect(r.logger.lineEvents.records).toEqual([expect.objectContaining({ id: 'event-1', path: 'canvas' })]);
+    expect(JSON.stringify(r.logger)).not.toContain('subtitle text');
+    expect(r.logger.video).toMatchObject({ available: true, fps: 25, frames: 2 });
+    expect(r.logger.denseScenes[0]).toMatchObject({ peakLines: 180, frames: 2 });
+    expect(r.logger.timeline[0]).toMatchObject({ renderMsP95: 11, sourceMsP95: 6, canvasMsP95: 4, compositeMsP95: 5, jsMsP95: 4 });
+  });
+
+  it('marks video presentation unavailable without VFC metadata', () => {
+    const r = buildReport(run([frame(0)]), env, setup, null);
+    expect(r.logger.video).toMatchObject({ available: false, fps: null, frames: 0 });
+    expect(r.logger.limitations).toContain('video presentation metadata unavailable');
+  });
+
   it('an empty run still builds a report', () => {
     const r = buildReport(run([]), env, setup, null);
     expect(r.frames.count).toBe(0);

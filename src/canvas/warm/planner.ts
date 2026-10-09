@@ -7,21 +7,22 @@ import type { ClipShape } from '../../render/clipCss';
 import type { DrawItem, SpriteSpec } from '../types';
 
 import { Ahead } from './ahead';
-import { Expander, type Lines } from './expand';
+import { Expander, MAX_SLICE_REQUESTS, type Lines } from './expand';
 import { Frontier } from './frontier';
 import { MinHeap } from './heap';
 
 export type { Lines } from './expand';
 
-/** How far ahead (ms of subtitle time) the plan may ever look; what really limits it is the sprite memory (`AHEAD_SHARE`). */
+/** How far ahead (ms of subtitle time) the plan may look; queue admission remains tightly bounded below. */
 export const HORIZON_MS = 60_000;
-const MAX_QUEUE = 40_000;
+/** Bound pending variants so dense animated scripts cannot monopolize the cache or worker mailboxes. */
+const MAX_QUEUE = 512;
 const MAX_BAKES = 5000;
 /** A jump of the playhead beyond this (forward) or this much back is a seek: the plan starts over from the new time. */
 const SEEK_FORWARD_MS = 3000;
 const SEEK_BACK_MS = 150;
 /** Share of the sprite cache that sprites promised to later frames may hold: the rest is room for what was drawn lately. */
-export const AHEAD_SHARE = 0.7;
+export const AHEAD_SHARE = 0.5;
 /** Sprites needed within this many ms may use the whole cache, not only the ahead share (the frame is about to need them). */
 const IMMINENT_MS = 600;
 
@@ -60,6 +61,7 @@ export class WarmPlanner {
   private inflightBytes = 0;
   private queuedBytes = 0;
   private bakes: BakeJob[] = [];
+  private readonly bakeKeys = new Set<string>();
   private lastT = NaN;
   private frameMs = 41.7;
   /** The next chunk of a windowed script is not loaded yet: planning cannot go further. */
@@ -89,6 +91,7 @@ export class WarmPlanner {
     this.ahead.clear();
     this.expander.reset();
     this.bakes = [];
+    this.bakeKeys.clear();
     this.inflight.clear();
     [this.inflightBytes, this.queuedBytes, this.doneCost, this.lastT] = [0, 0, 0, NaN];
     this.blocked = false;
@@ -102,7 +105,7 @@ export class WarmPlanner {
     this.lastT = t;
   }
 
-  step(t: number, env: LineEnv, frameMs: number, budgetMs: number, lines: Lines, builder: Builder, exempt = true): Warmed {
+  step(t: number, env: LineEnv, frameMs: number, budgetMs: number, lines: Lines, builder: Builder, exempt = true, rangeMs = HORIZON_MS): Warmed {
     const t0 = performance.now();
     const left = (): number => budgetMs - (performance.now() - t0);
     this.lastT = t;
@@ -110,7 +113,8 @@ export class WarmPlanner {
     this.ahead.release(t - frameMs);
     const share = this.path.cache.capBytes * AHEAD_SHARE;
     const room = (): boolean => this.heap.size < MAX_QUEUE && this.path.cache.pinnedBytes + this.inflightBytes + this.queuedBytes < share * 1.25;
-    const r = this.expander.run(this.path, t, env, frameMs, lines, t + HORIZON_MS, room, left, (q) => this.want(q, t));
+    const planLeft = (): number => budgetMs / 2 - (performance.now() - t0);
+    const r = this.expander.run(this.path, t, env, frameMs, lines, t + Math.min(HORIZON_MS, rangeMs), room, planLeft, (q) => this.want(q, t));
     this.blocked = r.blocked;
     const out = this.build(t, left, builder, exempt);
     const baking = this.bake(left);
@@ -121,7 +125,14 @@ export class WarmPlanner {
   private want(r: SpriteReq, t: number): void {
     if (r.until < t) return;
     this.ahead.hold(r.key, r.until);
-    if (r.bake && this.bakes.length < MAX_BAKES) this.bakes.push({ base: r.key, ...r.bake, until: r.until });
+    if (r.bake) {
+      const existing = this.bakes.find((b) => b.key === r.bake!.key);
+      if (existing) existing.until = Math.max(existing.until, r.until);
+      else if (this.bakes.length < MAX_BAKES) {
+        this.bakes.push({ base: r.key, ...r.bake, until: r.until });
+        this.bakeKeys.add(r.bake.key);
+      }
+    }
     if (this.path.cache.has(r.key) || this.frontier.has(r.key)) return;
     this.push({ key: r.key, spec: r.spec, ms: r.ms, until: r.until, bytes: estimateBytes(r.spec), cost: estimateBuildMs(r.spec), prio: r.ms });
   }
@@ -136,7 +147,11 @@ export class WarmPlanner {
   urgent(key: string, spec: SpriteSpec, t: number): void {
     if (this.path.cache.has(key) || this.inflight.has(key)) return;
     this.ahead.hold(key, t + IMMINENT_MS * 3);
-    if (this.frontier.has(key)) return;
+    if (this.frontier.has(key)) {
+      this.heap.update((e) => e.key === key, (e) => { e.ms = Math.min(e.ms, t); e.prio = -1; });
+      this.frontier.add(key, t, estimateBuildMs(spec));
+      return;
+    }
     this.push({ key, spec, ms: t, until: t + IMMINENT_MS * 3, bytes: estimateBytes(spec), cost: estimateBuildMs(spec), prio: -1 });
   }
 
@@ -155,11 +170,11 @@ export class WarmPlanner {
     let i = 0;
     for (; i < this.bakes.length; i++) {
       const b = this.bakes[i];
-      if (b.until < this.lastT) continue;
-      if (cache.has(b.key)) { this.ahead.hold(b.key, b.until); continue; }
+      if (b.until < this.lastT) { this.bakeKeys.delete(b.key); continue; }
+      if (cache.has(b.key)) { this.bakeKeys.delete(b.key); this.ahead.hold(b.key, b.until); continue; }
       if (!cache.peek(b.base)) { keep.push(b); continue; }
       if (left() <= 0) break;
-      if (bakeAhead(cache, b.key, b.item, b.clip)) this.ahead.hold(b.key, b.until);
+      if (bakeAhead(cache, b.key, b.item, b.clip)) { this.bakeKeys.delete(b.key); this.ahead.hold(b.key, b.until); }
     }
     const more = i < this.bakes.length;
     this.bakes = more ? keep.concat(this.bakes.slice(i)) : keep;
@@ -185,9 +200,9 @@ export class WarmPlanner {
   private build(t: number, left: () => number, builder: Builder, exempt: boolean): { built: number; more: boolean; waiting: boolean } {
     const cache = this.path.cache;
     let built = 0;
-    for (let e = this.heap.peek(); e && (e.prio < 0 || e.ms <= this.expander.frontier + 2 * this.frameMs); e = this.heap.peek()) {
+    for (let e = this.heap.peek(); e && (e.prio < 0 || e.ms <= this.expander.pendingUntil + 2 * this.frameMs); e = this.heap.peek()) {
       if (cache.has(e.key)) { this.heap.pop(); this.queuedBytes -= e.bytes; this.frontier.done(e.key); if (this.ahead.wants(e.key)) cache.pin(e.key); continue; }
-      if (left() <= 0) return { built, more: true, waiting: false };
+      if (left() <= 0 || built >= MAX_SLICE_REQUESTS) return { built, more: true, waiting: false };
       const used = cache.pinnedBytes + this.inflightBytes;
       const cap = cache.capBytes * (e.ms <= t + IMMINENT_MS ? 1 : AHEAD_SHARE);
       if (used > 0 && used + e.bytes > cap) return { built, more: false, waiting: false };

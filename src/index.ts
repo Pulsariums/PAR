@@ -30,6 +30,7 @@ export type { ResolvedLayout } from './layout/resolve';
 export { msOf, timeToMs, frameRate, frameIndex, frameMs } from './core/time';
 export type { Rate } from './core/time';
 export type { SourceStatsReport } from './core/WindowFeed';
+export type { DiagnosticsEventSink, DiagnosticsEventSinkLike, DiagnosticsLog, DiagnosticsOutcome, DiagnosticsPath, DiagnosticsSnapshot, DiagnosticsVideoFrame, RenderMarker } from './core/Diagnostics';
 export { fromAssText } from './source/fromText';
 export { isSubtitleSource } from './source/types';
 export { inWindow, filterWindow } from './source/window';

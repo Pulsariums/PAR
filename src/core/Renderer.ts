@@ -20,6 +20,8 @@ import { Scene } from './Scene';
 import { ScriptHost } from './ScriptHost';
 import { timeToMs } from './time';
 import type { SourceStatsReport } from './WindowFeed';
+import { Diagnostics, RenderLogger, type DiagnosticsEventSinkLike, type DiagnosticsLog, type DiagnosticsSnapshot } from './Diagnostics';
+import type { VideoFrameMetadata } from '../clock/Scheduler';
 
 /** The PAR renderer instance. Create it with `PAR.create(options)` or `new PARRenderer(options)`. */
 export class PARRenderer extends FontApi {
@@ -38,17 +40,24 @@ export class PARRenderer extends FontApi {
   private forceNext = true;
   private lastMs = NaN;
   private lastRaw = 0;
+  private renderGeneration = 0;
   private destroyed = false;
   private readonly frames = new FrameStats();
+  private readonly diagnostics = new Diagnostics();
+  private readonly logger = new RenderLogger();
+  private lastVideoFrame: VideoFrameMetadata | undefined;
   private readonly load = new LoadMeter();
   private readonly stall = new Stall(() => this.opts.video, () => this.scene.deficit(this.lastMs));
   constructor(options: PAROptions) {
     super();
     this.opts = resolveOptions(options);
-    this.scheduler = new Scheduler((mediaTime) => this.frame(mediaTime));
+    this.scheduler = new Scheduler((mediaTime, metadata) => {
+      this.lastVideoFrame = metadata;
+      this.frame(mediaTime);
+    });
     this.host = new ScriptHost({
       scene: () => this.scene, fonts: this.fonts, windowSeconds: () => this.opts.windowSeconds, reset: () => this.resetMissing(),
-      changed: () => { this.env = { ...this.env, styles: this.host.styles }; this.forceNext = true; this.draw(this.now(), false); },
+      changed: () => { this.diagnostics.clear(); this.logger.segment(); this.env = { ...this.env, styles: this.host.styles }; this.forceNext = true; this.draw(this.now(), false); },
       error: (e) => console.warn('PAR: subtitle source error', e),
     });
     this.mount();
@@ -69,14 +78,42 @@ export class PARRenderer extends FontApi {
    */
   setSubtitle(input: string | SubtitleSource | null): void {
     this.assertAlive();
+    this.logger.segment();
     this.host.load(input || null);
     this.env = { ...this.env, styles: this.host.styles };
     this.invalidate();
+    this.diagnostics.clear();
   }
 
   /** Window / source numbers: events in memory, loaded range, whether a read is running, bytes read and decode time. */
   getSourceStats(): SourceStatsReport {
     return this.host.stats();
+  }
+
+  /** Enables or disables opt-in frame timing and visible-event attribution. */
+  setDiagnostics(enabled: boolean): void {
+    this.assertAlive();
+    this.diagnostics.setEnabled(enabled);
+    this.scene.setDiagnostics(enabled);
+    if (enabled) this.forceNext = true;
+  }
+
+  /** Returns the latest diagnostic frame, optionally materializing up to 20 visible-event candidates. */
+  getDiagnostics(includeEvents = false): DiagnosticsSnapshot | null {
+    return this.diagnostics.snapshot(includeEvents);
+  }
+
+  /** Installs the opt-in bounded event sink. Null disables it with no per-line logging work. */
+  setEventLogger(sink: DiagnosticsEventSinkLike | null): void {
+    this.assertAlive();
+    this.logger.setSink(sink);
+    this.scene.setLogger(this.logger.enabled ? this.logger : null);
+    this.scheduler.setMetadataCapture(this.logger.enabled);
+  }
+
+  /** Returns current-segment markers and cumulative drops since the event sink was installed. */
+  getEventLog(): DiagnosticsLog {
+    return this.logger.snapshot();
   }
 
   /** Changes options at runtime. Only the given keys change. */
@@ -85,8 +122,13 @@ export class PARRenderer extends FontApi {
     const prev = this.opts;
     this.opts = resolveOptions(patch, prev);
     if (this.opts.container !== prev.container || this.opts.video !== prev.video) {
+      const diagnosticsEnabled = this.diagnostics.active;
+      const loggerEnabled = this.logger.enabled;
       this.unmount();
       this.mount();
+      this.scene.setDiagnostics(diagnosticsEnabled);
+      this.scene.setLogger(loggerEnabled ? this.logger : null);
+      this.scheduler.setMetadataCapture(loggerEnabled);
       this.host.bind();
     } else if (this.opts.zIndex !== prev.zIndex) this.overlay.setZIndex(this.opts.zIndex);
     if (patch.subtitle !== undefined) this.setSubtitle(patch.subtitle);
@@ -117,15 +159,20 @@ export class PARRenderer extends FontApi {
   /** Removes the overlay, listeners and loop; the instance is dead afterwards. */
   destroy(): void {
     if (this.destroyed) return;
+    this.setEventLogger(null);
+    this.lastVideoFrame = undefined;
     this.unmount();
     this.disposeFonts();
     this.host.dispose();
+    this.diagnostics.setEnabled(false);
     this.destroyed = true;
   }
 
   /** Fonts changed: measured boxes (collisions) are stale, so rebuild every visible line. */
   protected onFontsChanged(): void {
     if (this.destroyed) return;
+    this.diagnostics.clear();
+    this.logger.segment();
     this.scene.hold = this.missing.hold;
     this.scene.clear();
     this.scene.setFaces(this.fonts.shipFaces());
@@ -137,9 +184,16 @@ export class PARRenderer extends FontApi {
     this.overlay = new Overlay(container, this.opts.zIndex);
     this.scene = new Scene(this.overlay, () => this.opts.renderMode, this.opts.spriteCacheMB * 1048576, debugWorkers);
     this.scene.setFaces(this.fonts.shipFaces());
-    this.scene.onReady = () => { if (!this.destroyed) this.draw(this.now(), false); };
+    this.scene.onReady = (epoch, generation) => {
+      queueMicrotask(() => {
+        if (!this.destroyed && generation === this.renderGeneration && this.scene.readyEpoch === epoch && this.scene.readyGeneration === generation) this.draw(this.now(), false, true);
+      });
+    };
     this.teardown.push(observeSize(container, video, () => this.invalidate()));
     if (video) {
+      const cancelWarm = (): void => { this.scene.cancelWarm(); this.logger.segment(); };
+      video.addEventListener('seeking', cancelWarm);
+      this.teardown.push(() => video.removeEventListener('seeking', cancelWarm));
       this.teardown.push(bindVideoEvents(video, {
         play: () => this.syncLoop(),
         pause: () => { this.syncLoop(); this.draw(this.now(), false); },
@@ -154,6 +208,7 @@ export class PARRenderer extends FontApi {
   }
 
   private unmount(): void {
+    this.diagnostics.clear();
     this.scheduler.stop();
     this.load.stop();
     this.stall.dispose();
@@ -172,7 +227,11 @@ export class PARRenderer extends FontApi {
 
   private now(): number { return this.opts.clock ? this.opts.clock() : this.opts.video ? this.opts.video.currentTime : this.lastRaw; }
 
-  private frame(mediaTime: number | null): void { this.draw(this.opts.clock || mediaTime === null ? this.now() : mediaTime, false); }
+  private frame(mediaTime: number | null): void {
+    const frame = this.lastVideoFrame;
+    this.lastVideoFrame = undefined;
+    this.draw(this.opts.clock || mediaTime === null ? this.now() : mediaTime, false, false, frame);
+  }
   private invalidate(): void {
     if (this.destroyed) return;
     this.layoutDirty = true;
@@ -180,22 +239,32 @@ export class PARRenderer extends FontApi {
     this.draw(this.now(), true);
   }
 
-  private draw(raw: number, force: boolean): void {
+  private draw(raw: number, force: boolean, retry = false, videoFrame?: VideoFrameMetadata): void {
+    const generation = ++this.renderGeneration;
     if (this.destroyed || !Number.isFinite(raw) || this.fonts.blocking) return;
     const ms = timeToMs(raw + this.opts.timeOffset, this.opts.videoFps);
     if (this.layoutDirty) this.relayout();
     this.host.update(ms);
     const forced = force || this.forceNext;
-    if (!forced && ms === this.lastMs) return;
+    if (!forced && !retry && ms === this.lastMs) return;
     const running = this.scheduler.isRunning;
     this.scene.setLoad(running ? this.load.late() : null);
     // A frame is presented whole or not at all while the picture can wait for it (paused, seeking, a video the renderer may hold);
     // a free-running custom clock cannot be held: it draws what is ready (the missing are counted) and the builders rush the rest.
     const policy = (!running || (this.opts.video && this.scene.buffers)) && !this.scene.stuck ? 'hold' : 'partial';
     let complete = true;
-    this.frames.time(() => { complete = this.scene.render(ms, this.env, forced, policy); });
+    const renderStart = this.diagnostics.active ? performance.now() : 0;
+    this.frames.time(() => { complete = this.scene.render(ms, this.env, forced, policy, generation, raw); });
+    if (this.diagnostics.active) {
+      const sample = this.scene.diagnostics;
+      if (sample) this.diagnostics.record({ ...sample, media: raw, presented: complete || policy === 'partial', held: !complete && policy === 'hold', renderMs: performance.now() - renderStart, videoFrame: videoFrame ? { ...videoFrame } : undefined });
+    }
     if (running && this.opts.video && this.scene.buffers) this.stall.consider(this.scene.deficit(ms));
-    if (!complete && policy === 'hold') return; // held: `onReady` draws it again; the previous picture stays
+    if (!complete && policy === 'hold') {
+      // The attempted frame has applied layout/DOM state; readiness retries must not force static lines again.
+      this.forceNext = false;
+      return; // held: `onReady` draws it again; the previous picture stays
+    }
     [this.forceNext, this.lastMs] = [false, ms];
   }
 
@@ -203,7 +272,10 @@ export class PARRenderer extends FontApi {
     this.layoutDirty = false;
     const { region, layout, resolved, transform: st } = computeStage(this.opts, this.host.info);
     const prev = this.env;
-    if (prev.layout.width !== layout.width || prev.layout.height !== layout.height) this.scene.clear();
+    if (prev.layout.width !== layout.width || prev.layout.height !== layout.height) {
+      this.scene.clear();
+      this.logger.segment();
+    }
     const devScale = deviceScale(this.opts.container, region.width, layout.width);
     this.env = { ...prev, layout, borderScale: st.borderScale, blurScale: st.blurScale, devScale, frameMs: 1000 / (this.opts.videoFps ?? 24) };
     this.forceNext ||= st.borderScale !== prev.borderScale || st.blurScale !== prev.blurScale || devScale !== prev.devScale;

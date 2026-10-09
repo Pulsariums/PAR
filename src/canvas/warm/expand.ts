@@ -2,7 +2,7 @@ import type { PreparedLine } from '../../anim/Prepared';
 import type { LineEnv } from '../../render/LineView';
 import type { CanvasPath } from '../CanvasPath';
 import { AUTO_LOAD } from '../eligibility';
-import { spriteRequests, type SpriteReq } from '../sprites';
+import { spriteRequestSamples, type SpriteReq } from '../sprites';
 
 /** What the plan reads of the script's timeline (`Timeline` plus whether a time is loaded in a windowed script). */
 export interface Lines {
@@ -13,37 +13,32 @@ export interface Lines {
 }
 
 const CHUNK_MS = 500;
+/** Per slice, including duplicate samples and cheap eligibility checks. */
+export const MAX_SLICE_REQUESTS = 128;
 
-/** Same rule the old look-ahead used: forced canvas, canvas lines on screen lately, or a chunk heavy enough that `auto` will route it to the canvas. */
-const wanted = (path: CanvasPath, t: number, chunk: readonly PreparedLine[]): boolean => {
-  if (path.mode() === 'canvas' || path.busy(t)) return true;
-  let load = 0;
-  for (const l of chunk) {
-    const c = path.complexity(l);
-    if (c.eligible && (load += c.score) >= AUTO_LOAD) return true;
-  }
-  return false;
-};
-
-/**
- * Walks the script forward in time chunks and yields the sprites its events need (`spriteRequests`, the derivation drawing and
- * the analyzer use). Lines already on screen at the restart come first, then everything that starts after. Resumable: a slice that
- * runs out of time continues where it stopped.
- */
+/** Walks loaded windows, using cheap eligibility scores before deriving exact, resumable sprite requests. */
 export class Expander {
-  /** Everything starting up to here has been read (its sprites went to `sink`, or it was skipped as unwanted). */
   frontier = NaN;
+  /** Current chunk's boundary, also while admission pauses at a queue/time bound. */
+  get pendingUntil(): number { return Number.isFinite(this.end) ? this.end : this.frontier; }
   private pending: PreparedLine[] = [];
   private pi = 0;
   private end = NaN;
+  private from = 0;
   private wantedChunk = false;
+  private deciding = false;
+  private score = 0;
+  private requests: Generator<SpriteReq> | null = null;
 
   restart(t: number, lines: Lines): void {
     this.frontier = t;
     this.pending = lines.visibleAt(t);
     this.pi = 0;
     this.end = t;
+    this.from = t;
     this.wantedChunk = true;
+    this.deciding = false;
+    this.requests = null;
   }
 
   reset(): void {
@@ -51,27 +46,51 @@ export class Expander {
     this.pending = [];
     this.pi = 0;
     this.end = NaN;
+    this.requests = null;
+    this.deciding = false;
   }
 
-  /** Reads lines until `until` (ms), `room()` says stop, or `left()` runs out. True when it could go on. `blocked`: the next chunk is not loaded (windowed script). */
+  /** Stops between samples, not between full events: queue, time and request bounds all apply to dense animations. */
   run(path: CanvasPath, t: number, env: LineEnv, frameMs: number, lines: Lines, until: number, room: () => boolean, left: () => number, sink: (r: SpriteReq) => void): { more: boolean; blocked: boolean } {
+    let work = 0;
     for (;;) {
-      while (this.pi < this.pending.length) {
-        if (left() <= 0) return { more: true, blocked: false };
+      while (this.deciding && this.pi < this.pending.length) {
+        if (left() <= 0 || work >= MAX_SLICE_REQUESTS) return { more: true, blocked: false };
+        const c = path.complexity(this.pending[this.pi++]);
+        work++;
+        if (c.eligible) this.score += c.score;
+        if (this.score >= AUTO_LOAD) { this.wantedChunk = true; break; }
+      }
+      if (this.deciding) { this.deciding = false; this.pi = 0; }
+      while (this.requests || this.pi < this.pending.length) {
+        if (left() <= 0 || work >= MAX_SLICE_REQUESTS) return { more: true, blocked: false };
+        if (!room()) return { more: false, blocked: false };
+        if (this.requests) {
+          const r = this.requests.next();
+          if (r.done) this.requests = null;
+          else { work++; if (r.value.until >= t) sink(r.value); }
+          continue;
+        }
         const line = this.pending[this.pi++];
+        work++;
         const c = this.wantedChunk ? path.complexity(line) : null;
-        if (c?.eligible) for (const r of spriteRequests(line, env, c.animated, frameMs, lines.startMs(line), undefined, true)) sink(r);
+        if (c?.eligible) this.requests = spriteRequestSamples(line, env, c.animated, frameMs, lines.startMs(line), undefined, true, [Math.max(t, this.from), Math.max(this.end, t + frameMs)]);
       }
       this.pending = [];
       this.pi = 0;
       if (Number.isFinite(this.end)) { this.frontier = this.end; this.end = NaN; }
       if (this.frontier >= until || !room()) return { more: false, blocked: false };
-      if (left() <= 0) return { more: true, blocked: false };
+      if (left() <= 0 || work >= MAX_SLICE_REQUESTS) return { more: true, blocked: false };
       const a = this.frontier, b = Math.min(a + CHUNK_MS, until);
-      if (lines.covers && !lines.covers(b - 1)) return { more: false, blocked: true };
-      this.pending = lines.startingIn(a, b);
+      if (lines.covers && !lines.covers(b)) return { more: false, blocked: true };
+      // Survivors matter: staggered starts can form a dense scene, and animated survivors
+      // need fresh variants as the rolling window advances.
+      this.pending = [...new Set([...lines.visibleAt(a), ...lines.startingIn(a, b)])];
+      this.from = a;
       this.end = b;
-      this.wantedChunk = wanted(path, t, this.pending);
+      this.wantedChunk = path.mode() === 'canvas' || path.busy(t);
+      this.deciding = !this.wantedChunk;
+      this.score = 0;
     }
   }
 }

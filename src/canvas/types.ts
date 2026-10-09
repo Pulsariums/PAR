@@ -95,6 +95,24 @@ export interface PathStats {
   compositeMs: number;
 }
 
+/** Opt-in counters for one canvas composition. These are absent from normal playback metrics. */
+export interface CanvasProfile {
+  /** Number of `drawImage` calls issued by the composition pass. */
+  drawImages: number;
+  /** Canvas drawing calls, including slot clears and `drawImage`. */
+  drawOps: number;
+  /** Context state mutations issued by the composition pass. */
+  stateChanges: number;
+  /** Sprite cache lookups made while resolving this frame. */
+  spriteLookups: number;
+  spriteHits: number;
+  spriteMisses: number;
+  /** JavaScript time spent in the canvas render path, including resolution. */
+  jsMs: number;
+  /** Bounded hash of the effective ordered frame inputs and resolution results. */
+  signature: string;
+}
+
 /** Counters of the look-ahead: the warm plan and the sprite workers. */
 export interface WarmStats {
   /** Sprite workers running (0 = every sprite is built on the main thread) and sprites they have delivered. */

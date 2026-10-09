@@ -155,7 +155,7 @@ describe('sprite pool with a worker double', () => {
     await wait();
     let n = 0;
     while (pool.submit(`k${n}`, spec('A'))) n++;
-    expect(n).toBe(64);
+    expect(n).toBe(16);
   });
 });
 

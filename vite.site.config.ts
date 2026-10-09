@@ -8,6 +8,6 @@ export default defineConfig({
   build: {
     outDir: '../site-dist', emptyOutDir: true, target: 'es2020',
     // Two pages: the site (/PAR/) and the plain player (/PAR/player/).
-    rollupOptions: { input: { main: 'site/index.html', player: 'site/player/index.html' } },
+    rollupOptions: { input: { main: 'index.html', player: 'player/index.html' } },
   },
 });

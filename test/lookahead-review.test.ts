@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CanvasPath } from '../src/canvas/CanvasPath';
 import { SpritePool } from '../src/canvas/workers/pool';
@@ -24,9 +24,12 @@ vi.mock('../src/canvas/workers/create', () => ({
 afterEach(() => { made.pools.length = 0; made.worker = null; made.calls = 0; made.mute = false; vi.restoreAllMocks(); Object.defineProperty(document, 'hidden', { value: false, configurable: true }); });
 
 const pump = (la: Lookahead): void => (la as unknown as { pump(): void }).pump();
-const burst = ev(2000, 2800, '\\blur2', 'A') + ev(2100, 2900, '\\blur3', 'B') + ev(9000, 9800, '\\blur2', 'C');
+const burst = ev(2000, 2800, '\\blur2', 'A') + ev(2100, 2900, '\\blur3', 'B') + ev(4000, 4800, '\\blur2', 'C');
 
 describe('look-ahead and its workers', () => {
+  let perfNow = 0;
+  beforeEach(() => { perfNow = 0; vi.spyOn(performance, 'now').mockImplementation(() => perfNow); });
+  afterEach(() => { vi.restoreAllMocks(); });
   it('starts no worker until a sprite could use one (a quiet page never pays for threads)', () => {
     const k = kit(ev(1000, 2000, ''), { mode: 'auto' });
     (k.path as unknown as { busy: () => boolean }).busy = () => false;
@@ -53,10 +56,11 @@ describe('look-ahead and its workers', () => {
   });
 
   it('a pool that dies hands its in-flight sprites back: they are planned again and built on the main thread, once', async () => {
-    const k = kit(ev(5000, 5800, '\\blur2', 'A') + ev(5100, 5900, '\\blur3', 'B'));
+    const k = kit(ev(3000, 3800, '\\blur2', 'A') + ev(3100, 3900, '\\blur3', 'B'));
     const la = new Lookahead(k.path, k.lines, () => 'auto');
     made.mute = true; // the worker never answers: its jobs stay pending
     la.note(0, k.env, 1);
+    pump(la); // cold planning is deferred until after paint
     await wait();
     la.note(20, k.env, 1);
     pump(la); // submits to the ready worker
@@ -76,12 +80,45 @@ describe('look-ahead and its workers', () => {
     const k = kit(burst);
     const la = new Lookahead(k.path, k.lines, () => 'auto');
     la.note(0, k.env, 1);
+    pump(la); // cold planning is deferred until after paint
     await wait();
     const inv = vi.spyOn(made.pools[0], 'invalidate');
     la.note(20, k.env, 1);
     expect(inv).not.toHaveBeenCalled(); // playing on
     la.note(60_000, k.env, 1);
     expect(inv).toHaveBeenCalledTimes(1);
+  });
+
+  it('prewarms a cold upcoming scene through workers and drops late results after replacement', async () => {
+    const k = kit(ev(3000, 3800, '\\blur2', 'A'));
+    const la = new Lookahead(k.path, k.lines, () => 'auto');
+    la.note(0, k.env, null);
+    expect(k.cache.size).toBe(0);
+    pump(la); // starts the pool; the far sprite waits for worker boot
+    await wait();
+    pump(la);
+    await wait();
+    expect(k.cache.size).toBe(1);
+    expect(k.built).toHaveLength(0);
+    expect(la.stats().workerBuilt).toBe(1);
+    la.begin(3000, k.env);
+    expect(k.cache.size).toBe(1);
+    la.dispose();
+
+    const cold = kit(ev(3000, 3800, '\\blur2', 'B'));
+    made.mute = true;
+    const pending = new Lookahead(cold.path, cold.lines, () => 'auto');
+    pending.note(0, cold.env, null);
+    pump(pending);
+    await wait();
+    pump(pending);
+    expect(made.pools[made.pools.length - 1].pending).toBe(1);
+    pending.clear();
+    const close = vi.fn();
+    made.worker!.fire('message', { data: { op: 'built', gen: 0, items: [{ id: 1, bitmap: { width: 1, height: 1, close }, w: 1, h: 1, boxW: 1, ox: 0, oy: 0, bytes: 4 }] } });
+    expect(cold.cache.size).toBe(0);
+    expect(close).toHaveBeenCalledOnce();
+    pending.dispose();
   });
 
   it('a hidden tab does not pump', async () => {
@@ -104,6 +141,7 @@ describe('look-ahead and its workers', () => {
     const k = kit(burst);
     const la = new Lookahead(k.path, k.lines, () => 'auto');
     la.note(0, k.env, 1);
+    pump(la); // cold planning is deferred until after paint
     await wait();
     la.dispose();
     expect(made.worker!.terminate).toHaveBeenCalled();

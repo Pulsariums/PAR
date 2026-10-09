@@ -3,7 +3,7 @@ import type { LineEnv } from '../render/LineView';
 import type { Overlay } from '../render/Overlay';
 
 import { bakeable, bakeKey, type Baked } from './bake';
-import { CanvasLayer, type Resolved, type Run } from './CanvasLayer';
+import { CanvasLayer, type CanvasMarkerOutcome, type Resolved, type Run } from './CanvasLayer';
 import { ShedController } from './shed';
 import { analyzeLine, chooseMode, type Complexity } from './eligibility';
 import type { Dropped } from './paint';
@@ -11,7 +11,8 @@ import { planLine } from './plan';
 import { canvasSupported, type Sprite } from './raster';
 import { SpriteCache } from './SpriteCache';
 import { buildAhead } from './mainBuild';
-import type { DrawItem, PathStats, RenderMode, SpriteSpec } from './types';
+import { frameSignature } from './key';
+import type { CanvasProfile, DrawItem, PathStats, RenderMode, SpriteSpec } from './types';
 
 /** What a frame does when a sprite it needs is not ready: `hold` presents nothing new (the previous frame stays, nothing is half drawn), `partial` draws what is ready. Neither builds anything. */
 export type Policy = 'hold' | 'partial';
@@ -28,8 +29,11 @@ export interface Routed {
  * The frame path is a lookup and a draw: it never builds a sprite, never measures text and never waits. What is not ready is
  * reported (`onMissing`) to the look-ahead, which builds it first; the frame is then held or drawn without it (`Policy`).
  */
+export type CanvasEventMarker = (item: DrawItem, outcome: CanvasMarkerOutcome, start: number, end: number) => void;
+
 export class CanvasPath {
   private readonly layer: CanvasLayer;
+  private marker: CanvasEventMarker | null = null;
   readonly cache: SpriteCache<Sprite>;
   private readonly info = new WeakMap<PreparedLine, Complexity>();
   private modes = new Map<string, 'dom' | 'canvas'>();
@@ -40,6 +44,8 @@ export class CanvasPath {
   private runs = 0;
   private busyUntil = -1;
   private readonly shedding = new ShedController();
+  private profiling = false;
+  private profile: CanvasProfile | null = null;
   /** Share of recent display frames that came late while playing (null = not playing: full quality). */
   load: number | null = null;
   /** Items of the last frame whose sprites were not ready, items missed in all frames, frames held back. */
@@ -53,6 +59,21 @@ export class CanvasPath {
     this.layer = new CanvasLayer(overlay);
     this.cache = new SpriteCache<Sprite>(capBytes);
   }
+
+  setProfiling(enabled: boolean): void {
+    this.profiling = enabled;
+    this.profile = null;
+    this.layer.setProfiling(enabled);
+  }
+
+  setMarker(marker: CanvasEventMarker | null): void {
+    this.marker = marker;
+    this.layer.onMarker = marker;
+  }
+
+  get canvasProfile(): CanvasProfile | null { return this.profile; }
+
+  clearProfile(): void { this.profile = null; }
 
   get enabled(): boolean { return this.mode() !== 'dom' && canvasSupported(); }
 
@@ -87,6 +108,11 @@ export class CanvasPath {
 
   /** Draws the canvas lines of this frame; `seq` is the whole visible sequence, so DOM lines split the canvas lines into runs. True when the frame is complete (every sprite was ready and it was drawn). */
   render(seq: readonly Routed[], env: LineEnv, policy: Policy = 'partial'): boolean {
+    const started = this.profiling ? performance.now() : 0;
+    const hitsBefore = this.cache.hits;
+    const missesBefore = this.cache.misses;
+    this.profile = null;
+    this.layer.resetOperationCounts();
     const f = env.devScale ?? 1;
     // Sprites carry their scale in the key; the first render must keep what the look-ahead built before any canvas line was on screen.
     if (this.scale !== 0 && f !== this.scale) this.cache.clear();
@@ -108,25 +134,66 @@ export class CanvasPath {
     this.missing = missing.length;
     this.missedTotal += missing.length;
     if (missing.length) this.onMissing(missing);
-    if (missing.length && policy === 'hold') { this.held++; return false; }
+    if (missing.length && policy === 'hold') {
+      this.held++;
+      this.markItems(missing, 'held');
+      this.finishProfile(runs, resolved, started, hitsBefore, missesBefore);
+      return false;
+    }
+    if (missing.length) this.markItems(missing, 'missing');
     if (this.load === null) this.shedding.reset();
     else this.shedding.update(this.load, this.layer.demandPx, this.layer.stagePx, this.layer.compositeMs);
     this.layer.draw(runs, resolved, this.shedding.budget);
+    this.finishProfile(runs, resolved, started, hitsBefore, missesBefore);
     return missing.length === 0;
+  }
+
+  private finishProfile(runs: Run[], resolved: Resolved, started: number, hitsBefore: number, missesBefore: number): void {
+    if (!this.profiling) return;
+    const ops = this.layer.operationCounts();
+    this.profile = {
+      drawImages: ops.drawImages,
+      drawOps: ops.drawOps,
+      stateChanges: ops.stateChanges,
+      spriteLookups: this.cache.hits - hitsBefore + this.cache.misses - missesBefore,
+      spriteHits: this.cache.hits - hitsBefore,
+      spriteMisses: this.cache.misses - missesBefore,
+      jsMs: performance.now() - started,
+      signature: frameSignature(runs, resolved),
+    };
   }
 
   /** The bitmaps of a frame: looked up, never built. The clip-cut version of a sprite is used when the look-ahead made it (the same pixels as clipping on the draw). */
   private resolve(runs: Run[]): { resolved: Resolved; missing: DrawItem[] } {
     const missing: DrawItem[] = [];
     const resolved = runs.map((run) => run.items.map((it): Sprite | Baked | null => {
-      if (it.alpha < 0.004) return null;
+      if (it.alpha < 0.004) {
+        this.mark(it, 'skipped');
+        return null;
+      }
       const sp = this.cache.lookup(it.key);
       if (sp === undefined) { missing.push(it); return null; }
-      if (!sp) { this.skipped++; return null; }
+      if (!sp) {
+        this.skipped++;
+        this.mark(it, 'skipped');
+        return null;
+      }
       const c = bakeable(it);
       return (c && (this.cache.peek(bakeKey(it, c)) as Baked | null | undefined)) || sp;
     }));
     return { resolved, missing };
+  }
+
+  private mark(item: DrawItem, outcome: CanvasMarkerOutcome): void {
+    if (!this.marker) return;
+    const at = performance.now();
+    this.marker(item, outcome, at, at);
+  }
+
+  private markItems(items: readonly DrawItem[], outcome: CanvasMarkerOutcome): void {
+    if (!this.marker) return;
+    const at = performance.now();
+    for (const item of items) this.marker(item, outcome, at, at);
   }
 
   /** Look-ahead build (page thread): not counted as a draw-time miss. */
@@ -142,6 +209,7 @@ export class CanvasPath {
 
   /** Fonts changed or the stage was rebuilt: bitmaps and sticky decisions are stale. */
   clear(): void {
+    this.profile = null;
     this.cache.clear();
     this.cache.sweep();
     this.modes.clear();

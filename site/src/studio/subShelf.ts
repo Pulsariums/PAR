@@ -8,20 +8,27 @@ import type { Player } from '../player/player';
 import type { SubKind } from './exportPlan';
 import { Shelf, newId } from './shelfState';
 import { createShelf } from './shelfView';
+import { SubtitleCache, scheduleSubtitlePrewarm, type IdleHandle, type SubtitleIdentity } from './subCache';
 
-export interface SubItem { id: string; name: string; size: number; kind: SubKind; file: File; error: string }
+export interface SubItem { id: string; name: string; size: number; kind: SubKind; file: File; identity: SubtitleIdentity; error: string }
 const BADGE: Record<SubKind, string> = { ass: 'ASS', xpar: 'XPAR', par: 'PAR' };
 
 /** Subtitles shelf (.ass .ssa .xpar .par, sniffed from the content). Selecting opens the file in the source Worker and swaps only the subtitle: the video keeps playing. */
 export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session(s: StudioSession | null): void; status(msg: string): void }) => {
   const shelf = new Shelf<SubItem>();
+  const cache = new SubtitleCache();
   let applied: string | null = null;
   let abort: AbortController | null = null;
+  let prewarm: IdleHandle | null = null;
   const view = createShelf(host, {
     title: 'st.subs', empty: 'st.emptyS', accept: '.ass,.ssa,.xpar,.par,.txt', selectable: true,
     onFiles: (files) => void add(files),
     onSelect: (id) => { shelf.select(id); },
-    onRemove: (id) => { shelf.remove(id); },
+    onRemove: (id) => {
+      const removed = shelf.items.find((item) => item.id === id);
+      if (removed) cache.delete(removed.identity);
+      shelf.remove(id);
+    },
   });
   const draw = (): void => view.render(shelf.items.map((s) => ({ id: s.id, name: s.name, meta: humanBytes(s.size), badge: BADGE[s.kind], error: s.error, selected: s.id === shelf.selectedId })));
 
@@ -30,7 +37,7 @@ export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session
     for (const file of files) {
       const kind = await sniffBlob(file).catch(() => 'unknown' as const);
       if (kind === 'unknown') hooks.status(t('st.subBad', { name: file.name }));
-      else items.push({ id: newId('s'), name: file.name, size: file.size, kind, file, error: '' });
+      else items.push({ id: newId('s'), name: file.name, size: file.size, kind, file, identity: cache.identity(file, kind), error: '' });
     }
     shelf.add(items);
     if (select && items.length) shelf.select(items[0]!.id);
@@ -41,21 +48,32 @@ export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session
     if ((cur?.id ?? null) === applied) return;
     applied = cur?.id ?? null;
     abort?.abort();
+    prewarm?.cancel();
+    prewarm = null;
     if (!cur) { abort = null; player.text = ''; player.par.setSubtitle(null); hooks.session(null); hooks.status(''); return; }
+    const cached = cache.get(cur.identity);
+    if (cached) { applyReady(cur, cached); return; }
     const ac = (abort = new AbortController());
     hooks.session(null);
     hooks.status(t('st.reading', { name: cur.name }));
     openSession(cur.file, cur.name, { signal: ac.signal, onProgress: (d, n) => hooks.status(t('st.prog', { pct: Math.round((d / Math.max(1, n)) * 100), done: humanBytes(d), total: humanBytes(n) })) }).then((s) => {
-      if (ac.signal.aborted) { s.source.close?.(); return; }
-      player.setSource(s.source);
-      hooks.session(s);
-      hooks.status(t('st.subReady', { name: cur.name, n: s.source.eventCount.toLocaleString('en-US') }));
+      if (ac.signal.aborted || shelf.selectedId !== cur.id) { s.source.close?.(); return; }
+      cache.set(cur.identity, s);
+      applyReady(cur, s);
     }, (e: unknown) => {
-      if (ac.signal.aborted) return;
+      if (ac.signal.aborted || shelf.selectedId !== cur.id) return;
       cur.error = e instanceof Error ? e.message : String(e);
       hooks.status(t('st.fail', { error: cur.error }));
       draw();
     });
+  };
+
+  const applyReady = (item: SubItem, s: StudioSession): void => {
+    if (s !== cache.get(item.identity)) return;
+    player.setSource(s.source);
+    hooks.session(s);
+    hooks.status(t('st.subReady', { name: item.name, n: s.source.eventCount.toLocaleString('en-US') }));
+    prewarm = scheduleSubtitlePrewarm(s.source, () => player.transport.time);
   };
 
   shelf.subscribe(() => { apply(); draw(); });
@@ -64,7 +82,10 @@ export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session
   async function upsert(file: File): Promise<void> {
     const ex = shelf.items.find((i) => i.name === file.name);
     if (!ex) { await add([file], true); return; }
-    ex.file = file; ex.size = file.size; ex.error = '';
+    const kind = await sniffBlob(file).catch(() => 'unknown' as const);
+    if (kind === 'unknown') { hooks.status(t('st.subBad', { name: file.name })); return; }
+    cache.delete(ex.identity);
+    ex.file = file; ex.size = file.size; ex.kind = kind; ex.identity = cache.identity(file, kind); ex.error = '';
     applied = null; // same id, new content: apply() must reopen it
     if (shelf.selectedId !== ex.id) shelf.select(ex.id); else { apply(); draw(); }
   }

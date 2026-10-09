@@ -1,10 +1,20 @@
 import type { FpsOption } from '../types/options';
 
+/** Capability-detected metadata from requestVideoFrameCallback. */
+export interface VideoFrameMetadata {
+  now: number;
+  mediaTime: number;
+  expectedDisplayTime?: number;
+  presentationTime?: number;
+  presentedFrames?: number;
+  processingDuration?: number;
+}
+
 /** Receives the presented media time when known (requestVideoFrameCallback), else null. */
-export type FrameCallback = (mediaTime: number | null) => void;
+export type FrameCallback = (mediaTime: number | null, metadata?: VideoFrameMetadata) => void;
 
 type VideoWithVfc = HTMLVideoElement & {
-  requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => number;
+  requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number; expectedDisplayTime?: number; presentationTime?: number; presentedFrames?: number; processingDuration?: number }) => void) => number;
   cancelVideoFrameCallback?: (handle: number) => void;
 };
 
@@ -18,6 +28,7 @@ export const MAX_FPS = 200;
  */
 export class Scheduler {
   private running = false;
+  private captureMetadata = false;
   private rafId = 0;
   private vfcId = 0;
   private last = -Infinity;
@@ -25,6 +36,8 @@ export class Scheduler {
   private video: VideoWithVfc | null = null;
 
   constructor(private readonly cb: FrameCallback) {}
+
+  setMetadataCapture(enabled: boolean): void { this.captureMetadata = enabled; }
 
   configure(fps: FpsOption, video: HTMLVideoElement | null): void {
     this.fps = fps;
@@ -57,10 +70,19 @@ export class Scheduler {
     if (!this.running) return;
     const v = this.video;
     if (this.fps === 'auto' && v && typeof v.requestVideoFrameCallback === 'function') {
-      this.vfcId = v.requestVideoFrameCallback((_now, meta) => {
+      this.vfcId = v.requestVideoFrameCallback((now, meta) => {
         this.vfcId = 0;
         if (!this.running) return;
-        this.cb(meta.mediaTime);
+        if (this.captureMetadata) {
+          this.cb(meta.mediaTime, {
+            now,
+            mediaTime: meta.mediaTime,
+            ...(meta.expectedDisplayTime === undefined ? {} : { expectedDisplayTime: meta.expectedDisplayTime }),
+            ...(meta.presentationTime === undefined ? {} : { presentationTime: meta.presentationTime }),
+            ...(meta.presentedFrames === undefined ? {} : { presentedFrames: meta.presentedFrames }),
+            ...(meta.processingDuration === undefined ? {} : { processingDuration: meta.processingDuration }),
+          });
+        } else this.cb(meta.mediaTime);
         this.schedule();
       });
       return;

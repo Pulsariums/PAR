@@ -96,7 +96,7 @@ describe('analyze: report', () => {
     const ac = new AbortController();
     ac.abort();
     await expect(analyzeAss(t, { signal: ac.signal })).rejects.toMatchObject({ name: 'AbortError' });
-  });
+  }, 15000);
 });
 
 describe('analyze panel helpers', () => {

@@ -20,7 +20,9 @@ export type ToSprite =
   /** Jobs join the worker's own queue, built by priority in slices between messages. */
   | { op: 'build'; gen: number; jobs: Job[] }
   /** Queued jobs of an older generation are not wanted (a seek or a font change): drop them without building. */
-  | { op: 'drop'; gen: number };
+  | { op: 'drop'; gen: number }
+  /** A frame now needs a queued job: promote it ahead of look-ahead work. */
+  | { op: 'reprioritize'; id: number; prio: number };
 
 /** Sprite worker -> main thread. */
 export type FromSprite =
@@ -29,5 +31,5 @@ export type FromSprite =
   /** Faces (keys) the worker could not register: sprites with those families would be drawn in a fallback font, so the pool stops taking them. */
   | { op: 'faces'; failed: string[] }
   | { op: 'built'; gen: number; items: Built[] }
-  /** `n` queued jobs were discarded unbuilt (they belonged to an older generation). */
-  | { op: 'dropped'; n: number };
+  /** `n` queued jobs were discarded unbuilt (they belonged to generations older than `gen`). */
+  | { op: 'dropped'; gen: number; n: number };

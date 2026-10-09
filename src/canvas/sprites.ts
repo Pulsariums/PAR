@@ -28,7 +28,7 @@ export const keyAnimated = (animated: ReadonlySet<string>): boolean => {
  * sprite not built ahead is a sprite late for its frame. With `startMs` (the event's absolute start) the samples sit on the
  * frames that will actually be drawn: frames are at whole multiples of `frameMs`, not at the event's start offset.
  */
-export const sampleTimes = (line: PreparedLine, frameMs: number, startMs?: number, keyed: boolean = line.animated): number[] => {
+export const sampleTimes = (line: PreparedLine, frameMs: number, startMs?: number, keyed: boolean = line.animated, range?: readonly [number, number]): number[] => {
   if (!keyed) return [0];
   const out: number[] = [];
   if (startMs === undefined) {
@@ -37,10 +37,12 @@ export const sampleTimes = (line: PreparedLine, frameMs: number, startMs?: numbe
   }
   // The frames drawn are `frameStart(n, rate)` (exact NTSC fractions, see time.ts), not multiples of a rounded frame length.
   const rate = frameRate(1000 / frameMs);
-  let n = Math.max(0, Math.floor((startMs * rate.num) / (1000 * rate.den)) - 1);
-  while (frameStart(n, rate) < startMs) n++;
+  const from = Math.max(startMs, range?.[0] ?? startMs);
+  let n = Math.max(0, Math.floor((from * rate.num) / (1000 * rate.den)) - 1);
+  while (frameStart(n, rate) < from) n++;
   for (; out.length < MAX_SAMPLES; n++) {
     const rel = frameStart(n, rate) - startMs;
+    if (range && startMs + rel >= range[1]) break;
     if (rel >= line.durationMs && out.length > 0) break;
     out.push(rel);
     if (rel >= line.durationMs) break;
@@ -63,19 +65,27 @@ export interface SpriteReq {
  * event want" (the look-ahead, the warm plan and the script analyzer all use it, and it keys on the same `specAt` the draw uses).
  */
 export const spriteRequests = (line: PreparedLine, env: LineEnv, animated: ReadonlySet<string>, frameMs: number, startMs: number, dropped: Dropped = { blur: 0 }, withBake = false): SpriteReq[] => {
-  const keyed = keyAnimated(animated);
-  const clipped = withBake && !!(line.event.lineTags.clip || line.event.lineTags.vclip);
   const seen = new Map<string, SpriteReq>();
-  const end = startMs + line.durationMs;
-  for (const rel of sampleTimes(line, frameMs, startMs, keyed)) {
-    const { key, spec } = specAt(line, rel, env, animated, dropped);
-    const at = startMs + rel;
-    const r = seen.get(key);
-    if (r) r.until = keyed ? at + frameMs : end;
-    else seen.set(key, { key, spec, ms: at, until: keyed ? at + frameMs : end, bake: clipped ? bakeOf(line, rel, env, animated, dropped) : undefined });
+  for (const r of spriteRequestSamples(line, env, animated, frameMs, startMs, dropped, withBake)) {
+    const had = seen.get(r.key);
+    if (had) had.until = Math.max(had.until, r.until);
+    else seen.set(r.key, r);
   }
   return [...seen.values()];
 };
+
+/** Resumable exact requests for a loaded range; playback never expands a full event's variants at once. */
+export function* spriteRequestSamples(line: PreparedLine, env: LineEnv, animated: ReadonlySet<string>, frameMs: number, startMs: number, dropped: Dropped = { blur: 0 }, withBake = false, range?: readonly [number, number]): Generator<SpriteReq> {
+  const keyed = keyAnimated(animated);
+  const clipped = withBake && !!(line.event.lineTags.clip || line.event.lineTags.vclip);
+  const end = startMs + line.durationMs;
+  if (range && (end <= range[0] || startMs >= range[1])) return;
+  for (const rel of sampleTimes(line, frameMs, startMs, keyed, range)) {
+    const { key, spec } = specAt(line, rel, env, animated, dropped);
+    const at = startMs + rel;
+    yield { key, spec, ms: range ? Math.max(at, range[0]) : at, until: keyed ? at + frameMs : end, bake: clipped ? bakeOf(line, rel, env, animated, dropped) : undefined };
+  }
+}
 
 const bakeOf = (line: PreparedLine, rel: number, env: LineEnv, animated: ReadonlySet<string>, dropped: Dropped): SpriteReq['bake'] => {
   const item = planLine(line, rel, env, animated, dropped);

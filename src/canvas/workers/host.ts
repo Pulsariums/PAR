@@ -65,7 +65,7 @@ export const attachSpriteHost = (scope: HostScope, deps: HostDeps): void => {
         gen = j.gen;
         items.push(buildOne(j));
       }
-      if (dropped) scope.postMessage({ op: 'dropped', n: dropped });
+      if (dropped) scope.postMessage({ op: 'dropped', gen: minGen, n: dropped });
       if (items.length) scope.postMessage({ op: 'built', gen, items }, items.flatMap((i) => (i.bitmap ? [i.bitmap] : [])));
       if (queue.size > 0) await nextTask();
     }
@@ -89,6 +89,8 @@ export const attachSpriteHost = (scope: HostScope, deps: HostDeps): void => {
     } else if (m.op === 'drop') {
       minGen = Math.max(minGen, m.gen);
       kick();
+    } else if (m.op === 'reprioritize') {
+      queue.update((j) => j.id === m.id, (j) => { j.prio = m.prio; });
     }
   });
 };
