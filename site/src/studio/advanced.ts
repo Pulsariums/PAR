@@ -27,7 +27,7 @@ export const ADVANCED_HTML = `
   <label class="fld"><span data-i18n="st.advOffset"></span>
     <input id="stOffset" type="number" step="0.1" value="0" inputmode="decimal" /></label>
   <label class="fld"><span data-i18n="st.advWarmRange"></span>
-    <select id="stWarmRange">${opts(WARM_RANGE_MARKS)}</select></label>
+    <select id="stWarmRange">${WARM_RANGE_MARKS.map((v) => `<option value="${v}"${v === 30 ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
   <label class="fld"><span data-i18n="st.advTemp"></span>
     <input id="stTemp" type="number" min="1" step="1" value="50" inputmode="numeric" /></label>
   <label class="fld"><span data-i18n="st.advPrepare"></span>

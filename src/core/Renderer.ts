@@ -323,7 +323,8 @@ export class PARRenderer extends FontApi {
     const running = this.scheduler.isRunning;
     const sourceCovered = this.host.covers(ms);
     this.scene.setLoad(running ? this.load.late() : null);
-    const seekBufferReady = !sourceCovered || this.scene.warmPending() > 0 || !this.scene.readyAt(ms);
+    // Ready means: the time is covered, the plan holds nothing unbuilt and every planned sprite has landed.
+    const seekBufferReady = sourceCovered && this.scene.warmPending() === 0 && this.scene.readyAt(ms);
     // After a seek, presentation waits for a one-second buffer while the planner computes ahead independently.
     const seekBufferWaiting = this.seekBufferUntilMs > 0 && ms <= this.seekBufferUntilMs && !seekBufferReady;
     if (this.seekBufferUntilMs !== 0 && (ms > this.seekBufferUntilMs || seekBufferReady)) this.seekBufferUntilMs = 0;

@@ -20,6 +20,8 @@ export type { AssIndexData, AssIndexOptions, AssRange } from './assTypes';
 export class AssIndex {
   readonly script: ParsedScript;
   private readonly cache = new ByteLru<number, string[]>(64 << 20);
+  /** Parsed dialogue of a run: a seek that touches the same runs again never re-parses their text. */
+  private readonly events = new ByteLru<number, Array<{ ev: AssEvent; line: string }>>(64 << 20);
 
   constructor(readonly data: AssIndexData, private readonly blob: Blob) {
     this.script = parseScript(data.header);
@@ -48,6 +50,25 @@ export class AssIndex {
       this.cache.set(i, l, r.len * 2);
     }
     return l;
+  }
+
+  /** The parsed dialogue of a run (with file-order ordinals); built once, so re-reads only filter by time. */
+  private async dialogues(i: number): Promise<Array<{ ev: AssEvent; line: string }>> {
+    let d = this.events.get(i);
+    if (!d) {
+      const r = this.data.ranges[i];
+      const fields = this.fields(r.fmt);
+      let ord = r.ord0;
+      d = [];
+      for (const line of await this.lines(i)) {
+        const kv = splitKeyValue(line.replace(/^\s+/, ''));
+        if (!kv || kv[0].toLowerCase() !== 'dialogue') continue;
+        const ev = parseDialogue(fields, kv[1], ord++);
+        if (typeof ev !== 'string') d.push({ ev, line });
+      }
+      this.events.set(i, d, r.len * 4);
+    }
+    return d;
   }
 
   /** Raw text of run `i` (event lines only); lets callers sample the file without reading all of it. */
@@ -84,13 +105,8 @@ export class AssIndex {
       const r = this.data.ranges[i];
       if (!(r.minStartMs < b && r.maxEndMs > a)) continue;
       throwIfAborted(signal);
-      const fields = this.fields(r.fmt);
-      let ord = r.ord0;
-      for (const line of await this.lines(i)) {
-        const kv = splitKeyValue(line.replace(/^\s+/, ''));
-        if (!kv || kv[0].toLowerCase() !== 'dialogue') continue;
-        const ev = parseDialogue(fields, kv[1], ord++);
-        if (typeof ev !== 'string' && ev.start < t1 && ev.end > t0) out.push({ ev, line });
+      for (const w of await this.dialogues(i)) {
+        if (w.ev.start < t1 && w.ev.end > t0) out.push(w);
       }
     }
     return out.sort((x, y) => x.ev.index - y.ev.index);
