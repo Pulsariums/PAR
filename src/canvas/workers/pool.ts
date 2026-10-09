@@ -2,6 +2,7 @@ import type { Sprite } from '../raster';
 import type { SpriteSpec } from '../types';
 
 import { FaceBook, type FaceInfo } from './faces';
+import { maskOf } from '../tint';
 import type { FaceData, FromSprite, Job, ToSprite } from './protocol';
 
 export type { FaceInfo } from './faces';
@@ -42,6 +43,7 @@ export class SpritePool {
   private readonly out = new Map<number, Out>();
   private readonly inflight = new Map<string, number>();
   private readonly refused = new Set<string>();
+  private readonly affinity = new Map<string, number>();
   private readonly staged: Staged[] = [];
   private readonly book: FaceBook;
   private seq = 0;
@@ -105,6 +107,8 @@ export class SpritePool {
       if (!this.book.allows(o.spec)) { it.bitmap?.close(); individual = true; this.refuse(o.key); continue; }
       if (!it.bitmap) { individual = true; this.refuse(o.key); continue; }
       this.received++;
+      const mask = maskOf(o.spec);
+      if (mask) this.affinity.set(mask.key, this.slots.indexOf(slot));
       built.push({ key: o.key, sprite: { canvas: it.bitmap, w: it.w, h: it.h, boxW: it.boxW, ox: it.ox, oy: it.oy, bytes: it.bytes } });
     }
     if (this.hooks.builtBatch && built.length && !individual) this.hooks.builtBatch(built);
@@ -177,7 +181,12 @@ export class SpritePool {
     const ready = this.slots.filter((s) => s.ready && s.load < PER_WORKER);
     if (this.staged.length > 1) this.staged.sort((a, b) => a.prio - b.prio);
     while (this.staged.length && ready.length && !this.dead) {
-      const s = ready.reduce((a, b) => (b.load < a.load ? b : a));
+      const first = this.staged[0]!;
+      const mask = maskOf(first.spec);
+      const preferred = mask ? this.affinity.get(mask.key) : undefined;
+      const candidates = preferred === undefined ? ready : ready.filter((s) => this.slots.indexOf(s) === preferred);
+      const pool = candidates.length ? candidates : ready;
+      const s = pool.reduce((a, b) => (b.load < a.load ? b : a));
       const batch = this.staged.splice(0, Math.min(BATCH, PER_WORKER - s.load));
       s.load += batch.length;
       const gen = batch[0].gen;
@@ -197,6 +206,7 @@ export class SpritePool {
   /** Results of jobs sent before this call are dropped (fonts changed, or a seek moved the plan elsewhere). Their logical capacity is released immediately; the worker still accounts for the stale mailbox until it reports the drop. */
   invalidate(): void {
     this.gen++;
+    this.affinity.clear();
     this.staged.length = 0;
     this.out.clear();
     this.inflight.clear();
@@ -218,6 +228,7 @@ export class SpritePool {
 
   destroy(): void {
     this.dead = true;
+    this.affinity.clear();
     this.slots.forEach((s) => s.w.terminate());
     this.slots.length = 0;
     this.staged.length = 0;

@@ -51,7 +51,7 @@ export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session
     prewarm?.cancel();
     prewarm = null;
     if (!cur) { abort = null; player.text = ''; player.par.setSubtitle(null); hooks.session(null); hooks.status(''); return; }
-    const cached = cache.get(cur.identity);
+    const cached = cache.take(cur.identity);
     if (cached) { applyReady(cur, cached); return; }
     const ac = (abort = new AbortController());
     hooks.session(null);
@@ -59,7 +59,8 @@ export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session
     openSession(cur.file, cur.name, { signal: ac.signal, onProgress: (d, n) => hooks.status(t('st.prog', { pct: Math.round((d / Math.max(1, n)) * 100), done: humanBytes(d), total: humanBytes(n) })) }).then((s) => {
       if (ac.signal.aborted || shelf.selectedId !== cur.id) { s.source.close?.(); return; }
       cache.set(cur.identity, s);
-      applyReady(cur, s);
+      const active = cache.take(cur.identity);
+      applyReady(cur, active ?? s);
     }, (e: unknown) => {
       if (ac.signal.aborted || shelf.selectedId !== cur.id) return;
       cur.error = e instanceof Error ? e.message : String(e);
@@ -69,7 +70,6 @@ export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session
   };
 
   const applyReady = (item: SubItem, s: StudioSession): void => {
-    if (s !== cache.get(item.identity)) return;
     player.setSource(s.source);
     hooks.session(s);
     hooks.status(t('st.subReady', { name: item.name, n: s.source.eventCount.toLocaleString('en-US') }));

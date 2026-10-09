@@ -58,7 +58,7 @@ export class PARRenderer extends FontApi {
       this.frame(mediaTime);
     });
     this.host = new ScriptHost({
-      scene: () => this.scene, fonts: this.fonts, windowSeconds: () => this.opts.windowSeconds, reset: () => this.resetMissing(),
+      scene: () => this.scene, fonts: this.fonts, windowSeconds: () => this.opts.windowSeconds, timeMs: () => timeToMs(this.now() + this.opts.timeOffset, this.opts.videoFps), reset: () => this.resetMissing(),
       changed: () => { this.diagnostics.clear(); this.logger.segment(); this.env = { ...this.env, styles: this.host.styles }; this.forceNext = true; this.draw(this.now(), false); },
       error: (e) => console.warn('PAR: subtitle source error', e),
     });
@@ -80,6 +80,7 @@ export class PARRenderer extends FontApi {
    */
   setSubtitle(input: string | SubtitleSource | null): void {
     this.assertAlive();
+    this.prepareSeq++;
     this.logger.segment();
     this.host.load(input || null);
     this.env = { ...this.env, styles: this.host.styles };

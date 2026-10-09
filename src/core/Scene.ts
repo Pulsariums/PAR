@@ -119,8 +119,8 @@ export class Scene {
     this.logger?.mark({ id: line.event.id, index: line.event.index, mediaTime: this.markerMediaTime, generation: this.markerGeneration, epoch: this.markerEpoch, path: 'dom', start, end, outcome: 'rendered' });
   }
 
-  setScript(script: ParsedScript | null): void {
-    this.clear();
+  setScript(script: ParsedScript | null, preserveSprites = false): void {
+    this.clear(preserveSprites);
     this.cache.clear();
     this.covers = null;
     this.timeline = script
@@ -237,14 +237,14 @@ export class Scene {
     this.placed.set(view.line.event.id, { layer, box: { ...box, top: box.top + shift, bottom: box.bottom + shift } });
   }
 
-  clear(): void {
+  clear(preserveSprites = false): void {
     this.diagnosticSample = null;
     this.pendingReadyEpoch = -1;
     this.pendingReadyGeneration = -1;
     for (const v of this.views.values()) v.destroy();
     this.views.clear();
     this.placed.clear();
-    this.canvas.clear();
+    this.canvas.clear(preserveSprites);
     this.ahead.clear();
     this.canvasOn = false;
     this.canvasLines = 0;

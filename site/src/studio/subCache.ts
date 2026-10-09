@@ -101,6 +101,15 @@ export class SubtitleCache {
     return entry.session;
   }
 
+  /** Transfers a runtime source to the player without closing it or leaving a second owner in the cache. */
+  take(identity: SubtitleIdentity): StudioSession | null {
+    const entry = this.runtime.get(identity.key);
+    if (!entry) return null;
+    this.runtime.delete(identity.key);
+    this.remember(identity, entry.session);
+    return entry.session;
+  }
+
   set(identity: SubtitleIdentity, session: StudioSession): void {
     const old = this.runtime.get(identity.key);
     if (old && old.session !== session) old.session.source.close?.();

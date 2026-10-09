@@ -37,6 +37,9 @@ export class CanvasPath {
   readonly cache: SpriteCache<Sprite>;
   private readonly info = new WeakMap<PreparedLine, Complexity>();
   private modes = new Map<string, 'dom' | 'canvas'>();
+  private readonly staticItems = new Map<string, { generation: number; item: DrawItem }>();
+  private cacheGeneration = 0;
+  private staticEnv = '';
   private scale = 0;
   private readonly dropped: Dropped = { blur: 0 };
   private skipped = 0;
@@ -114,8 +117,10 @@ export class CanvasPath {
     this.profile = null;
     this.layer.resetOperationCounts();
     const f = env.devScale ?? 1;
+    const staticEnv = `${f}|${env.borderScale}|${env.blurScale ?? 1}|${env.layout.width}x${env.layout.height}`;
     // Sprites carry their scale in the key; the first render must keep what the look-ahead built before any canvas line was on screen.
-    if (this.scale !== 0 && f !== this.scale) this.cache.clear();
+    if ((this.scale !== 0 && f !== this.scale) || (this.staticEnv !== '' && staticEnv !== this.staticEnv)) { this.cache.clear(); this.cacheGeneration++; this.staticItems.clear(); }
+    this.staticEnv = staticEnv;
     this.scale = f;
     this.cache.sweep();
     this.layer.resize(env.layout, f);
@@ -123,7 +128,15 @@ export class CanvasPath {
     let open: Run | null = null;
     for (const r of seq) {
       if (!r.canvas) { open = null; continue; }
-      const it = planLine(r.line, r.rel, env, this.complexity(r.line).animated, this.dropped);
+      const animated = this.complexity(r.line).animated;
+      const cacheKey = !animated ? `${r.line.event.id}:${this.cacheGeneration}:${env.devScale ?? 1}` : '';
+      let it: DrawItem;
+      if (cacheKey) {
+        const hit = this.staticItems.get(cacheKey);
+        it = hit?.generation === this.cacheGeneration ? hit.item : planLine(r.line, r.rel, env, animated, this.dropped);
+        this.staticItems.set(cacheKey, { generation: this.cacheGeneration, item: it });
+        if (this.staticItems.size > 4096) this.staticItems.delete(this.staticItems.keys().next().value!);
+      } else it = planLine(r.line, r.rel, env, animated, this.dropped);
       if (!open) {
         if (runs.length >= this.layer.maxRuns) { open = runs[runs.length - 1]; this.merged++; } else runs.push((open = { layer: it.layer, index: it.index, items: [] }));
       }
@@ -208,11 +221,16 @@ export class CanvasPath {
   }
 
   /** Fonts changed or the stage was rebuilt: bitmaps and sticky decisions are stale. */
-  clear(): void {
+  clear(preserveSprites = false): void {
     this.profile = null;
-    this.cache.clear();
-    this.cache.sweep();
+    if (!preserveSprites) {
+      this.cache.clear();
+      this.cache.sweep();
+    }
     this.modes.clear();
+    this.cacheGeneration++;
+    this.staticEnv = '';
+    this.staticItems.clear();
     this.layer.draw([], []);
   }
 
