@@ -24,6 +24,7 @@ export type Resolved = Array<Array<Sprite | Baked | null>>;
 const DEG = Math.PI / 180;
 const isBaked = (sp: Sprite | Baked): sp is Baked => 'x' in sp;
 const MAX_PATHS = 1024;
+const NO_SHED = new Set<DrawItem>();
 
 interface LayerProfile extends SlotProfile {
   drawImages: number;
@@ -132,6 +133,20 @@ export class CanvasLayer {
 
   /** The items to leave out for `budget` (none when it fits). */
   private leave(runs: Run[], resolved: Resolved, budget: number): Set<DrawItem> {
+    if (!(budget < Infinity)) {
+      let demand = 0;
+      for (let i = 0; i < runs.length; i++) {
+        const items = runs[i].items;
+        for (let k = 0; k < items.length; k++) {
+          const sp = resolved[i][k];
+          if (sp) demand += sp.w * sp.h;
+        }
+      }
+      this.demandPx = demand;
+      this.shedIds.clear();
+      this.shed = 0;
+      return NO_SHED;
+    }
     const cand: Candidate[] = [];
     const items: DrawItem[] = [];
     runs.forEach((run, i) => run.items.forEach((it, k) => {

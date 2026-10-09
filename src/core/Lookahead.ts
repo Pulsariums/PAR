@@ -11,8 +11,6 @@ import type { LineEnv } from '../render/LineView';
 
 /** No frame drawn for this long (ms) = nothing is playing: idle slices may be long. */
 const IDLE_AFTER_MS = 120;
-/** Time a frame spends handing the sprites it is missing to the builders (ms). */
-const URGENT_MS = 3;
 /** Without canvas lines on screen, the look-ahead runs on every this-many-th render. */
 const QUIET_EVERY = 6;
 /** While workers are starting, sprites needed later than this (ms ahead of the playhead) wait for them instead of being built on the page thread. */
@@ -80,7 +78,7 @@ export class Lookahead {
     this.arm();
   }
 
-  /** The frame needed these and did not find them: they go to the front, workers get them now. */
+  /** The frame needed these and did not find them: prioritize them for the next between-frame slice. */
   private urgent(items: DrawItem[]): void {
     if (!this.lastEnv) return;
     this.waiting = new Set(items.map((i) => i.key));
@@ -88,7 +86,8 @@ export class Lookahead {
       this.planner.urgent(it.key, it.spec, this.lastT);
       this.pool?.prioritize(it.key);
     }
-    this.run(URGENT_MS, false);
+    // Do not build synchronously from CanvasPath.render; the current frame must finish first.
+    this.arm();
   }
 
   private run(budgetMs: number, exempt = true): void {
