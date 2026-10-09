@@ -94,6 +94,7 @@ export class PARRenderer extends FontApi {
   setDiagnostics(enabled: boolean): void {
     this.assertAlive();
     this.diagnostics.setEnabled(enabled);
+    this.host.setDiagnostics(enabled);
     this.scene.setDiagnostics(enabled);
     if (enabled) this.forceNext = true;
   }
@@ -240,24 +241,45 @@ export class PARRenderer extends FontApi {
   }
 
   private draw(raw: number, force: boolean, retry = false, videoFrame?: VideoFrameMetadata): void {
+    const measuring = this.diagnostics.active;
+    const prepareStartedAt = measuring ? performance.now() : 0;
     const generation = ++this.renderGeneration;
-    if (this.destroyed || !Number.isFinite(raw) || this.fonts.blocking) return;
+    if (this.destroyed || !Number.isFinite(raw)) return;
     const ms = timeToMs(raw + this.opts.timeOffset, this.opts.videoFps);
+    if (this.fonts.blocking) {
+      if (measuring) this.recordPrepareSkip(raw, ms, prepareStartedAt, 0, 0, 'fonts-blocked');
+      return;
+    }
+    const layoutStart = measuring ? performance.now() : 0;
     if (this.layoutDirty) this.relayout();
+    const sourceStart = measuring ? performance.now() : 0;
+    const relayoutMs = measuring ? sourceStart - layoutStart : 0;
     this.host.update(ms);
+    const sourceUpdateMs = measuring ? performance.now() - sourceStart : 0;
     const forced = force || this.forceNext;
-    if (!forced && !retry && ms === this.lastMs) return;
+    if (!forced && !retry && ms === this.lastMs) {
+      if (measuring) this.recordPrepareSkip(raw, ms, prepareStartedAt, relayoutMs, sourceUpdateMs, 'unchanged');
+      return;
+    }
     const running = this.scheduler.isRunning;
     this.scene.setLoad(running ? this.load.late() : null);
     // A frame is presented whole or not at all while the picture can wait for it (paused, seeking, a video the renderer may hold);
     // a free-running custom clock cannot be held: it draws what is ready (the missing are counted) and the builders rush the rest.
     const policy = (!running || (this.opts.video && this.scene.buffers)) && !this.scene.stuck ? 'hold' : 'partial';
     let complete = true;
-    const renderStart = this.diagnostics.active ? performance.now() : 0;
+    const source = measuring ? this.host.stats() : null;
+    const sourceReady = measuring ? this.host.covers(ms) : false;
+    const renderStart = measuring ? performance.now() : 0;
     this.frames.time(() => { complete = this.scene.render(ms, this.env, forced, policy, generation, raw); });
     if (this.diagnostics.active) {
       const sample = this.scene.diagnostics;
-      if (sample) this.diagnostics.record({ ...sample, media: raw, presented: complete || policy === 'partial', held: !complete && policy === 'hold', renderMs: performance.now() - renderStart, videoFrame: videoFrame ? { ...videoFrame } : undefined });
+      const completedAt = performance.now();
+      if (sample) this.diagnostics.record({ ...sample, media: raw, presented: complete || policy === 'partial', held: !complete && policy === 'hold',
+        prepareStartedAt, completedAt, prepareMs: renderStart - prepareStartedAt, relayoutMs, sourceUpdateMs, sourceReady,
+        sourceLoading: source!.loading, windowRange: source!.windowRange, windowApplyTotalMs: source!.windowApplyTotalMs,
+        windowPrepareTotalMs: source!.windowPrepareTotalMs, sceneRendered: true,
+        rendererSubmitted: complete && sourceReady && sample.visible.length > 0 && (this.scene.renderStats.domLines > 0 || this.scene.renderStats.canvas.drawn > 0),
+        renderMs: completedAt - renderStart, videoFrame: videoFrame ? { ...videoFrame } : undefined });
     }
     if (running && this.opts.video && this.scene.buffers) this.stall.consider(this.scene.deficit(ms));
     if (!complete && policy === 'hold') {
@@ -266,6 +288,17 @@ export class PARRenderer extends FontApi {
       return; // held: `onReady` draws it again; the previous picture stays
     }
     [this.forceNext, this.lastMs] = [false, ms];
+  }
+
+  private recordPrepareSkip(raw: number, ms: number, prepareStartedAt: number, relayoutMs: number, sourceUpdateMs: number, skipReason: 'unchanged' | 'fonts-blocked'): void {
+    const source = this.host.stats();
+    const sourceReady = this.host.covers(ms);
+    const completedAt = performance.now();
+    this.diagnostics.record({ sceneMs: 0, renderMs: 0, domMs: null, canvasMs: null, visible: [], route: [], canvas: null,
+      media: raw, presented: false, held: false, sceneRendered: false, rendererSubmitted: false, skipReason,
+      prepareStartedAt, completedAt, prepareMs: completedAt - prepareStartedAt, relayoutMs, sourceUpdateMs,
+      sourceReady, sourceLoading: source.loading, windowRange: source.windowRange,
+      windowApplyTotalMs: source.windowApplyTotalMs, windowPrepareTotalMs: source.windowPrepareTotalMs });
   }
 
   private relayout(): void {

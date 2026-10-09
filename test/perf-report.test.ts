@@ -148,6 +148,19 @@ describe('busiest moments', () => {
     expect(Math.abs(m[0].t - m[1].t)).toBeGreaterThanOrEqual(10);
   });
 
+  it('bounds opening scans to 0-30 or 0-90 without reading later windows', async () => {
+    const reads: [number, number][] = [];
+    const ranged = { duration: 500, readWindow: async (a: number, b: number) => { reads.push([a, b]); return events.filter((e) => e.start < b && e.end > a); } } as never;
+    const opening = await busiest(ranged, 3, { from: 0, to: 30 });
+    expect(opening[0]!.t).toBe(9);
+    expect(reads.every(([a, b]) => a >= 0 && b <= 30)).toBe(true);
+    expect(reads[reads.length - 1]).toEqual([28, 30]);
+    reads.length = 0;
+    const ninety = await busiest(ranged, 3, { from: 0, to: 90 });
+    expect(ninety[0]!.t).toBe(53);
+    expect(reads[reads.length - 1]).toEqual([88, 90]);
+  });
+
   it('stops when aborted', async () => {
     const ac = new AbortController();
     let reads = 0;

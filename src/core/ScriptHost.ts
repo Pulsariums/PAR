@@ -30,6 +30,17 @@ export class ScriptHost {
   private win: SourceScript | null = null;
   private ready = false;
   private token = 0;
+  private diagnosticsEnabled = false;
+  private windowPrepareTotalMs = 0;
+
+  setDiagnostics(enabled: boolean): void {
+    this.diagnosticsEnabled = enabled;
+    this.windowPrepareTotalMs = 0;
+    this.feed?.setDiagnostics(enabled);
+  }
+
+  /** Readiness means coverage at this time, not merely a completed source read. */
+  covers(tMs: number): boolean { return !this.feed || (this.ready && this.feed.covers(tMs)); }
 
   constructor(private readonly d: HostDeps) {}
 
@@ -56,6 +67,7 @@ export class ScriptHost {
     const token = this.token;
     this.win = src.script;
     this.feed = new WindowFeed(src, { onChange: (a, r) => this.onWindow(a, r), onError: (e) => this.d.error(e) }, this.d.windowSeconds());
+    this.feed.setDiagnostics(this.diagnosticsEnabled);
     this.bind();
     this.d.reset();
     const start = (text: string | null): void => {
@@ -84,7 +96,7 @@ export class ScriptHost {
   }
 
   stats(): SourceStatsReport {
-    if (this.feed) return this.feed.stats();
+    if (this.feed) return { ...this.feed.stats(), ...(this.diagnosticsEnabled ? { windowPrepareTotalMs: this.windowPrepareTotalMs } : {}) };
     return { ...EMPTY, windowEvents: this.full?.events.length ?? 0 };
   }
 
@@ -93,12 +105,15 @@ export class ScriptHost {
   private onWindow(added: AssEvent[], removed: number[]): void {
     const feed = this.feed;
     if (!feed || !this.win) return;
+    const start = this.diagnosticsEnabled ? performance.now() : 0;
     const fresh = this.d.scene().setWindow(feed.events, added, removed, this.win);
     this.d.fonts.extendUsage(collectUsage(fresh, this.win.styles), removed);
+    if (this.diagnosticsEnabled) this.windowPrepareTotalMs += performance.now() - start;
     this.d.changed();
   }
 
   private drop(): void {
+    this.windowPrepareTotalMs = 0;
     this.token++;
     this.feed?.dispose();
     [this.feed, this.win, this.full, this.ready] = [null, null, null, false];

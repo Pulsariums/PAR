@@ -1,15 +1,27 @@
-import { MAX_LINE_EVENTS, type FrameSample, type LongTask, type LoggerLineRecord, type RawRun, type VideoFrameRecord } from './recorder';
+import { MAX_LINE_EVENTS, MAX_LONG_TASKS, taskAttribution, type FrameSample, type LongTask, type LoggerLineRecord, type RawRun, type VideoFrameRecord } from './recorder';
 
 /** Schema id of the legacy report; diagnostic fields live in `diagnostics`. */
 export const REPORT_SCHEMA = 'par-perf/1';
 export const DIAGNOSTIC_SCHEMA = 'par-perf-diagnostics/1';
 
-export type HotspotCause = 'main-thread/dom' | 'canvas/fill/composite' | 'sprite-build/cache' | 'source/decode/window' | 'worker/lookahead' | 'scheduler/unknown';
+export type HotspotCause = 'main-thread/pre-render' | 'main-thread/unknown' | 'main-thread/dom' | 'canvas/scene' | 'canvas/fill/composite' | 'sprite-build/cache' | 'source/decode/window' | 'worker/lookahead' | 'scheduler/unknown';
 
 export interface HotspotEvidence {
   gapMs: number;
   budgetMs: number;
   renderMs: number;
+  prepareMs: number | null;
+  relayoutMs: number | null;
+  sourceUpdateMs: number | null;
+  sceneMs: number | null;
+  windowApplyMs: number;
+  windowPrepareMs: number;
+  sourceReady: boolean | null;
+  windowRange: [number, number] | null;
+  skipReasons: ('unchanged' | 'fonts-blocked')[];
+  rendererSubmitted: boolean | null;
+  linesMax: number;
+  drawnMax: number;
   longTaskMs: number;
   fillMpx: number;
   compositeMs: number;
@@ -85,6 +97,15 @@ export interface LoggerTimelineBin {
   lateFrames: number;
   linesMax: number;
   renderMsP95: number;
+  prepareMsP95: number | null;
+  relayoutMsP95: number | null;
+  sourceUpdateMsP95: number | null;
+  sceneMsP95: number | null;
+  windowApplyMs: number;
+  windowPrepareMs: number;
+  sourceNotReadyFrames: number;
+  sourceLoadingFrames: number;
+  rendererSubmittedFrames: number;
   sourceMsP95: number;
   canvasMsP95: number;
   compositeMsP95: number;
@@ -104,6 +125,8 @@ export interface LoggerReport {
   durationS: number;
   lineEvents: { count: number; capped: boolean; dropped: number; records: LoggerLineRecord[] };
   video: { available: boolean; fps: number | null; frames: number; records: VideoFrameRecord[] };
+  renderer: { available: boolean; submittedSamples: number; presentation: 'unavailable' };
+  longTasks: { attributionAvailable: boolean; capped: boolean; dropped: number; records: LongTask[] };
   causes: { cause: HotspotCause; score: number; share: number }[];
   denseScenes: LoggerDenseScene[];
   timeline: LoggerTimelineBin[];
@@ -242,6 +265,13 @@ const longTaskOverlap = (frames: readonly FrameSample[], lt: readonly LongTask[]
 };
 
 const finite = (n: number | undefined | null): number => Number.isFinite(n) ? n! : 0;
+const measured = (values: readonly (number | undefined | null)[], percentile = false): number | null => {
+  const ns = values.filter((n): n is number => typeof n === 'number' && Number.isFinite(n));
+  return ns.length ? r1(percentile ? pct(ns, 0.95) : max(ns)) : null;
+};
+const windowWork = (fs: readonly FrameSample[], pick: (f: FrameSample) => number | undefined): number => r1(fs.reduce((n, f) => n + finite(pick(f)), 0));
+const preRenderWork = (fs: readonly FrameSample[]): number => max(fs.map((f) => finite(f.diagnostics?.prepareMs))) + windowWork(fs, (f) => f.windowApplyMs) + windowWork(fs, (f) => f.windowPrepareMs);
+const hasSurfaceWork = (f: FrameSample): boolean => f.lines > 0 || f.drawn > 0;
 
 const loggerTimeline = (run: RawRun, budget: number): LoggerTimelineBin[] => {
   const out: LoggerTimelineBin[] = [];
@@ -258,6 +288,14 @@ const loggerTimeline = (run: RawRun, budget: number): LoggerTimelineBin[] => {
       at: sec * 1000, durationMs: Math.min(1000, Math.max(0, run.durationMs - sec * 1000)), frames: frames.length,
       lateFrames: frames.filter((f) => f.gap > budget * 1.25).length, linesMax: max(frames.map((f) => f.lines)),
       renderMsP95: r1(pct(frames.map((f) => f.diagnostics?.renderMs ?? f.renderMs ?? 0), 0.95)),
+      prepareMsP95: measured(frames.map((f) => f.diagnostics?.prepareMs), true),
+      relayoutMsP95: measured(frames.map((f) => f.diagnostics?.relayoutMs), true),
+      sourceUpdateMsP95: measured(frames.map((f) => f.diagnostics?.sourceUpdateMs), true),
+      sceneMsP95: measured(frames.map((f) => f.diagnostics?.sceneMs), true),
+      windowApplyMs: windowWork(frames, (f) => f.windowApplyMs), windowPrepareMs: windowWork(frames, (f) => f.windowPrepareMs),
+      sourceNotReadyFrames: frames.filter((f) => f.diagnostics?.sourceReady === false).length,
+      sourceLoadingFrames: frames.filter((f) => f.diagnostics?.sourceLoading || f.source?.loading).length,
+      rendererSubmittedFrames: frames.filter((f) => f.diagnostics?.rendererSubmitted).length,
       sourceMsP95: r1(pct(source.map((s) => s.decodeMs), 0.95)), canvasMsP95: r1(pct(frames.map((f) => f.diagnostics?.canvasMs ?? 0), 0.95)),
       compositeMsP95: r1(pct(render.map((r) => r.compositeMs), 0.95)), jsMsP95: r1(pct(profile.map((p) => p.jsMs), 0.95)),
     });
@@ -284,19 +322,11 @@ const denseScenes = (frames: readonly FrameSample[]): LoggerDenseScene[] => {
   return out.slice(0, 20);
 };
 
-const loggerCauses = (frames: readonly FrameSample[], longTaskMs: number): LoggerReport['causes'] => {
-  const render = frames.map((f) => f.render).filter((x): x is NonNullable<FrameSample['render']> => !!x);
-  const source = frames.map((f) => f.source).filter((x): x is NonNullable<FrameSample['source']> => !!x);
-  const scores: [HotspotCause, number][] = [
-    ['main-thread/dom', longTaskMs],
-    ['source/decode/window', source.reduce((n, s) => n + finite(s.decodeMs), 0)],
-    ['worker/lookahead', render.reduce((n, r) => n + finite(r.pending) + Math.max(0, finite(r.deficitMs)), 0)],
-    ['sprite-build/cache', render.reduce((n, r) => n + finite(r.spriteMisses), 0)],
-    ['canvas/fill/composite', frames.reduce((n, f) => n + finite(f.fillMpx), 0) + render.reduce((n, r) => n + finite(r.compositeMs), 0)],
-    ['scheduler/unknown', frames.length ? frames.filter((f) => f.gap > 0).length : 0],
-  ];
-  const total = scores.reduce((n, [, score]) => n + Math.max(0, score), 0) || 1;
-  return scores.filter(([, score]) => score > 0).sort((a, b) => b[1] - a[1]).map(([cause, score]) => ({ cause, score: r1(score), share: r1(score / total) }));
+const loggerCauses = (hotspots: readonly Hotspot[]): LoggerReport['causes'] => {
+  const scores = new Map<HotspotCause, number>();
+  for (const h of hotspots) scores.set(h.cause, (scores.get(h.cause) ?? 0) + h.durationMs);
+  const total = [...scores.values()].reduce((n, score) => n + score, 0) || 1;
+  return [...scores].sort((a, b) => b[1] - a[1]).map(([cause, score]) => ({ cause, score: r1(score), share: r1(score / total) }));
 };
 
 const loggerVideo = (records: readonly VideoFrameRecord[] | undefined): LoggerReport['video'] => {
@@ -306,10 +336,17 @@ const loggerVideo = (records: readonly VideoFrameRecord[] | undefined): LoggerRe
   return { available: frames.length > 0, fps, frames: frames.length, records: frames.slice() };
 };
 
-const loggerReport = (run: RawRun, env: Env, setup: Setup, budget: number): LoggerReport => {
+const loggerReport = (run: RawRun, setup: Setup, budget: number, diagnosticHotspots: readonly Hotspot[]): LoggerReport => {
   const lines = run.lineEvents ?? [];
   const limitations: string[] = [];
-  if (!run.videoFrames?.length) limitations.push(setup.hasVideo ? 'video presentation metadata unavailable' : 'no video');
+  if (!run.videoFrames?.length) limitations.push(setup.hasVideo ? 'video presentation metadata unavailable' : 'no video: presentation unavailable');
+  limitations.push('renderer submitted/visible means completed renderer surface submission, not physical display');
+  limitations.push('latest draw sampled on rAF: intermediate draws may be missed; stage times do not account for an entire frame gap');
+  limitations.push('window apply/prepare totals measure main-thread arrival work, not async read/worker wait; source decode counters may be cumulative');
+  limitations.push('cause shares are classified hotspot duration, not a CPU profile');
+  limitations.push('longtask attribution identifies browser contexts, not JavaScript stacks or functions');
+  if (!run.longTaskAttributionAvailable) limitations.push('longtask attribution unavailable');
+  if (!run.frames.some((f) => f.diagnostics?.prepareMs !== undefined)) limitations.push('pre-render timing unavailable');
   if (!run.frames.some((f) => f.diagnostics?.canvas)) limitations.push('canvas timing unavailable');
   if (!run.frames.some((f) => f.source)) limitations.push('source timing unavailable');
   const lineRecords = lines.slice(0, MAX_LINE_EVENTS).map(({ at, media, sessionId, id, index, mediaTime, generation, epoch, path, start, end, outcome }): LoggerLineRecord =>
@@ -318,7 +355,17 @@ const loggerReport = (run: RawRun, env: Env, setup: Setup, budget: number): Logg
   return {
     schema: 'par-logger/1', durationS: r1(run.durationMs / 1000),
     lineEvents: { count: lineRecords.length, capped: dropped > 0 || lines.length >= MAX_LINE_EVENTS, dropped, records: lineRecords },
-    video: loggerVideo(run.videoFrames), causes: loggerCauses(run.frames, longTaskOverlap(run.frames, env.longTasks ? run.longTasks : [])),
+    video: loggerVideo(setup.hasVideo ? run.videoFrames : undefined), causes: loggerCauses(diagnosticHotspots),
+    renderer: { available: run.frames.some((f) => f.diagnostics?.rendererSubmitted !== undefined), submittedSamples: run.frames.filter((f) => f.diagnostics?.rendererSubmitted).length, presentation: 'unavailable' },
+    longTasks: {
+      attributionAvailable: !!run.longTaskAttributionAvailable,
+      capped: run.longTasks.length >= MAX_LONG_TASKS || (run.longTasksDropped ?? 0) > 0,
+      dropped: Math.max(0, run.longTasksDropped ?? 0) + Math.max(0, run.longTasks.length - MAX_LONG_TASKS),
+      records: run.longTasks.slice(0, MAX_LONG_TASKS).map((task) => {
+        const attribution = taskAttribution(task.attribution);
+        return { at: task.at, dur: task.dur, ...(attribution ? { attribution, attributionDropped: Math.max(0, task.attributionDropped ?? 0) + Math.max(0, (task.attribution?.length ?? 0) - attribution.length) } : {}) };
+      }),
+    },
     denseScenes: denseScenes(run.frames), timeline: loggerTimeline(run, budget), limitations,
   };
 };
@@ -326,15 +373,25 @@ const loggerReport = (run: RawRun, env: Env, setup: Setup, budget: number): Logg
 const hotspotCause = (fs: readonly FrameSample[], longTaskMs: number): { cause: HotspotCause; confidence: Hotspot['confidence'] } => {
   const render = fs.map((f) => f.render).filter((x): x is NonNullable<FrameSample['render']> => !!x);
   const source = fs.map((f) => f.source).filter((x): x is NonNullable<FrameSample['source']> => !!x);
+  const surface = fs.filter(hasSurfaceWork);
+  const prepare = preRenderWork(fs);
+  const scene = max(fs.map((f) => finite(f.diagnostics?.sceneMs)));
+  const dom = max(surface.map((f) => finite(f.diagnostics?.domMs)));
+  const canvas = max(surface.map((f) => finite(f.diagnostics?.canvasMs)));
   const evidence = {
-    main: longTaskMs,
+    main: Math.max(0, longTaskMs - prepare - scene),
     canvas: fs.reduce((n, f) => n + finite(f.fillMpx), 0),
     composite: render.reduce((n, r) => n + finite(r.compositeMs), 0),
     misses: render.reduce((n, r) => n + finite(r.spriteMisses), 0),
     source: source.reduce((n, s) => n + finite(s.decodeMs), 0) + (source.some((s) => s.loading) ? 1 : 0),
     worker: render.reduce((n, r) => n + finite(r.pending) + Math.max(0, finite(r.deficitMs)), 0),
   };
-  const ranked: [HotspotCause, number][] = [['main-thread/dom', evidence.main], ['source/decode/window', evidence.source], ['worker/lookahead', evidence.worker], ['sprite-build/cache', evidence.misses], ['canvas/fill/composite', evidence.canvas + evidence.composite]];
+  // Measured stage duration takes precedence over pressure proxies. Blank samples never supply canvas evidence.
+  const stages: [HotspotCause, number][] = [['main-thread/pre-render', prepare], ['main-thread/dom', dom], ['canvas/scene', canvas], ['main-thread/unknown', Math.max(evidence.main, scene - dom - canvas)]];
+  stages.sort((a, b) => b[1] - a[1]);
+  if (stages[0][1] >= 10) return { cause: stages[0][0], confidence: stages[0][1] >= 2 * Math.max(1, stages[1][1]) ? 'high' : 'low' };
+  if (fs.some((f) => f.diagnostics?.sourceReady === false)) return { cause: 'source/decode/window', confidence: 'low' };
+  const ranked: [HotspotCause, number][] = [['main-thread/unknown', evidence.main], ['source/decode/window', evidence.source], ['worker/lookahead', evidence.worker], ['sprite-build/cache', evidence.misses], ['canvas/fill/composite', surface.length ? evidence.canvas + evidence.composite : 0]];
   ranked.sort((a, b) => b[1] - a[1]);
   const [cause, score] = ranked[0];
   if (score <= 0) return { cause: 'scheduler/unknown', confidence: 'low' };
@@ -357,9 +414,17 @@ const hotspots = (frames: readonly FrameSample[], lt: readonly LongTask[], budge
       at: first.at, media: r2(first.media), durationMs: r1(Math.max(first.gap, last.at - first.at + last.gap)), frames: group.length,
       cause: classification.cause, confidence: classification.confidence,
       evidence: {
-        gapMs: r1(Math.max(...group.map((f) => f.gap))), budgetMs: r1(budget), renderMs: r1(max(group.map((f) => f.renderMs ?? f.drawP95))), longTaskMs: r1(longTaskMs),
+        gapMs: r1(max(group.map((f) => f.gap))), budgetMs: r1(budget), renderMs: r1(max(group.map((f) => f.diagnostics?.renderMs ?? f.renderMs ?? f.drawP95))), longTaskMs: r1(longTaskMs),
+        prepareMs: measured(group.map((f) => f.diagnostics?.prepareMs)), relayoutMs: measured(group.map((f) => f.diagnostics?.relayoutMs)),
+        sourceUpdateMs: measured(group.map((f) => f.diagnostics?.sourceUpdateMs)), sceneMs: measured(group.map((f) => f.diagnostics?.sceneMs)),
+        windowApplyMs: windowWork(group, (f) => f.windowApplyMs), windowPrepareMs: windowWork(group, (f) => f.windowPrepareMs),
+        sourceReady: group.some((f) => f.diagnostics?.sourceReady === false) ? false : group.some((f) => f.diagnostics?.sourceReady === true) ? true : null,
+        windowRange: group[group.length - 1].diagnostics?.windowRange ?? null,
+        skipReasons: [...new Set(group.map((f) => f.diagnostics?.skipReason).filter((reason): reason is 'unchanged' | 'fonts-blocked' => reason !== undefined))],
+        rendererSubmitted: group.some((f) => f.diagnostics?.rendererSubmitted === true) ? true : group.some((f) => f.diagnostics?.rendererSubmitted === false) ? false : null,
+        linesMax: max(group.map((f) => f.lines)), drawnMax: max(group.map((f) => f.drawn)),
         fillMpx: r2(max(group.map((f) => f.fillMpx))), compositeMs: r1(max(render.map((r) => r.compositeMs))), spriteMisses: delta(group, (f) => f.misses),
-        pending: max(render.map((r) => r.pending)), deficitMs: r1(max(render.map((r) => r.deficitMs))), sourceLoading: source.some((s) => s.loading), decodeMs: r1(max(source.map((s) => s.decodeMs))),
+        pending: max(render.map((r) => r.pending)), deficitMs: r1(max(render.map((r) => r.deficitMs))), sourceLoading: source.some((s) => s.loading) || group.some((f) => f.diagnostics?.sourceLoading), decodeMs: r1(max(source.map((s) => s.decodeMs))),
       },
     });
     group = [];
@@ -369,7 +434,8 @@ const hotspots = (frames: readonly FrameSample[], lt: readonly LongTask[], budge
     const recordingGap = previous && frame.at - previous.at > Math.max(300, budget * 4);
     // Match Recorder's seek threshold so a media jump cannot merge two hotspots.
     const mediaSeek = previous && Number.isFinite(frame.media) && Number.isFinite(previous.media) && Math.abs(frame.media - previous.media) > 2;
-    if (group.length && (recordingGap || mediaSeek)) flush();
+    const surfaceChanged = previous && hasSurfaceWork(frame) !== hasSurfaceWork(previous);
+    if (group.length && (recordingGap || mediaSeek || surfaceChanged)) flush();
     group.push(frame);
   }
   flush();
@@ -379,6 +445,10 @@ const hotspots = (frames: readonly FrameSample[], lt: readonly LongTask[], budge
 const diagnosticLimitations = (run: RawRun, env: Env, setup: Setup): string[] => {
   const out: string[] = [];
   if (!env.longTasks) out.push('longtask observer unsupported');
+  if (!run.longTaskAttributionAvailable) out.push('longtask attribution unavailable');
+  if (!run.frames.some((f) => f.diagnostics?.prepareMs !== undefined)) out.push('pre-render timing unavailable');
+  if (!setup.hasVideo) out.push('no video: presentation unavailable');
+  out.push('blank gaps are source/pre-render/main-thread or unknown, not evidence of canvas drawing');
   if (!run.frames.length) out.push('no frame samples');
   if (!run.frames.some((f) => f.render)) out.push('renderer samples unavailable');
   if (!run.frames.some((f) => f.source)) out.push('source samples unavailable');
@@ -414,7 +484,7 @@ export const buildReport = (run: RawRun, env: Env, setup: Setup, file: FileInfo 
     seconds: seconds(fs),
     worst: worstFrames(fs),
     diagnostics: { schema: DIAGNOSTIC_SCHEMA, budgetMs: r1(budgetMs), hotspotCount: diagnosticHotspots.length, longTaskOverlapMs: r1(longTaskOverlap(fs, env.longTasks ? run.longTasks : [])), hotspots: diagnosticHotspots, limitations: diagnosticLimitations(run, env, setup) },
-    logger: loggerReport(run, env, setup, budgetMs),
+    logger: loggerReport(run, setup, budgetMs, diagnosticHotspots),
   };
 };
 
@@ -437,6 +507,7 @@ export const summaryText = (r: Report): string => {
     `Canvas path: lines p50 ${d.lines.p50} / max ${n0(d.lines.max)}; drawn p50 ${d.drawn.p50} / max ${n0(d.drawn.max)}; fill p50 ${d.fillMpx.p50} / max ${d.fillMpx.max} Mpx; draw call p95 ~${d.drawMsP95} ms`,
     `Under load: shed in ${d.shedFrames} frames (max ${d.shedItemsMax} items), sprite misses ${n0(d.spriteMisses)}, skipped ${n0(d.skipped)}, blurs dropped ${n0(d.detailDropped)}`,
   ];
+  lines.push(`Prepare ms max per-second p95: ${measured(r.logger.timeline.map((bin) => bin.prepareMsP95)) ?? 'unavailable'}; renderer submitted samples: ${r.logger.renderer.available ? r.logger.renderer.submittedSamples : 'unavailable'}; physical presentation unavailable; longtask attribution ${r.logger.longTasks.attributionAvailable ? 'available (contexts only)' : 'unavailable'}`);
   if (r.worst.length) lines.push(`Worst frames: ${r.worst.slice(0, 5).map((w) => `${w.media}s ${w.gap}ms (${n0(w.lines)} lines, ${n0(w.drawn)} drawn)`).join('; ')}`);
   return lines.join('\n');
 };

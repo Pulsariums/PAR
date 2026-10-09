@@ -35,6 +35,9 @@ export interface FrameSample {
   /** Runtime counters sampled with the frame; cumulative counters stay cumulative. */
   render?: RenderSample;
   source?: SourceSample;
+  /** Source arrival work since the previous recorder sample. */
+  windowApplyMs?: number;
+  windowPrepareMs?: number;
 }
 
 /** A bounded, text-free record of an actual render submission. */
@@ -90,14 +93,35 @@ export interface SourceSample {
   bytesRead: number;
   decodeMs: number;
   indexMs: number;
+  windowApplyTotalMs?: number;
+  windowPrepareTotalMs?: number;
 }
 
-export interface LongTask { at: number; dur: number }
+export interface LongTaskAttribution { name: string; containerType: string }
+export interface LongTask { at: number; dur: number; attribution?: LongTaskAttribution[]; attributionDropped?: number }
+
+export const MAX_LONG_TASKS = 2000;
+export const MAX_TASK_ATTRIBUTIONS = 4;
+// Only browser-defined categories are retained. Container names/ids/src can contain private page data.
+const TASK_NAMES = new Set(['unknown', 'self', 'same-origin', 'same-origin-ancestor', 'same-origin-descendant', 'cross-origin-ancestor', 'cross-origin-descendant', 'cross-origin-unreachable', 'multiple-contexts']);
+const CONTAINER_TYPES = new Set(['window', 'iframe', 'embed', 'object']);
+export const taskAttribution = (value: unknown): LongTaskAttribution[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  return value.slice(0, MAX_TASK_ATTRIBUTIONS).map((entry: unknown) => {
+    const item = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+    return {
+      name: typeof item.name === 'string' && TASK_NAMES.has(item.name) ? item.name : 'unknown',
+      containerType: typeof item.containerType === 'string' && CONTAINER_TYPES.has(item.containerType) ? item.containerType : 'unknown',
+    };
+  });
+};
 
 /** What a run collected, before it is turned into a report. */
 export interface RawRun {
   frames: FrameSample[];
   longTasks: LongTask[];
+  longTasksDropped?: number;
+  longTaskAttributionAvailable?: boolean;
   /** Ms the recording lasted. */
   durationMs: number;
   startMedia: number;
@@ -127,8 +151,12 @@ export const MAX_VIDEO_FRAMES = 36000;
 export class Recorder {
   private frames: FrameSample[] = [];
   private longTasks: LongTask[] = [];
+  private longTasksDropped = 0;
+  private attributionAvailable = false;
   private t0 = 0;
   private last = 0;
+  private windowApplyTotalMs = 0;
+  private windowPrepareTotalMs = 0;
   private startMedia = NaN;
   private lastMedia = NaN;
   private everPaused = false;
@@ -164,8 +192,12 @@ export class Recorder {
     this.frames = [];
     this.observedLongTasks = false;
     this.longTasks = [];
+    this.longTasksDropped = 0;
+    this.attributionAvailable = false;
     this.t0 = now;
     this.last = 0;
+    this.windowApplyTotalMs = 0;
+    this.windowPrepareTotalMs = 0;
     this.startMedia = NaN;
     this.lastMedia = NaN;
     this.everPaused = false;
@@ -183,16 +215,27 @@ export class Recorder {
     try {
       this.obs = new PerformanceObserver((list) => {
         if (!this.active || generation !== this.videoGeneration) return;
-        for (const e of list.getEntries()) {
-          const at = Math.round(e.startTime - this.t0), dur = Math.round(e.duration);
-          if (dur > 0 && at + dur >= 0 && at <= MAX_RUN_MS) this.longTasks.push({ at: Math.max(0, at), dur });
-        }
+        this.recordLongTasks(list.getEntries());
       });
       this.obs.observe({ entryTypes: ['longtask'] });
       this.observedLongTasks = true;
     } catch { this.obs = null; /* longtask is Chromium only: the report says "not measured" */ }
     this.scheduleVideoFrame();
     this.scheduleFrame();
+  }
+
+  private recordLongTasks(entries: readonly PerformanceEntry[]): void {
+    for (const e of entries) {
+      const at = Math.round(e.startTime - this.t0), dur = Math.round(e.duration);
+      if (!Number.isFinite(at) || !Number.isFinite(dur) || dur <= 0 || at + dur < 0 || at > MAX_RUN_MS) continue;
+      if (this.longTasks.length >= MAX_LONG_TASKS) { this.longTasksDropped++; continue; }
+      const value = (e as PerformanceEntry & { attribution?: unknown }).attribution;
+      const attribution = taskAttribution(value);
+      if (attribution?.length) this.attributionAvailable = true;
+      this.longTasks.push({ at: Math.max(0, at), dur,
+        ...(attribution ? { attribution, attributionDropped: Math.max(0, (value as unknown[]).length - attribution.length) } : {}),
+      });
+    }
   }
 
   private scheduleFrame(): void {
@@ -242,13 +285,23 @@ export class Recorder {
     this.lastMedia = r.media;
     const { playing: _p, heapMB: _h, ...rest } = r;
     // The first frame has no previous one: its gap is not a measurement.
-    if (this.last > 0) this.frames.push({ ...rest, at, gap });
+    const apply = r.source?.windowApplyTotalMs ?? r.diagnostics?.windowApplyTotalMs;
+    const prepare = r.source?.windowPrepareTotalMs ?? r.diagnostics?.windowPrepareTotalMs;
+    const windowApplyMs = apply === undefined ? undefined : Math.max(0, apply - this.windowApplyTotalMs);
+    const windowPrepareMs = prepare === undefined ? undefined : Math.max(0, prepare - this.windowPrepareTotalMs);
+    if (this.last > 0 && this.frames.length < MAX_VIDEO_FRAMES) this.frames.push({ ...rest, at, gap, windowApplyMs, windowPrepareMs });
+    // Preserve opening arrival work until the first retained frame (the initial rAF has no gap).
+    if (this.last > 0) {
+      this.windowApplyTotalMs = apply ?? this.windowApplyTotalMs;
+      this.windowPrepareTotalMs = prepare ?? this.windowPrepareTotalMs;
+    }
     this.last = now;
     this.heap1 = r.heapMB;
   }
 
   /** Stops and returns what was collected. */
   stop(now = performance.now()): RawRun {
+    if (this.active && this.obs?.takeRecords) this.recordLongTasks(this.obs.takeRecords());
     if (this.active && this.eventLogger) {
       // The sink captured markers across segments; the snapshot supplies truncation, not a second copy.
       this.lineEventsDropped += this.eventLogger.getEventLog().dropped;
@@ -263,7 +316,7 @@ export class Recorder {
     this.obs?.disconnect();
     this.obs = null;
     return {
-      frames: this.frames, longTasks: this.longTasks, durationMs: Math.round(now - this.t0), startMedia: this.startMedia, endMedia: this.lastMedia,
+      frames: this.frames, longTasks: this.longTasks, longTasksDropped: this.longTasksDropped, longTaskAttributionAvailable: this.attributionAvailable, durationMs: Math.round(now - this.t0), startMedia: this.startMedia, endMedia: this.lastMedia,
       playing: !this.everPaused, seeks: this.seeks, heapStartMB: this.heap0, heapEndMB: this.heap1, lineEvents: this.lineEvents, lineEventsDropped: this.lineEventsDropped, videoFrames: this.videoFrames,
     };
   }
@@ -274,6 +327,8 @@ export class Recorder {
     this.eventLogger?.setEventLogger(null);
     this.frames = [];
     this.longTasks = [];
+    this.longTasksDropped = 0;
+    this.attributionAvailable = false;
     this.lineEvents = [];
     this.lineEventsDropped = 0;
     this.videoFrames = [];

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildReport, pct } from '../site/src/studio/perf/report';
-import { MAX_LINE_EVENTS, MAX_RUN_MS, MAX_VIDEO_FRAMES, Recorder, type FrameSample, type RawRun, type VideoFrameSource } from '../site/src/studio/perf/recorder';
+import { MAX_LINE_EVENTS, MAX_LONG_TASKS, MAX_TASK_ATTRIBUTIONS, MAX_RUN_MS, MAX_VIDEO_FRAMES, Recorder, type FrameSample, type RawRun, type VideoFrameSource } from '../site/src/studio/perf/recorder';
 import { initPerf, PERF_HTML } from '../site/src/studio/perf/ui';
 import type { Player } from '../site/src/player/player';
 import { Player as StudioPlayer } from '../site/src/player/player';
@@ -138,9 +138,33 @@ describe('performance diagnostics', () => {
     );
 
     expect(report.diagnostics.hotspots[0]).toMatchObject({
-      cause: 'main-thread/dom',
+      cause: 'main-thread/unknown',
       confidence: 'high',
     });
+  });
+
+  it('never attributes huge blank-frame gaps to stale canvas counters, and separates blank groups', () => {
+    const diag = { serial: 1, observedAt: 7000, media: 13.71, presented: true, held: false, sceneMs: 1, renderMs: 1, domMs: null, canvasMs: null, eventCount: 0 };
+    const blank = frame(7000, 6551, { lines: 0, drawn: 0, fillMpx: 9000, diagnostics: diag });
+    const report = buildReport(run([blank], { longTasks: [{ at: 500, dur: 6000 }] }), env, { ...setup(), hasVideo: false }, null);
+    expect(report.diagnostics.hotspots[0]!.cause).toBe('main-thread/unknown');
+    expect(report.logger.causes.some((c) => c.cause.startsWith('canvas'))).toBe(false);
+    expect(report.logger.video.available).toBe(false);
+    expect(report.logger.limitations).toContain('no video: presentation unavailable');
+    const unknown = buildReport(run([blank]), env, setup(), null);
+    expect(unknown.diagnostics.hotspots[0]!.cause).toBe('scheduler/unknown');
+    const prepared = buildReport(run([{ ...blank, diagnostics: { ...diag, prepareMs: 5000, sourceUpdateMs: 4800, relayoutMs: 150, sourceReady: false, rendererSubmitted: false } }]), env, setup(), null);
+    expect(prepared.diagnostics.hotspots[0]).toMatchObject({ cause: 'main-thread/pre-render', evidence: { prepareMs: 5000, sourceUpdateMs: 4800, sourceReady: false, rendererSubmitted: false } });
+    expect(prepared.logger.timeline[0]).toMatchObject({ prepareMsP95: 5000, sourceUpdateMsP95: 4800, sourceNotReadyFrames: 1, rendererSubmittedFrames: 0 });
+    const mixed = buildReport(run([blank, frame(7050, 50, { fillMpx: 100 })]), env, setup(), null);
+    expect(mixed.diagnostics.hotspots).toHaveLength(2);
+    expect(mixed.diagnostics.hotspots[0]!.cause).not.toContain('canvas');
+  });
+
+  it('distinguishes measured scene/canvas work from window arrival preparation', () => {
+    const diag = { serial: 1, observedAt: 100, media: 1, presented: true, held: false, prepareMs: 1, sceneMs: 80, renderMs: 80, domMs: null, canvasMs: 75, eventCount: 10 };
+    expect(buildReport(run([frame(100, 90, { diagnostics: diag })]), env, setup(), null).diagnostics.hotspots[0]!.cause).toBe('canvas/scene');
+    expect(buildReport(run([frame(100, 90, { lines: 0, drawn: 0, windowPrepareMs: 200 })]), env, setup(), null).diagnostics.hotspots[0]!.cause).toBe('main-thread/pre-render');
   });
 
   it('keeps empty diagnostics inputs finite and empty', () => {
@@ -350,6 +374,57 @@ describe('logger recorder integration', () => {
     expect(observers[1]!.disconnect).toHaveBeenCalledTimes(1);
   });
 
+  it('caps long tasks and attribution, strips private metadata, and reports unsupported attribution', () => {
+    let callback!: PerformanceObserverCallback;
+    vi.stubGlobal('PerformanceObserver', class {
+      constructor(cb: PerformanceObserverCallback) { callback = cb; }
+      observe = vi.fn(); disconnect = vi.fn();
+    });
+    const recorder = new Recorder(sample);
+    recorder.start(1000);
+    const attribution = Array.from({ length: 9 }, (_, i) => ({ name: i ? 'private subtitle text' : 'unknown', containerType: 'iframe', containerName: 'private subtitle text', containerId: 'private subtitle text', containerSrc: 'https://private.example', text: 'private subtitle text' }));
+    const list = { getEntries: () => Array.from({ length: MAX_LONG_TASKS + 3 }, () => ({ startTime: 1010, duration: 60, attribution })) } as unknown as PerformanceObserverEntryList;
+    callback(list, {} as PerformanceObserver);
+    const result = recorder.stop(1100);
+    expect(result.longTasks).toHaveLength(MAX_LONG_TASKS);
+    expect(result.longTasksDropped).toBe(3);
+    expect(result.longTasks[0]!.attribution).toHaveLength(MAX_TASK_ATTRIBUTIONS);
+    expect(result.longTasks[0]!.attributionDropped).toBe(5);
+    const report = buildReport(result, env, setup(), null);
+    expect(report.logger.longTasks).toMatchObject({ attributionAvailable: true, capped: true, dropped: 3 });
+    expect(report.logger.longTasks.records[0]!.attribution![0]).toEqual({ name: 'unknown', containerType: 'iframe' });
+    expect(JSON.stringify(report)).not.toContain('private');
+    const dirty = { ...result, longTasks: [{ at: 0, dur: 50, attribution }] };
+    expect(JSON.stringify(buildReport(dirty, env, setup(), null))).not.toContain('private');
+    recorder.start(2000);
+    callback({ getEntries: () => [{ startTime: 2010, duration: 60 }] } as unknown as PerformanceObserverEntryList, {} as PerformanceObserver);
+    const fallback = buildReport(recorder.stop(2100), env, setup(), null);
+    expect(fallback.frames.longTasks.count).toBe(1);
+    expect(fallback.logger.longTasks.attributionAvailable).toBe(false);
+    expect(fallback.logger.limitations).toContain('longtask attribution unavailable');
+  });
+
+  it('captures cumulative source-arrival work once per sample and handles resets', () => {
+    let total = 100;
+    const recorder = new Recorder(() => ({ ...sample(), source: { windowEvents: 0, loading: true, bytesRead: 0, decodeMs: 0, indexMs: 0, windowPrepareTotalMs: total }, diagnostics: { serial: 1, observedAt: 1000, media: 1.5, presented: true, held: false, sceneMs: 0, renderMs: 0, domMs: 0, canvasMs: null, eventCount: 1, windowPrepareTotalMs: 0 } }));
+    recorder.start(1000);
+    recorder.add(1010);
+    total = 125; recorder.add(1020); recorder.add(1030);
+    total = 0; recorder.add(1040);
+    total = 50; recorder.add(1050);
+    expect(recorder.stop(1100).frames.map((f) => f.windowPrepareMs)).toEqual([125, 0, 0, 50]);
+  });
+
+  it('drains queued long tasks on stop before disconnecting', () => {
+    const takeRecords = vi.fn(() => [{ startTime: 1010, duration: 70 }] as PerformanceEntry[]);
+    vi.stubGlobal('PerformanceObserver', class { observe = vi.fn(); disconnect = vi.fn(); takeRecords = takeRecords; });
+    const recorder = new Recorder(sample);
+    recorder.start(1000);
+    expect(recorder.stop(1100).longTasks).toEqual([{ at: 10, dur: 70 }]);
+    recorder.stop(1200);
+    expect(takeRecords).toHaveBeenCalledTimes(1);
+  });
+
   it('detaches the sink and cancels video capture at the maximum run duration', () => {
     let tick: FrameRequestCallback | undefined;
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { tick = cb; return 1; });
@@ -482,9 +557,10 @@ describe('logger UI integration', () => {
     expect(Array.from(table.children, (child) => child.tagName)).toEqual(['THEAD', 'TBODY']);
     expect(table.querySelectorAll('tbody')).toHaveLength(1);
     expect(table.tBodies[0]!.parentElement).toBe(table);
-    expect(Array.from(table.tHead!.rows[0]!.children, (cell) => cell.tagName)).toEqual(Array(9).fill('TH'));
+    expect(Array.from(table.tHead!.rows[0]!.children, (cell) => cell.tagName)).toEqual(Array(16).fill('TH'));
     expect(Array.from(table.tHead!.rows[0]!.cells, (cell) => cell.textContent)).toEqual([
       t('st.loggerAt'), t('st.loggerFrames'), t('st.loggerLate'), t('st.loggerLines'),
+      t('st.loggerPrepare'), t('st.loggerRelayout'), t('st.loggerSourceUpdate'), t('st.loggerWindowApply'), t('st.loggerWindowPrepare'), t('st.loggerNotReady'), t('st.loggerSubmitted'),
       t('st.loggerRender'), t('st.loggerSource'), t('st.loggerCanvas'), t('st.loggerComposite'), t('st.loggerJs'),
     ]);
     expect(report.logger.timeline).toHaveLength(2);
@@ -492,9 +568,29 @@ describe('logger UI integration', () => {
     expect(Array.from(table.tBodies[0]!.rows, (row) => Array.from(row.cells, (cell) => cell.textContent))).toEqual(
       report.logger.timeline.map((bin) => [
         `${(bin.at / 1000).toFixed(1)}s`, String(bin.frames), String(bin.lateFrames), String(bin.linesMax),
+        `${bin.prepareMsP95 ?? '-'} ms`, `${bin.relayoutMsP95 ?? '-'} ms`, `${bin.sourceUpdateMsP95 ?? '-'} ms`,
+        `${bin.windowApplyMs} ms`, `${bin.windowPrepareMs} ms`, String(bin.sourceNotReadyFrames), String(bin.rendererSubmittedFrames),
         `${bin.renderMsP95} ms`, `${bin.sourceMsP95} ms`, `${bin.canvasMsP95} ms`, `${bin.compositeMsP95} ms`, `${bin.jsMsP95} ms`,
       ]),
     );
+  });
+
+  it('records the selected opening from zero and makes hotspot rows directly seekable', () => {
+    const range = document.getElementById('stPerfRange') as HTMLSelectElement;
+    expect(range.value).toBe('90');
+    range.value = '30';
+    click('stPerfOpening');
+    expect(player.transport.seek).toHaveBeenCalledWith(0);
+    expect((document.getElementById('stPerfDur') as HTMLSelectElement).value).toBe('30');
+    recordFrames();
+    now += 6500; par.renderAt(4); tick!(now);
+    click('stPerfStop');
+    const hotspot = document.querySelector<HTMLButtonElement>('#stPerfDiag .st-pick')!;
+    expect(hotspot).not.toBeNull();
+    hotspot.click();
+    expect(player.transport.seek).toHaveBeenLastCalledWith(4);
+    expect(document.querySelectorAll('#stPerf')).toHaveLength(1);
+    expect(document.getElementById('stPerfDiag')!.textContent).not.toContain(t('st.loggerCanvasScene'));
   });
 
   it('preserves existing playback and produces the report when the view lifecycle stops logging', () => {

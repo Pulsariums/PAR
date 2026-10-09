@@ -14,6 +14,9 @@ export interface SourceStatsReport {
   bytesRead: number;
   decodeMs: number;
   indexMs: number;
+  /** Opt-in cumulative main-thread arrival work; not asynchronous read latency. */
+  windowApplyTotalMs?: number;
+  windowPrepareTotalMs?: number;
 }
 
 /** After a seek / at the start: the first read only covers the frames about to be shown (ms). */
@@ -46,6 +49,13 @@ export class WindowFeed {
   private readonly ahead: number;
   /** Longest forward read: the window grows in slices so playback never waits for one big read. */
   private readonly slice: number;
+  private diagnosticsEnabled = false;
+  private applyTotalMs = 0;
+
+  setDiagnostics(enabled: boolean): void {
+    this.diagnosticsEnabled = enabled;
+    this.applyTotalMs = 0;
+  }
 
   constructor(readonly source: SubtitleSource, private readonly hooks: FeedHooks, windowSeconds = 12) {
     const total = Math.max(1000, Math.round(windowSeconds * 1000));
@@ -79,6 +89,7 @@ export class WindowFeed {
     return {
       windowEvents: this.ev.size, windowRange: this.has ? [this.lo / 1000, this.hi / 1000] : null, loading: this.req !== null,
       bytesRead: s.bytesRead, decodeMs: s.decodeMs, indexMs: s.indexMs ?? 0,
+      ...(this.diagnosticsEnabled ? { windowApplyTotalMs: this.applyTotalMs } : {}),
     };
   }
 
@@ -107,6 +118,7 @@ export class WindowFeed {
   }
 
   private apply(a: number, b: number, events: AssEvent[]): void {
+    const start = this.diagnosticsEnabled ? performance.now() : 0;
     const removed: number[] = [];
     const added: AssEvent[] = [];
     if (!(this.has && a <= this.hi && b >= this.lo)) {
@@ -119,6 +131,8 @@ export class WindowFeed {
       this.ev.set(e.index, e);
       added.push(e);
     }
+    // Record merge/filter work before onChange can synchronously redraw.
+    if (this.diagnosticsEnabled) this.applyTotalMs += performance.now() - start;
     this.hooks.onChange(added, removed);
   }
 

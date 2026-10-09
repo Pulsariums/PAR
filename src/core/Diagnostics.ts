@@ -114,7 +114,26 @@ export class RenderLogger {
   }
 }
 
-export interface DiagnosticsSnapshot {
+export interface DiagnosticsPrepare {
+  /** Synchronous draw work before Scene.render; absent in older snapshots. */
+  prepareMs?: number;
+  relayoutMs?: number;
+  sourceUpdateMs?: number;
+  sourceReady?: boolean;
+  sourceLoading?: boolean;
+  windowRange?: [number, number] | null;
+  /** Cumulative source-arrival work, outside draw/Scene.render. */
+  windowApplyTotalMs?: number;
+  windowPrepareTotalMs?: number;
+  prepareStartedAt?: number;
+  completedAt?: number;
+  sceneRendered?: boolean;
+  /** Completed nonempty DOM/canvas surface submission, not physical display. */
+  rendererSubmitted?: boolean;
+  skipReason?: 'unchanged' | 'fonts-blocked';
+}
+
+export interface DiagnosticsSnapshot extends DiagnosticsPrepare {
   serial: number;
   observedAt: number;
   media: number;
@@ -141,7 +160,7 @@ export interface SceneDiagnosticsSample {
   canvas: CanvasProfile | null;
 }
 
-interface DiagnosticsFrame extends SceneDiagnosticsSample {
+interface DiagnosticsFrame extends SceneDiagnosticsSample, DiagnosticsPrepare {
   media: number;
   presented: boolean;
   held: boolean;
@@ -184,6 +203,19 @@ export class Diagnostics {
       held: frame.held,
       sceneMs: frame.sceneMs,
       renderMs: frame.renderMs,
+      prepareMs: frame.prepareMs,
+      relayoutMs: frame.relayoutMs,
+      sourceUpdateMs: frame.sourceUpdateMs,
+      sourceReady: frame.sourceReady,
+      sourceLoading: frame.sourceLoading,
+      windowRange: frame.windowRange ? [...frame.windowRange] : frame.windowRange,
+      windowApplyTotalMs: frame.windowApplyTotalMs,
+      windowPrepareTotalMs: frame.windowPrepareTotalMs,
+      prepareStartedAt: frame.prepareStartedAt,
+      completedAt: frame.completedAt,
+      sceneRendered: frame.sceneRendered,
+      rendererSubmitted: frame.rendererSubmitted,
+      skipReason: frame.skipReason,
       domMs: frame.domMs,
       canvasMs: frame.canvasMs,
       eventCount: frame.visible.length,

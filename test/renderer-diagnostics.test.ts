@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ScriptHost } from '../src/core/ScriptHost';
+import { parseScript } from '../src/parser/ScriptParser';
+import type { SubtitleSource } from '../src/source/types';
 
 import { create } from '../src/index';
 
@@ -20,13 +23,13 @@ const subtitle = [
 
 const box = (): HTMLElement => {
   const el = document.createElement('div');
-  Object.defineProperty(el, 'clientWidth', { value: 640 });
+  Object.defineProperty(el, 'clientWidth', { configurable: true, get: () => 640 });
   Object.defineProperty(el, 'clientHeight', { value: 360 });
   document.body.appendChild(el);
   return el;
 };
 
-afterEach(() => { document.body.innerHTML = ''; });
+afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); });
 
 describe('renderer diagnostics', () => {
   it('disables and clears the event logger on destruction', () => {
@@ -84,6 +87,58 @@ describe('renderer diagnostics', () => {
     par.setSubtitle(null);
     expect(par.getDiagnostics()).toBeNull();
     par.destroy();
+  });
+
+  it('captures relayout and source-update delays outside renderMs, including unchanged draws', () => {
+    const par = create({ container: box(), subtitle, renderMode: 'dom' });
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const update = ScriptHost.prototype.update;
+    vi.spyOn(ScriptHost.prototype, 'update').mockImplementation(function (this: ScriptHost, ms) { now += 250; update.call(this, ms); });
+    const width = vi.spyOn(par.element.parentElement!, 'clientWidth', 'get').mockImplementation(() => { now += 40; return 640; });
+    try {
+      par.setDiagnostics(true);
+      par.refresh();
+      const layout = par.getDiagnostics()!;
+      expect(layout.relayoutMs).toBeGreaterThanOrEqual(40);
+      expect(layout.sourceUpdateMs).toBe(250);
+      expect(layout.prepareMs).toBeGreaterThanOrEqual(290);
+      expect(layout.renderMs).toBe(0);
+      expect(layout.sourceReady).toBe(true);
+      expect(layout.sourceLoading).toBe(false);
+      par.renderAt(1.75);
+      expect(par.getDiagnostics()).toMatchObject({ rendererSubmitted: true, sceneRendered: true, prepareMs: 250, renderMs: 0 });
+      par.renderAt(1.75);
+      expect(par.getDiagnostics()).toMatchObject({ skipReason: 'unchanged', sceneRendered: false, rendererSubmitted: false, prepareMs: 250, sourceUpdateMs: 250 });
+      par.renderAt(4);
+      expect(par.getDiagnostics()).toMatchObject({ eventCount: 0, rendererSubmitted: false });
+    } finally { width.mockRestore(); par.destroy(); }
+  });
+
+  it('reports uncovered/loading source windows and measures asynchronous arrival preparation', async () => {
+    const parsed = parseScript(subtitle);
+    let resolve!: (events: typeof parsed.events) => void;
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const source: SubtitleSource = { kind: 'ass', script: parsed, duration: 10, eventCount: 2,
+      readWindow: vi.fn(() => new Promise<typeof parsed.events>((r) => { resolve = r; })),
+    };
+    const par = create({ container: box(), subtitle: source, renderMode: 'dom' });
+    try {
+      await Promise.resolve();
+      par.setDiagnostics(true);
+      par.renderAt(1.75);
+      expect(par.getDiagnostics()).toMatchObject({ sourceReady: false, sourceLoading: true, windowRange: null, eventCount: 0, rendererSubmitted: false });
+      const extend = vi.spyOn((par as unknown as { fonts: { extendUsage: (...args: unknown[]) => void } }).fonts, 'extendUsage').mockImplementation(() => { now += 125; });
+      resolve(parsed.events);
+      await Promise.resolve();
+      expect(par.getDiagnostics()).toMatchObject({ sourceReady: true, sourceLoading: true, windowPrepareTotalMs: 125, rendererSubmitted: true });
+      expect(par.getDiagnostics()!.windowApplyTotalMs).toBeGreaterThanOrEqual(0);
+      extend.mockRestore();
+      par.setDiagnostics(false);
+      expect(par.getSourceStats().windowPrepareTotalMs).toBeUndefined();
+      expect(par.getSourceStats().windowApplyTotalMs).toBeUndefined();
+    } finally { par.destroy(); }
   });
 
   it('increments frame serials and exposes the latest media time', () => {

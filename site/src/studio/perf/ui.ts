@@ -16,13 +16,16 @@ export const PERF_HTML = `
   <p class="hint" data-i18n="st.loggerHint"></p>
   <div class="row">
     <label class="fld inline"><span data-i18n="st.loggerFor"></span>
-      <select id="stPerfDur"><option value="15">15 s</option><option value="30" selected>30 s</option><option value="60">60 s</option><option value="120">120 s</option></select></label>
+      <select id="stPerfDur"><option value="15">15 s</option><option value="30" selected>30 s</option><option value="60">60 s</option><option value="90">90 s</option><option value="120">120 s</option></select></label>
     <button type="button" class="btn sm primary" id="stPerfRec" data-i18n="st.loggerStart"></button>
     <button type="button" class="btn sm" id="stPerfStop" data-i18n="st.loggerStop" hidden></button>
     <button type="button" class="btn sm" id="stPerfClear" data-i18n="st.loggerClear"></button>
   </div>
   <div class="row">
+    <label class="fld inline"><span data-i18n="st.loggerRange"></span>
+      <select id="stPerfRange"><option value="30">0-30 s</option><option value="90" selected>0-90 s</option><option value="all" data-i18n="st.loggerWhole"></option></select></label>
     <button type="button" class="btn sm" id="stPerfScan" data-i18n="st.loggerScan"></button>
+    <button type="button" class="btn sm" id="stPerfOpening" data-i18n="st.loggerOpening"></button>
   </div>
   <p class="hint" id="stPerfStatus" role="status"></p>
   <div class="chips" id="stPerfMoments"></div>
@@ -78,7 +81,7 @@ export const initPerf = ({ player, session, choices }: Deps) => {
         planQueued: r.planQueued, planLeadMs: r.planLeadMs, pending: r.pending, readyMs: r.readyMs, deficitMs: r.deficitMs, buildRate: r.buildRate,
         missing: r.missing, missedTotal: r.missedTotal, held: r.held, compositeMs: r.compositeMs, stalls: r.stalls, stallMs: r.stallMs, evictions: r.evictions,
       },
-      source: { windowEvents: source.windowEvents, loading: source.loading, bytesRead: source.bytesRead, decodeMs: source.decodeMs, indexMs: source.indexMs },
+      source: { windowEvents: source.windowEvents, loading: source.loading, bytesRead: source.bytesRead, decodeMs: source.decodeMs, indexMs: source.indexMs, windowApplyTotalMs: source.windowApplyTotalMs, windowPrepareTotalMs: source.windowPrepareTotalMs },
       playing: player.transport.playing, heapMB: heapMB(),
     } satisfies Omit<FrameSample, 'at' | 'gap'> & { playing: boolean; heapMB: number | null };
   }, video, par);
@@ -105,6 +108,9 @@ export const initPerf = ({ player, session, choices }: Deps) => {
 
   const causeKey: Record<HotspotCause, keyof import('../../i18n/en').Dict> = {
     'main-thread/dom': 'perf.diag.cause.mainThread',
+    'main-thread/pre-render': 'st.loggerPreRender',
+    'main-thread/unknown': 'st.loggerMainUnknown',
+    'canvas/scene': 'st.loggerCanvasScene',
     'canvas/fill/composite': 'perf.diag.cause.canvas',
     'sprite-build/cache': 'perf.diag.cause.sprite',
     'source/decode/window': 'perf.diag.cause.source',
@@ -150,7 +156,7 @@ export const initPerf = ({ player, session, choices }: Deps) => {
         body.append(
           el('span', 'st-name', t('perf.diag.hotspotAt', { media: hotspot.media, duration: hotspot.durationMs, frames: hotspot.frames })),
           el('span', 'st-meta', `${t(causeKey[hotspot.cause])} / ${t(confidenceKey(hotspot.confidence))}`),
-          el('span', 'st-meta', `${t('perf.diag.evidence')}: ${hotspot.evidence.gapMs} ms / ${hotspot.evidence.renderMs} ms / ${hotspot.evidence.longTaskMs} ms`),
+          el('span', 'st-meta', `${t('perf.diag.evidence')}: ${hotspot.evidence.gapMs} ms; ${t('st.loggerPrepare')} ${hotspot.evidence.prepareMs ?? '-'} ms; ${t('st.loggerRender')} ${hotspot.evidence.renderMs} ms; longtask ${hotspot.evidence.longTaskMs} ms`),
         );
         seek.append(body);
         const generation = reportGeneration;
@@ -177,6 +183,8 @@ export const initPerf = ({ player, session, choices }: Deps) => {
     const summary = el('dl', 'st-kv');
     addDiagnosticValue(summary, t('st.loggerDuration'), `${l.durationS} s`);
     addDiagnosticValue(summary, t('st.loggerVideo'), l.video.available ? `${t('st.loggerAvailable')} (${l.video.fps ?? '—'} fps, ${l.video.frames})` : t('st.loggerUnavailable'));
+    addDiagnosticValue(summary, t('st.loggerSubmitted'), l.renderer.available ? String(l.renderer.submittedSamples) : t('st.loggerUnavailable'));
+    addDiagnosticValue(summary, t('st.loggerAttribution'), l.longTasks.attributionAvailable ? t('st.loggerAvailable') : t('st.loggerUnavailable'));
     addDiagnosticValue(summary, t('st.loggerLineCount'), `${l.lineEvents.count}${l.lineEvents.capped ? '+' : ''}`);
     if (l.causes.length) addDiagnosticValue(summary, t('st.loggerCauses'), l.causes.slice(0, 3).map((c) => `${t(causeKey[c.cause])} ${Math.round(c.share * 100)}%`).join('; '));
     loggerOutput.append(summary);
@@ -199,13 +207,15 @@ export const initPerf = ({ player, session, choices }: Deps) => {
       const summaryNode = document.createElement('summary'); summaryNode.textContent = t('st.loggerTimeline'); details.append(summaryNode);
       const table = document.createElement('table'); table.className = 'st-table';
       const head = document.createElement('tr');
-      for (const label of ['st.loggerAt', 'st.loggerFrames', 'st.loggerLate', 'st.loggerLines', 'st.loggerRender', 'st.loggerSource', 'st.loggerCanvas', 'st.loggerComposite', 'st.loggerJs']) head.append(el('th', '', t(label as keyof import('../../i18n/en').Dict)));
+      for (const label of ['st.loggerAt', 'st.loggerFrames', 'st.loggerLate', 'st.loggerLines', 'st.loggerPrepare', 'st.loggerRelayout', 'st.loggerSourceUpdate', 'st.loggerWindowApply', 'st.loggerWindowPrepare', 'st.loggerNotReady', 'st.loggerSubmitted', 'st.loggerRender', 'st.loggerSource', 'st.loggerCanvas', 'st.loggerComposite', 'st.loggerJs']) head.append(el('th', '', t(label as keyof import('../../i18n/en').Dict)));
       const thead = document.createElement('thead'); thead.append(head); table.append(thead);
       const body = document.createElement('tbody');
       for (const bin of l.timeline) {
         const row = document.createElement('tr');
         for (const value of [
           `${(bin.at / 1000).toFixed(1)}s`, bin.frames, bin.lateFrames, bin.linesMax,
+          `${bin.prepareMsP95 ?? '-'} ms`, `${bin.relayoutMsP95 ?? '-'} ms`, `${bin.sourceUpdateMsP95 ?? '-'} ms`,
+          `${bin.windowApplyMs} ms`, `${bin.windowPrepareMs} ms`, bin.sourceNotReadyFrames, bin.rendererSubmittedFrames,
           `${bin.renderMsP95} ms`, `${bin.sourceMsP95} ms`, `${bin.canvasMsP95} ms`, `${bin.compositeMsP95} ms`, `${bin.jsMsP95} ms`,
         ]) row.append(el('td', '', String(value)));
         body.append(row);
@@ -250,7 +260,7 @@ export const initPerf = ({ player, session, choices }: Deps) => {
   };
 
   const start = (): void => {
-    if (rec.active) return;
+    if (rec.active || scan) return;
     clearDiagnostics();
     const secs = Number($<HTMLSelectElement>('stPerfDur').value);
     const s = session();
@@ -286,7 +296,16 @@ export const initPerf = ({ player, session, choices }: Deps) => {
     say(t('st.loggerCleared'));
   });
 
+  $('stPerfOpening').addEventListener('click', () => {
+    if (rec.active || scan) return;
+    const range = $<HTMLSelectElement>('stPerfRange').value;
+    $<HTMLSelectElement>('stPerfDur').value = range === '90' ? '90' : '30';
+    player.transport.seek(0);
+    start();
+  });
+
   scanBtn.addEventListener('click', async () => {
+    if (rec.active) return;
     const s = session();
     if (!s) { say(t('st.perfNoSub')); return; }
     if (scan) { scan.abort(); return; }
@@ -294,11 +313,13 @@ export const initPerf = ({ player, session, choices }: Deps) => {
     scanBtn.textContent = t('st.cancel');
     moments.replaceChildren();
     try {
-      const found = await busiest(s.source, 5, { signal: ac.signal, onProgress: (f) => say(t('st.perfScanning', { pct: Math.round(f * 100) })) });
+      const range = $<HTMLSelectElement>('stPerfRange').value;
+      const found = await busiest(s.source, 5, { from: 0, to: range === 'all' ? undefined : Number(range), signal: ac.signal, onProgress: (f) => say(t('st.perfScanning', { pct: Math.round(f * 100) })) });
+      if (ac.signal.aborted || s !== session()) return;
       say(found.length ? t('st.perfFound') : t('st.perfNone'));
       for (const m of found) {
         const b = Object.assign(document.createElement('button'), { type: 'button', className: 'chip', textContent: `${m.t.toFixed(1)} s · ${m.lines.toLocaleString('en-US')}` });
-        b.addEventListener('click', () => { player.transport.seek(Math.max(0, m.t - 2)); start(); });
+        b.addEventListener('click', () => { if (s !== session() || rec.active || scan) return; player.transport.seek(Math.max(0, m.t - 2)); start(); });
         moments.append(b);
       }
     } catch (e) { say(t('st.fail', { error: e instanceof Error ? e.message : String(e) })); } finally { scan = null; scanBtn.textContent = t('st.loggerScan'); }
