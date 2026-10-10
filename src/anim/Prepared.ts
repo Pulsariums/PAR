@@ -2,6 +2,7 @@ import { takesPartInStacking } from '../layout/Stacking';
 import { findStyle } from '../parser/StyleParser';
 import type { AssEvent, AssStyle, ScriptInfo, Transition } from '../types/script';
 
+import { createMoveParams, createPosParams } from './LineAnim';
 import { isPlated } from './plated';
 import { foldOps, stateFromStyle, type TextState } from './State';
 
@@ -29,17 +30,26 @@ export interface PreparedLine {
   clipTransitions: Transition[];
   /** Whole script area: where `\t(\clip)` starts when the line has no rect clip. */
   fullRect: [number, number, number, number];
+  /** Cached 6 Float32 values [x1, y1, x2, y2, t1, t2] for numeric interpolation (or null when not positioned). */
+  moveParams?: Float32Array | null;
 }
 
 export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: ScriptInfo): PreparedLine => {
   const style = findStyle(styles, ev.style);
   const lt = ev.lineTags;
+  const durationMs = Math.max(0, Math.round((ev.end - ev.start) * 1000));
+  let moveParams: Float32Array | null = null;
+  if (lt.move) {
+    moveParams = lt.moveParams ??= createMoveParams(lt.move, durationMs);
+  } else if (lt.pos) {
+    moveParams = lt.moveParams ??= createPosParams(lt.pos, durationMs);
+  }
   const transitions = ev.fragments.flatMap((f) => f.ops.filter((o): o is Transition => o.type === 't'));
   const animated = transitions.length > 0 || !!lt.move || !!lt.fad || !!lt.fade || ev.fragments.some((f) => !!f.karaoke);
   return {
     event: ev,
     style,
-    durationMs: Math.max(0, Math.round((ev.end - ev.start) * 1000)),
+    durationMs,
     an: lt.an ?? style.alignment,
     wrapStyle: lt.q ?? info.wrapStyle,
     margins: {
@@ -54,6 +64,7 @@ export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: S
     animated,
     clipTransitions: transitions.filter((t) => !!t.clip),
     fullRect: [0, 0, info.playResX, info.playResY],
+    moveParams,
   };
 };
 

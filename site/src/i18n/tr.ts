@@ -44,6 +44,7 @@ export const tr: Dict = {
   ...convertTr,
   ...watchTr,
   'w.avoidControls': 'Çubuk altyazıyı yukarı itsin',
+  'w.buffering': 'Altyazılar hazırlanıyor…',
   'w.settings': 'Ayarlar',
   ...studioTr,
   ...compareTr,

@@ -23,7 +23,11 @@ export class Stall {
   stalls = 0;
   stallMs = 0;
 
-  constructor(private readonly clip: () => Clip | null, private readonly probe: () => number) {}
+  constructor(
+    private readonly clip: () => Clip | null,
+    private readonly probe: () => number,
+    private readonly onBuffering?: (buffering: boolean) => void,
+  ) {}
 
   get active(): boolean { return this.on; }
 
@@ -37,6 +41,7 @@ export class Stall {
     this.since = now;
     this.stalls++;
     v.pause();
+    this.onBuffering?.(true);
     this.poll();
   }
 
@@ -61,6 +66,7 @@ export class Stall {
     this.cool = performance.now() + COOLDOWN_MS;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.onBuffering?.(false);
     if (resume && v && v.paused && !v.seeking) {
       this.resuming = true;
       try { void Promise.resolve(v.play()).catch(() => undefined).finally(() => { this.resuming = false; }); } catch { this.resuming = false; }

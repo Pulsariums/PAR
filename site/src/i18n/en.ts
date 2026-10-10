@@ -43,6 +43,7 @@ export const en = {
   ...convertEn,
   ...watchEn,
   'w.avoidControls': 'Avoid controls (push subtitles up)',
+  'w.buffering': 'Readying subtitles…',
   'w.settings': 'Settings',
   ...studioEn,
   ...compareEn,

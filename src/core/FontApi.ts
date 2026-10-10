@@ -105,8 +105,30 @@ export abstract class FontApi {
   }
 
   /** Subscribes to `missingfonts`: fires when the missing families or the glyph gaps (`missingGlyphs`) of the current script change, also back to none (`ok: true`, empty `missingGlyphs`). */
-  on(_event: 'missingfonts', fn: (report: PreflightReport) => void): () => void {
-    return this.missing.on(fn);
+  on(event: 'missingfonts', fn: (report: PreflightReport) => void): () => void;
+  on(event: 'buffering', fn: (buffering: boolean, readySec: number) => void): () => void;
+  on(event: string, fn: (...args: any[]) => void): () => void {
+    if (event === 'missingfonts') return this.missing.on(fn as (report: PreflightReport) => void);
+    if (event === 'buffering') {
+      const wrap = fn as (buffering: boolean, readySec: number) => void;
+      this.bufferingEvents.add(wrap);
+      return () => { this.bufferingEvents.delete(wrap); };
+    }
+    return () => undefined;
+  }
+
+  /** The `buffering` subscribers (see `on('buffering', ...)`). */
+  protected readonly bufferingEvents = new Set<(buffering: boolean, readySec: number) => void>();
+
+  private bufferingCb: ((buffering: boolean, readySec: number) => void) | null = null;
+
+  /** The owner hands the current `onBuffering` option callback here (called on create and on `setOptions`). */
+  protected setBufferingCallback(cb: ((buffering: boolean, readySec: number) => void) | null): void { this.bufferingCb = cb; }
+
+  /** Announces a buffering-state change to subscribers and the `onBuffering` callback. */
+  protected emitBuffering(buffering: boolean, readySec: number): void {
+    this.bufferingCb?.(buffering, readySec);
+    for (const fn of this.bufferingEvents) fn(buffering, readySec);
   }
 
   /** Forgets "not found" answers of the providers and asks again (a provider without `subscribe` got new fonts). */

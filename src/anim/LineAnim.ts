@@ -2,20 +2,108 @@ import type { ClipSpec, LineTags, Transition } from '../types/script';
 
 import { transitionProgress } from './State';
 
-/** `\pos` or `\move` position at `t` ms (null when the line is not positioned). libass semantics. */
-export const positionAt = (tags: LineTags, t: number, durationMs: number): [number, number] | null => {
-  if (tags.pos) return tags.pos;
-  const m = tags.move;
-  if (!m) return null;
-  let t1 = m.length === 6 ? m[4] : 0;
-  let t2 = m.length === 6 ? m[5] : 0;
-  if (t1 > t2) [t1, t2] = [t2, t1]; // libass swaps reversed times
+/**
+ * Caches the 6 Float32 values [x1, y1, x2, y2, t1, t2] for numeric interpolation.
+ * libass semantics: swaps reversed times, and defaults t1=0, t2=durationMs when both <= 0.
+ */
+export const createMoveParams = (m: readonly number[], durationMs: number): Float32Array => {
+  const buf = new Float32Array(6);
+  buf[0] = m[0] ?? 0;
+  buf[1] = m[1] ?? 0;
+  buf[2] = m[2] ?? 0;
+  buf[3] = m[3] ?? 0;
+  let t1 = m.length >= 6 ? (m[4] ?? 0) : 0;
+  let t2 = m.length >= 6 ? (m[5] ?? 0) : 0;
+  if (t1 > t2) {
+    const tmp = t1;
+    t1 = t2;
+    t2 = tmp;
+  }
   if (t1 <= 0 && t2 <= 0) {
     t1 = 0;
     t2 = durationMs;
   }
-  const k = t <= t1 ? 0 : t >= t2 ? 1 : (t - t1) / (t2 - t1);
-  return [m[0] + (m[2] - m[0]) * k, m[1] + (m[3] - m[1]) * k];
+  buf[4] = t1;
+  buf[5] = t2;
+  return buf;
+};
+
+/** Caches static position coordinates as 6 Float32 values [x, y, x, y, 0, durationMs]. */
+export const createPosParams = (pos: readonly [number, number], durationMs: number): Float32Array => {
+  const buf = new Float32Array(6);
+  buf[0] = pos[0];
+  buf[1] = pos[1];
+  buf[2] = pos[0];
+  buf[3] = pos[1];
+  buf[4] = 0;
+  buf[5] = durationMs;
+  return buf;
+};
+
+/** True when a \move tag never actually moves (x1 == x2 && y1 == y2). */
+export const isStaticMove = (mp: Float32Array): boolean =>
+  mp[0] === mp[2] && mp[1] === mp[3];
+
+/**
+ * Direct evaluation of cached 6-element Float32Array [x1, y1, x2, y2, t1, t2] at time t.
+ * Performs a single direct calculation without object allocations or re-parsing.
+ * If `out` is provided, writes into `out` and returns it; otherwise allocates [x, y].
+ */
+export const positionFromParams = (
+  mp: Float32Array,
+  t: number,
+  out?: [number, number],
+): [number, number] => {
+  let x: number;
+  let y: number;
+  if (mp[0] === mp[2] && mp[1] === mp[3]) {
+    x = mp[0];
+    y = mp[1];
+  } else {
+    const t1 = mp[4];
+    const t2 = mp[5];
+    if (t <= t1) {
+      x = mp[0];
+      y = mp[1];
+    } else if (t >= t2) {
+      x = mp[2];
+      y = mp[3];
+    } else {
+      const k = (t - t1) / (t2 - t1);
+      x = mp[0] + (mp[2] - mp[0]) * k;
+      y = mp[1] + (mp[3] - mp[1]) * k;
+    }
+  }
+  if (out) {
+    out[0] = x;
+    out[1] = y;
+    return out;
+  }
+  return [x, y];
+};
+
+/** `\pos` or `\move` position at `t` ms (null when the line is not positioned). libass semantics. */
+export const positionAt = (
+  tags: LineTags,
+  t: number,
+  durationMs: number,
+  out?: [number, number],
+): [number, number] | null => {
+  if (tags.pos) {
+    if (out) {
+      out[0] = tags.pos[0];
+      out[1] = tags.pos[1];
+      return out;
+    }
+    return tags.pos;
+  }
+  let mp = tags.moveParams;
+  if (!mp) {
+    const m = tags.move;
+    if (!m) return null;
+    mp = tags.moveParams = createMoveParams(m, durationMs);
+  }
+  return positionFromParams(mp, t, out);
 };
 
 /** libass `interpolate_alpha`: piecewise-linear alpha a1 -> a2 -> a3 over t1..t4. */

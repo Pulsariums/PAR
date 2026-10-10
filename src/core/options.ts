@@ -86,6 +86,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     fontProviders: [...(patch.fontProviders ?? prev?.fontProviders ?? [])],
     providerTimeout: patch.providerTimeout ?? prev?.providerTimeout ?? 5000,
     onMissingFonts: patch.onMissingFonts !== undefined ? patch.onMissingFonts : prev?.onMissingFonts ?? null,
+    onBuffering: patch.onBuffering !== undefined ? patch.onBuffering : prev?.onBuffering ?? null,
     // Effective window default follows the warm horizon: a caller who never set `windowSeconds` gets coverage at least as far ahead
     // as preparation plans (max(12, warmRangeSeconds + 8)); an explicit value is kept forever. Nothing is persisted.
     windowSeconds: validateWindow(patch.windowSeconds !== undefined ? patch.windowSeconds : prev?.windowExplicit === true ? prev.windowSeconds : Math.max(12, warmRangeSeconds + 8)),

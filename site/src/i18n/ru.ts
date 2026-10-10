@@ -44,6 +44,7 @@ export const ru: Dict = {
   ...convertRu,
   ...watchRu,
   'w.avoidControls': 'Сдвигать субтитры над панелью',
+  'w.buffering': 'Субтитры готовятся…',
   'w.settings': 'Настройки',
   ...studioRu,
   ...compareRu,

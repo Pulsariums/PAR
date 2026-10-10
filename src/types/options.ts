@@ -107,6 +107,12 @@ export interface PAROptions {
   workers?: 'auto' | 'off' | number;
   /** Extra padding/inset from the bottom in layout coordinates (e.g. for player controls). Default 0. */
   bottomInset?: number;
+  /**
+   * Called when PAR starts or stops holding/pre-buffering sprites (e.g. video start, seek or deficit).
+   * `buffering`: true while holding/pre-buffering, false when ready.
+   * `readySec`: how many seconds ahead of the playhead are ready (built and unheld).
+   */
+  onBuffering?: (buffering: boolean, readySec: number) => void;
 }
 
 /** Fully resolved options (internal). */
@@ -126,6 +132,7 @@ export interface ResolvedOptions {
   fontProviders: FontProvider[];
   providerTimeout: number;
   onMissingFonts: MissingFontsHandler | null;
+  onBuffering: ((buffering: boolean, readySec: number) => void) | null;
   windowSeconds: number;
   /** Internal: the caller set `windowSeconds` explicitly (then later `warmRangeSeconds` changes do not move it). */
   windowExplicit: boolean;

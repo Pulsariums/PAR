@@ -24,6 +24,7 @@ export const WATCH_HTML = `
       <div class="w-empty-b">${pick('wPickVideo0', 'w.video')}${pick('wPickBlank0', 'w.blank')}${pick('wPickSub0', 'w.sub')}${pick('wPickFonts0', 'w.fonts')}</div>
     </div>
     <div class="w-state" id="wState" role="status" aria-live="polite" hidden></div>
+    <div class="w-buffering" id="wBuffering" role="status" aria-live="polite" hidden><span class="w-buffer-spin" aria-hidden="true"></span><span data-i18n="w.buffering"></span></div>
     <div class="w-bar" id="wBar">
       <div class="w-settings" id="wSettingsPanel" hidden>
         <label class="w-setting"><input type="checkbox" id="wAvoidControls" /><span data-i18n="w.avoidControls"></span></label>

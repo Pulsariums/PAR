@@ -15,6 +15,8 @@ export const initWatch = (root: HTMLElement): void => {
   applyI18n(root);
   const stage = new WatchStage($('wStage'), $<HTMLVideoElement>('wVid'));
   const controls = initControls(stage);
+  const buffering = $('wBuffering');
+  stage.par.on('buffering', (active) => { buffering.hidden = !active; });
   let files: ReturnType<typeof initFiles> | null = null;
   const fonts = initFonts(stage, (n) => files?.fontCount(n));
   files = initFiles(stage, fonts, root);

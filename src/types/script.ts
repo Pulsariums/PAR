@@ -117,6 +117,8 @@ export interface LineTags {
   clip?: ClipSpec;
   /** Vector `\clip`/`\iclip`: the FIRST one wins, and it applies together with a rect clip (libass). */
   vclip?: ClipSpec;
+  /** Cached 6 Float32 values [x1, y1, x2, y2, t1, t2] for numeric interpolation. */
+  moveParams?: Float32Array;
 }
 
 export type KaraokeType = 'k' | 'kf' | 'ko';

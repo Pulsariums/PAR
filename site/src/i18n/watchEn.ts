@@ -22,6 +22,7 @@ export const watchEn = {
   'w.cc': 'Subtitles on / off',
   'w.settings': 'Settings',
   'w.avoidControls': 'Avoid controls (push subtitles up)',
+  'w.buffering': 'Readying subtitles…',
   'w.full': 'Fullscreen',
   'w.privacy': 'Everything stays on your device. Subtitles: .ass .ssa .xpar .par. Fonts you add are remembered here for next time. Keys: Space, arrows, F, M, C.',
   'w.videoOk': 'Video ready. Add a subtitle (and fonts, if it needs them).',

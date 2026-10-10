@@ -74,6 +74,9 @@ export class Scene {
   /** Ms the playhead would have to wait for every planned sprite to be built before its frame; 0 = playing on is safe. */
   deficit(t: number): number { return this.ahead.deficit(t); }
 
+  /** Subtitle ms until which every planned sprite is built and available. */
+  readyUntil(): number { return this.ahead.readyUntil(); }
+
   /** Sprite workers are running (page-thread building alone is too slow to buy time by holding the picture). */
   get buffers(): boolean { return this.ahead.hasWorkers; }
 

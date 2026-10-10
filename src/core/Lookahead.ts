@@ -273,6 +273,9 @@ export class Lookahead {
     return this.planner.frontier.deficit(t, this.rate.value, MARGIN_FRAMES * frame);
   }
 
+  /** Subtitle ms until which every planned sprite is built and available. */
+  readyUntil(): number { return this.planner.readyUntil(); }
+
   stats(): WarmStats {
     const f = this.planner.planned;
     return {

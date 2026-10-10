@@ -42,17 +42,19 @@ export class PARRenderer extends FontApi {
   private lastRaw = 0;
   private renderGeneration = 0;
   private destroyed = false;
+  private buffering = false;
   private readonly frames = new FrameStats();
   private readonly diagnostics = new Diagnostics();
   private readonly logger = new RenderLogger();
   private lastVideoFrame: VideoFrameMetadata | undefined;
   private readonly load = new LoadMeter();
-  private readonly stall = new Stall(() => this.opts.video, () => this.scene.deficit(this.lastMs));
+  private readonly stall = new Stall(() => this.opts.video, () => this.scene.deficit(this.lastMs), (active) => this.onStallBuffering(active));
   private seekBufferUntilMs = 0;
   private prepareSeq = 0;
   constructor(options: PAROptions) {
     super();
     this.opts = resolveOptions(options);
+    this.setBufferingCallback(this.opts.onBuffering);
     this.scheduler = new Scheduler((mediaTime, metadata) => {
       this.lastVideoFrame = metadata;
       this.frame(mediaTime);
@@ -84,6 +86,8 @@ export class PARRenderer extends FontApi {
     this.logger.segment();
     this.host.load(input || null);
     this.env = { ...this.env, styles: this.host.styles };
+    const currentMs = timeToMs(this.now() + this.opts.timeOffset, this.opts.videoFps);
+    this.seekBufferUntilMs = this.opts.seekBuffer ? currentMs + 1000 : 0;
     this.invalidate();
     this.diagnostics.clear();
   }
@@ -125,6 +129,7 @@ export class PARRenderer extends FontApi {
     this.assertAlive();
     const prev = this.opts;
     this.opts = resolveOptions(patch, prev);
+    if (this.opts.onBuffering !== prev.onBuffering) this.setBufferingCallback(this.opts.onBuffering);
     if (this.opts.container !== prev.container || this.opts.video !== prev.video) {
       const diagnosticsEnabled = this.diagnostics.active;
       const loggerEnabled = this.logger.enabled;
@@ -287,6 +292,14 @@ export class PARRenderer extends FontApi {
   }
 
   private now(): number { return this.opts.clock ? this.opts.clock() : this.opts.video ? this.opts.video.currentTime : this.lastRaw; }
+
+  /** Stall (the video was held for missing sprites) started or ended: announce the buffering state with how far ahead is ready. */
+  private onStallBuffering(active: boolean): void {
+    if (active === this.buffering) return;
+    this.buffering = active;
+    const readySec = Math.max(0, Math.round((this.scene.readyUntil() - this.lastMs) / 100) / 10);
+    this.emitBuffering(active, readySec);
+  }
 
   private frame(mediaTime: number | null): void {
     const frame = this.lastVideoFrame;

@@ -22,6 +22,7 @@ export const watchTr = {
   'w.cc': 'Altyazı aç / kapat',
   'w.settings': 'Ayarlar',
   'w.avoidControls': 'Çubuk altyazıyı yukarı itsin',
+  'w.buffering': 'Altyazılar hazırlanıyor…',
   'w.full': 'Tam ekran',
   'w.privacy': 'Her şey cihazında kalır. Altyazı: .ass .ssa .xpar .par. Eklediğin fontlar bir sonraki sefer için burada hatırlanır. Tuşlar: Boşluk, oklar, F, M, C.',
   'w.videoOk': 'Video hazır. Bir altyazı ekle (gerekiyorsa fontlarını da).',
