@@ -18,6 +18,7 @@ const texts = () => ({
   message: t('lib.prompt.msg', { names: '{names}' }),
   continueLabel: t('lib.prompt.continue'),
   addLabel: t('lib.prompt.add'),
+  localLabel: t('fonts.local'),
   glyphs: t('lib.prompt.glyphs', { names: '{names}' }),
   glyphsTitle: t('lib.prompt.glyphsTitle'),
 });
@@ -37,11 +38,25 @@ export const initMissingPrompt = (player: Pick<Player, 'par'>, addFonts: () => v
     last = r;
     if (!askEnabled() || !key(r) || key(r) === dismissed) { hide(); return; }
     if (prompt) { prompt.update(r); return; }
+    const hasLocal = typeof window !== 'undefined' && 'queryLocalFonts' in window;
     prompt = createMissingFontsPrompt(host, r, {
       texts: texts(),
       onContinue: () => { dismissed = key(last!); player.par.continueWithMissing(); hide(); },
       onDismiss: () => { dismissed = key(last!); hide(); },
       onAddFonts: addFonts,
+      ...(hasLocal ? {
+        onLocalFonts: async () => {
+          try {
+            const ok = await player.par.loadLocalFonts();
+            if (ok) {
+              hide();
+              player.par.refresh();
+            }
+          } catch {
+            /* cancelled or unsupported */
+          }
+        },
+      } : {}),
     });
   };
   player.par.on('missingfonts', show);

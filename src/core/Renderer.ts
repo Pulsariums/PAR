@@ -34,7 +34,7 @@ export class PARRenderer extends FontApi {
   private readonly scheduler: Scheduler;
   /** Undo functions of everything `mount()` attached (size observer, video listeners). */
   private teardown: Array<() => void> = [];
-  private env: LineEnv = { layout: { width: 1280, height: 720 }, styles: new Map(), borderScale: 1, fonts: this.fonts };
+  private env: LineEnv = { layout: { width: 1280, height: 720, bottomInset: 0 }, styles: new Map(), borderScale: 1, fonts: this.fonts, bottomInset: 0 };
   private geo: Geometry = { region: { x: 0, y: 0, width: 0, height: 0 }, scale: { x: 0, y: 0 }, layout: { size: { width: 1280, height: 720 }, source: 'default', derived: false } };
   private layoutDirty = true;
   private forceNext = true;
@@ -378,7 +378,7 @@ export class PARRenderer extends FontApi {
       this.logger.segment();
     }
     const devScale = deviceScale(this.opts.container, region.width, layout.width);
-    this.env = { ...prev, layout, borderScale: st.borderScale, blurScale: st.blurScale, devScale, frameMs: 1000 / (this.opts.videoFps ?? 24) };
+    this.env = { ...prev, layout, borderScale: st.borderScale, blurScale: st.blurScale, devScale, frameMs: 1000 / (this.opts.videoFps ?? 24), bottomInset: layout.bottomInset ?? this.opts.bottomInset };
     this.forceNext ||= st.borderScale !== prev.borderScale || st.blurScale !== prev.blurScale || devScale !== prev.devScale;
     this.geo = { region, scale: { x: st.scaleX, y: st.scaleY }, layout: resolved };
     this.overlay.place(region, layout);

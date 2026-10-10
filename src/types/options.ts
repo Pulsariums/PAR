@@ -21,7 +21,7 @@ export type RegionOption = 'video' | 'container' | Rect;
  * - `'script'`: PlayResX/PlayResY of the script (libass fallbacks when missing).
  * - `{ width, height }`: treat the script as authored for this size (ignores PlayRes).
  */
-export type LayoutOption = 'script' | { width: number; height: number };
+export type LayoutOption = 'script' | { width: number; height: number; bottomInset?: number };
 
 /**
  * Virtual size used when the script has no PlayRes at all (layout option and script both silent).
@@ -103,6 +103,8 @@ export interface PAROptions {
   renderMode?: 'auto' | 'dom' | 'canvas';
   /** Memory cap of the canvas sprite cache, MB. Default 96. */
   spriteCacheMB?: number;
+  /** Extra padding/inset from the bottom in layout coordinates (e.g. for player controls). Default 0. */
+  bottomInset?: number;
 }
 
 /** Fully resolved options (internal). */
@@ -131,6 +133,7 @@ export interface ResolvedOptions {
   zIndex: number;
   renderMode: 'auto' | 'dom' | 'canvas';
   spriteCacheMB: number;
+  bottomInset: number;
 }
 
 export interface PARMetrics {

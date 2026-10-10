@@ -70,6 +70,19 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
   ['wPickBlank', 'wPickBlank0'].forEach((b) => $(b).addEventListener('click', addBlank));
   bind('wFileSub', ['wPickSub', 'wPickSub0']);
   bind('wFileFonts', ['wPickFonts', 'wPickFonts0']);
+  const onLocal = async (): Promise<void> => {
+    try {
+      const ok = await stage.par.loadLocalFonts();
+      if (ok) stage.par.refresh();
+      status(ok ? t('fonts.localOk') : t('fonts.localFail'), !ok);
+    } catch {
+      status(t('fonts.localFail'), true);
+    }
+  };
+  ['wLocalFonts', 'wLocalFontsBtn'].forEach((id) => {
+    const el = root.querySelector<HTMLElement>(`#${id}`) ?? document.getElementById(id);
+    if (el) el.addEventListener('click', () => { void onLocal(); });
+  });
   watchDrop(document.body, route);
   stage.video.addEventListener('error', () => { if (stage.hasVideo && stage.video.error) status(t('w.vErr'), true); });
   void root;

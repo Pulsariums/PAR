@@ -49,7 +49,7 @@ export const validateMode = (m: unknown): 'auto' | 'dom' | 'canvas' => {
 export const validateLayout = (l: LayoutOption): LayoutOption => {
   if (l === 'script') return l;
   if (l && typeof l === 'object' && finite(l.width) && finite(l.height) && l.width > 0 && l.height > 0) {
-    return { width: l.width, height: l.height };
+    return { width: l.width, height: l.height, ...(finite(l.bottomInset) && l.bottomInset >= 0 ? { bottomInset: l.bottomInset } : {}) };
   }
   throw new TypeError(`PAR: layout must be 'script' or { width, height } with positive size`);
 };
@@ -90,6 +90,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
     renderMode: validateMode(patch.renderMode ?? prev?.renderMode ?? 'auto'),
     spriteCacheMB: finite(patch.spriteCacheMB) && patch.spriteCacheMB > 0 ? patch.spriteCacheMB : prev?.spriteCacheMB ?? 96,
+    bottomInset: Math.max(0, Number(patch.bottomInset ?? prev?.bottomInset ?? 0)),
   };
 };
 

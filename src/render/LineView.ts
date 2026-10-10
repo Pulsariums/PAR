@@ -23,6 +23,7 @@ export interface LineEnv extends StyleEnv {
   devScale?: number;
   frameMs?: number;
   styles: Map<string, AssStyle>;
+  bottomInset?: number;
 }
 
 /** Line rotation around the origin (`\org`, default: anchor), as CSS. Identity => 'none'. */
@@ -143,7 +144,7 @@ export class LineView {
     const states = evalStates(line, t, env.styles);
     const base = states[0] ?? stateFromStyle(line.style);
     const phases = line.event.fragments.map((f) => (f.karaoke ? karaokePhase(f.karaoke, t) : null));
-    const anchor = this.anchorAt(t, env.layout);
+    const anchor = this.anchorAt(t, env.layout, env.bottomInset ?? env.layout.bottomInset ?? 0);
     const rx = xRatio(base);
     this.rx = rx;
     const boxCss = {
@@ -176,19 +177,19 @@ export class LineView {
   }
 
   /** Anchor point at `t`: `\pos`/`\move`, else margins + alignment + collision shift. */
-  anchorAt(t: number, layout: Size): [number, number] {
+  anchorAt(t: number, layout: Size, bottomInset = layout.bottomInset ?? 0): [number, number] {
     const p = positionAt(this.line.event.lineTags, t, this.line.durationMs);
     if (p) return p;
-    const a = marginAnchor(this.line.an, this.line.margins, layout);
+    const a = marginAnchor(this.line.an, this.line.margins, layout, bottomInset);
     return [a[0], a[1] + this.shiftY];
   }
 
   /** Measured box in layout px (uses layout reads; call once after the first update). */
-  measure(layout: Size): Box {
+  measure(layout: Size, bottomInset = layout.bottomInset ?? 0): Box {
     const el = this.plates[this.plates.length - 1].box.el as HTMLElement;
     const w = el.offsetWidth * this.rx;
     const h = el.offsetHeight;
-    const [x, y] = this.anchorAt(0, layout);
+    const [x, y] = this.anchorAt(0, layout, bottomInset);
     const left = x - alignX(this.line.an) * w;
     const top = y - alignY(this.line.an) * h;
     return { left, top, right: left + w, bottom: top + h };

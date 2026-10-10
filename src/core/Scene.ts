@@ -224,7 +224,7 @@ export class Scene {
 
   /** Collision handling for unpositioned lines (lines already on screen keep their place). */
   private place(view: LineView, env: LineEnv, rel: number): void {
-    const measured = view.measure(env.layout);
+    const measured = view.measure(env.layout, env.bottomInset ?? env.layout.bottomInset ?? 0);
     if (measured.bottom - measured.top <= 0) return;
     const border = Math.max(0, ...evalStates(view.line, rel, env.styles).map((s) => Math.max(s.xbord, s.ybord))) * env.borderScale;
     const box = inflate(measured, border);

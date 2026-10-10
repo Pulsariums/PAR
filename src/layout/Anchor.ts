@@ -13,11 +13,11 @@ export interface Margins {
 }
 
 /** Anchor point of an unpositioned line in layout coordinates (libass margin rules). */
-export const marginAnchor = (an: number, m: Margins, size: Size): [number, number] => {
+export const marginAnchor = (an: number, m: Margins, size: Size, bottomInset = size.bottomInset ?? 0): [number, number] => {
   const ax = alignX(an);
   const x = ax === 0 ? m.l : ax === 1 ? size.width - m.r : m.l + (size.width - m.l - m.r) / 2;
   const ay = alignY(an);
-  const y = ay === 0 ? m.v : ay === 1 ? size.height - m.v : size.height / 2;
+  const y = ay === 0 ? m.v : ay === 1 ? size.height - m.v - bottomInset : size.height / 2;
   return [x, y];
 };
 

@@ -27,7 +27,7 @@ export const tr: Dict = {
   'code.intro': 'Geçerli ayarlar için PAR.create çağrısı:', 'code.copy': 'Kodu kopyala', 'code.copied': 'Kopyalandı',
 'm.lines': 'Etkin satır', 'm.fps': 'Çizim FPS (ölçülen)',
   'fonts.intro': 'Betikler yazı tiplerini adıyla ister. .ttf / .otf / .ttc / .woff / .woff2 dosyalarını (ya da bunları içeren bir .zip) bu bölümün herhangi bir yerine bırakın: PAR aile adını fonttan kendisi okur. .ass içine gömülü fontlar kendiliğinden yüklenir.',
-  'fonts.pick': 'Font dosyası ekle', 'fonts.testLoad': 'Üretilen test fontunu yükle', 'fonts.testSave': 'Test fontunu indir', 'fonts.local': 'Yüklü fontları kullan',
+  'fonts.pick': 'Font dosyası ekle', 'fonts.testLoad': 'Üretilen test fontunu yükle', 'fonts.testSave': 'Test fontunu indir', 'fonts.local': 'Cihaz fontlarını kullan (İzin ver)',
   'fonts.localOk': 'Yüklü fontlar açıldı: betiğin kullandığı ve başka hiçbir şeyin karşılamadığı adlar bu cihazdan yüklenir.',
   'fonts.localFail': 'Yerel font erişimi yok ya da reddedildi (yalnız Chromium, izin ister).',
   'fonts.used': 'Bu betiğin kullandığı fontlar', 'fonts.loaded': 'Yüklenen fontlar', 'fonts.noneUsed': 'Betik hiç metin fontu kullanmıyor.', 'fonts.noneLoaded': 'Henüz font yüklenmedi.',
@@ -43,6 +43,8 @@ export const tr: Dict = {
   ...studioPanelsTr,
   ...convertTr,
   ...watchTr,
+  'w.avoidControls': 'Çubuk altyazıyı yukarı itsin',
+  'w.settings': 'Ayarlar',
   ...studioTr,
   ...compareTr,
 };

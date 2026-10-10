@@ -6,11 +6,15 @@ import { resolveLayout } from './resolve';
 export interface Size {
   width: number;
   height: number;
+  bottomInset?: number;
 }
 
 /** Virtual coordinate space of a script (see `resolveLayout` for the full rule); kept for callers that only need the size. */
-export const resolveLayoutSize = (option: LayoutOption, info: ScriptInfo | null, def: DefaultLayoutOption = '1080p', aspect?: Size | null): Size =>
-  resolveLayout(option, info, def, aspect).size;
+export const resolveLayoutSize = (option: LayoutOption, info: ScriptInfo | null, def: DefaultLayoutOption = '1080p', aspect?: Size | null, bottomInset?: number): Size => {
+  const r = resolveLayout(option, info, def, aspect).size;
+  const inset = bottomInset ?? (typeof option === 'object' ? option.bottomInset : undefined);
+  return typeof inset === 'number' ? { ...r, bottomInset: inset } : r;
+};
 
 export interface StageTransform {
   /** Screen pixels per layout unit. */

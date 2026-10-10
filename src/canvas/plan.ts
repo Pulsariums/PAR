@@ -69,7 +69,7 @@ export const specAt = (line: PreparedLine, t: number, env: LineEnv, animated: Re
 export const planLine = (line: PreparedLine, t: number, env: LineEnv, animated: ReadonlySet<string>, dropped: Dropped): DrawItem => {
   const st = cachedStates(line, t, env.styles)[0];
   const { spec, alpha, sigma } = buildSpec(line.event.fragments[0].text, line.plated, st, env, line.kerning, animated, dropped, blurEnvelope(line));
-  const anchor = positionAt(line.event.lineTags, t, line.durationMs) ?? marginAnchor(line.an, line.margins, env.layout);
+  const anchor = positionAt(line.event.lineTags, t, line.durationMs) ?? marginAnchor(line.an, line.margins, env.layout, env.layout.bottomInset ?? env.bottomInset ?? 0);
   const fade = fadeAlphaAt(line.event.lineTags, t, line.durationMs);
   const xr = xRatio(st);
   return {

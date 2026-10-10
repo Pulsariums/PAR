@@ -23,7 +23,8 @@ export const storageSize = (info: ScriptInfo | null, video: HTMLVideoElement | n
 export const computeStage = (opts: ResolvedOptions, info: ScriptInfo | null): Stage => {
   const region = resolveRegion(opts.region, measureRegionInput(opts.container, opts.video));
   const resolved = resolveLayout(opts.layout, info, opts.defaultLayout, region);
-  const layout = resolved.size;
+  const bottomInset = opts.bottomInset || (typeof opts.layout === 'object' ? opts.layout.bottomInset ?? 0 : 0);
+  const layout: Size = { ...resolved.size, bottomInset };
   return { region, layout, resolved, transform: stageTransform(region, layout, info?.scaledBorderAndShadow ?? false, storageSize(info, opts.video)) };
 };
 

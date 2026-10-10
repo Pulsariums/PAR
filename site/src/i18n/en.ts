@@ -42,6 +42,8 @@ export const en = {
   ...studioPanelsEn,
   ...convertEn,
   ...watchEn,
+  'w.avoidControls': 'Avoid controls (push subtitles up)',
+  'w.settings': 'Settings',
   ...studioEn,
   ...compareEn,
 };

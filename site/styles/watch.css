@@ -23,6 +23,12 @@ body { min-height: 100dvh; }
 .w-ib:focus-visible, .w-speed:focus-visible, .w-seek:focus-visible, .w-vol:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .w-ib[aria-pressed="false"] { opacity: .5; }
 .w-time { font-size: 13px; padding-inline: 6px; white-space: nowrap; color: #fff; }
+#wSettingsPanel { position: absolute; bottom: 56px; right: 10px; z-index: 10; display: none; flex-direction: column; gap: 10px; padding: 10px 12px; background: rgb(20 20 25 / .95); border: 1px solid rgb(255 255 255 / .2); border-radius: 8px; color: #fff; font-size: 13px; min-width: 200px; box-shadow: 0 4px 16px rgb(0 0 0 / .6); backdrop-filter: blur(8px); }
+#wSettingsPanel:not([hidden]), #wSettingsPanel.open { display: flex; }
+#wSettingsPanel[hidden] { display: none !important; }
+.w-setting { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 13px; color: #fff; }
+#wSettingsPanel .btn { background: rgb(255 255 255 / .12); border: 1px solid rgb(255 255 255 / .25); color: #fff; min-height: 32px; padding: 4px 10px; font-size: 12px; border-radius: 6px; justify-content: center; }
+#wSettingsPanel .btn:hover { background: rgb(255 255 255 / .2); border-color: #fff; }
 .w-stage input[type="range"] { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 0; min-height: 0; }
 .w-stage select.w-speed { width: auto; min-height: 0; }
 .w-speed { appearance: none; background: transparent; color: #fff; border: 1px solid rgb(255 255 255 / .35); border-radius: 8px; height: 34px; padding: 0 8px; font: inherit; font-size: 13px; }

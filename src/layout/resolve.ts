@@ -47,7 +47,8 @@ const whole = (n: number): number => Math.max(1, Math.round(n));
  */
 export const resolveLayout = (option: LayoutOption, info: ScriptInfo | null, def: DefaultLayoutOption, aspect?: Size | null): ResolvedLayout => {
   if (typeof option === 'object' && option.width > 0 && option.height > 0) {
-    return { size: { width: option.width, height: option.height }, source: 'option', derived: false };
+    const bottomInset = typeof option.bottomInset === 'number' ? option.bottomInset : undefined;
+    return { size: { width: option.width, height: option.height, ...(bottomInset !== undefined ? { bottomInset } : {}) }, source: 'option', derived: false };
   }
   const { x, y } = writtenPlayRes(info);
   if (x > 0 && y > 0) return { size: { width: x, height: y }, source: 'script', derived: false };

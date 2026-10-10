@@ -43,6 +43,8 @@ export const ru: Dict = {
   ...studioPanelsRu,
   ...convertRu,
   ...watchRu,
+  'w.avoidControls': 'Сдвигать субтитры над панелью',
+  'w.settings': 'Настройки',
   ...studioRu,
   ...compareRu,
 };

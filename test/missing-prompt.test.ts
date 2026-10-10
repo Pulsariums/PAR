@@ -55,4 +55,20 @@ describe('createMissingFontsPrompt', () => {
     p.destroy();
     expect(document.body.querySelector('.par-missing-prompt')).toBeNull();
   });
+
+  it('renders local fonts button when onLocalFonts is provided and calls callback', () => {
+    const onLocalFonts = vi.fn();
+    const p = createMissingFontsPrompt(host(), report(['Arial']), {
+      onContinue: () => {},
+      onAddFonts: () => {},
+      onLocalFonts,
+      texts: { localLabel: 'Cihaz fontlarını kullan (İzin ver)' },
+    });
+    const localBtn = p.element.querySelector<HTMLButtonElement>('.par-missing-prompt-local');
+    expect(localBtn).not.toBeNull();
+    expect(localBtn!.textContent).toBe('Cihaz fontlarını kullan (İzin ver)');
+    localBtn!.click();
+    expect(onLocalFonts).toHaveBeenCalledTimes(1);
+    p.destroy();
+  });
 });

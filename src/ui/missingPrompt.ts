@@ -6,6 +6,8 @@ export interface MissingPromptTexts {
   message: string;
   continueLabel: string;
   addLabel: string;
+  /** Label of the optional "use installed / local fonts" action. */
+  localLabel?: string;
   /** Label of the optional close action (Escape key). */
   dismissLabel?: string;
   /** Warning about fonts that exist but lack characters the script draws; `{names}` = those families. Optional (no warning without it). */
@@ -17,6 +19,8 @@ export interface MissingPromptTexts {
 export interface MissingPromptOptions {
   onContinue(): void;
   onAddFonts(): void;
+  /** Optional handler when the user asks to use device/local fonts. */
+  onLocalFonts?(): void | Promise<void>;
   /** Escape / close. Default: removes the prompt without deciding. */
   onDismiss?(): void;
   texts?: Partial<MissingPromptTexts>;
@@ -38,6 +42,7 @@ const EN: MissingPromptTexts = {
   message: 'These fonts are missing: {names}. Continue anyway?',
   continueLabel: 'Continue',
   addLabel: 'Add font',
+  localLabel: 'Use installed fonts',
   glyphs: 'These fonts lack some characters used here: {names}.',
   glyphsTitle: 'Characters are missing',
 };
@@ -85,6 +90,9 @@ export const createMissingFontsPrompt = (container: HTMLElement, report: Preflig
   const actions = make('div', 'actions');
   const add = button(t.addLabel, 'add', () => opts.onAddFonts());
   actions.append(button(t.continueLabel, 'continue', () => opts.onContinue()), add);
+  if (opts.onLocalFonts && t.localLabel) {
+    actions.append(button(t.localLabel, 'local', () => { void opts.onLocalFonts?.(); }));
+  }
   root.append(title, message, list, glyphs, actions);
   const dismiss = (): void => { if (opts.onDismiss) opts.onDismiss(); else destroy(); };
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); dismiss(); } });
