@@ -1,4 +1,4 @@
-/* Studio panels: transport, advanced row, collapsible metrics / layout, sizes and export. Compact and data dense; everything stays visible (no hover-only controls); touch targets >= 34 px. */
+/* Studio panels: transport, the collapsed Expert fold, collapsible metrics / layout, sizes and export. Compact and data dense; everything stays visible (no hover-only controls); touch targets >= 34 px. */
 .mono { font-family: var(--mono); }
 .dragging { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 12px; }
 .st-stage { position: relative; }
@@ -10,7 +10,7 @@
 .st-btns .btn { min-width: 44px; font-family: var(--mono); }
 .st-btns .btn.primary { min-width: 84px; font-family: var(--font); }
 .st-opts, .st-adv, .st-bar { margin: 0; align-items: center; gap: 6px 14px; }
-.st-adv { align-items: end; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.st-adv { align-items: end; }
 .st-adv .fld { flex: 0 0 auto; font-size: 11px; }
 .st-adv select, .st-adv input { min-height: 32px; font-size: 12px; width: auto; max-width: 100%; }
 .st-adv input { width: 6.5em; }

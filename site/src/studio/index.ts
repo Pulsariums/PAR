@@ -58,12 +58,11 @@ export const initStudio = (root: HTMLElement): void => {
   const stats = initStats(player, () => fps.steps);
   const advanced = initAdvanced(player.par, fps, () => exporter.setVideoFps(fps.option));
   const transport = initTransport(player, () => fps.steps, (to) => stats.seeked(to), () => session?.source ?? null, async () => {
+    // The first-play prepare sweep is always the dense one: no knob for it, the engine knows what a smooth start needs.
     if (prepared) return;
-    const m = advanced.values().prepareMode;
-    if (m === 'off') { prepared = true; return; }
     const token = prepareToken;
     status(t('st.preparing', { cur: 0, total: 0 }));
-    await player.par.prepare(m, (cur, total) => {
+    await player.par.prepare('dense', (cur, total) => {
       if (token === prepareToken) status(t('st.preparing', { cur: Math.round(cur / 1000), total: Math.round(total / 1000) }));
     });
     if (token !== prepareToken) return;
@@ -153,7 +152,6 @@ export const initStudio = (root: HTMLElement): void => {
   const loop = (): void => {
     player.tick();
     transport.update();
-    monitor.tick();
     // Honest source state: a seek that outruns the window shows what it is actually waiting for.
     if (session && !transportPlaying()) {
       const st = player.par.getSourceStats();
@@ -163,11 +161,12 @@ export const initStudio = (root: HTMLElement): void => {
         status(busy ? t('st.srcLoading') : t('st.subReady', { name: session.name, n: session.source.eventCount.toLocaleString('en-US') }));
       }
     }
-    // The watch view measures nothing: no metrics, no layout panel, so the only work is PAR's own.
+    // The watch view measures nothing: no metrics, no layout panel, no monitor sampling, so the only work is PAR's own.
     if (view === 'lab') {
       const m = player.par.getMetrics();
       stats.sample(m);
       layout.draw(m);
+      monitor.tick();
     }
     requestAnimationFrame(loop);
   };
