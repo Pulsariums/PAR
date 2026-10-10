@@ -87,7 +87,7 @@ export class PARRenderer extends FontApi {
     this.host.load(input || null);
     this.env = { ...this.env, styles: this.host.styles };
     const currentMs = timeToMs(this.now() + this.opts.timeOffset, this.opts.videoFps);
-    this.seekBufferUntilMs = this.opts.seekBuffer ? currentMs + 1000 : 0;
+    this.seekBufferUntilMs = this.opts.video && this.opts.seekBuffer ? currentMs + 1000 : 0;
     this.invalidate();
     this.diagnostics.clear();
   }
@@ -259,7 +259,7 @@ export class PARRenderer extends FontApi {
       const cancelWarm = (): void => {
         this.scene.cancelWarm();
         this.logger.segment();
-        this.seekBufferUntilMs = this.opts.seekBuffer ? this.lastMs + 1000 : 0;
+        this.seekBufferUntilMs = this.opts.video && this.opts.seekBuffer ? this.lastMs + 1000 : 0;
       };
       video.addEventListener('seeking', cancelWarm);
       this.teardown.push(() => video.removeEventListener('seeking', cancelWarm));
@@ -268,7 +268,7 @@ export class PARRenderer extends FontApi {
         pause: () => { this.syncLoop(); this.draw(this.now(), false); },
         started: () => this.stall.userPlayed(),
         seek: () => {
-          this.seekBufferUntilMs = this.opts.seekBuffer ? timeToMs(this.opts.video?.currentTime ?? this.now(), this.opts.videoFps) + 1000 : 0;
+          this.seekBufferUntilMs = this.opts.video && this.opts.seekBuffer ? timeToMs(this.opts.video.currentTime, this.opts.videoFps) + 1000 : 0;
           if (!this.scheduler.isRunning) this.draw(this.now(), false);
         },
         resize: () => this.invalidate(),
@@ -351,7 +351,7 @@ export class PARRenderer extends FontApi {
     // A frame is presented whole or not at all while the picture can wait for it (paused, seeking, a video the renderer may hold);
     // a free-running custom clock cannot be held: it draws what is ready (the missing are counted) and the builders rush the rest.
     // While the warm-up window is active, source gaps are held rather than presented with a partial picture.
-    const presentationHold = !running || seekBufferWaiting || (this.opts.video && this.scene.buffers);
+    const presentationHold = !running || (this.opts.video !== null && (seekBufferWaiting || this.stall.active));
     let complete = true;
     const source = measuring ? this.host.stats() : null;
     const sourceReady = measuring ? sourceCovered : false;

@@ -104,7 +104,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     spriteCacheMB: finite(patch.spriteCacheMB) && patch.spriteCacheMB > 0 ? patch.spriteCacheMB : prev?.spriteCacheMB ?? 96,
     workers: validateWorkers(patch.workers !== undefined ? patch.workers : prev?.workers ?? 'auto'),
     bottomInset: Math.max(0, Number(patch.bottomInset ?? prev?.bottomInset ?? 0)),
-    loadShedding: validateLoadShedding(patch.loadShedding ?? prev?.loadShedding ?? 'auto'),
+    loadShedding: validateLoadShedding(patch.loadShedding ?? prev?.loadShedding ?? 'off'),
   };
 };
 

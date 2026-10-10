@@ -66,7 +66,7 @@ export const ADVANCED_HTML = `
     <label class="fld"><span data-i18n="st.advWarmRange"></span>
       <select id="stWarmRange">${WARM_RANGE_MARKS.map((v) => `<option value="${v}"${v === 60 ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     <label class="fld"><span data-i18n="st.advLoadShedding"></span>
-      <select id="stLoadShedding"><option value="auto" data-i18n="st.auto"></option><option value="off" data-i18n="st.sheddingOff"></option></select></label>
+      <select id="stLoadShedding"><option value="off" data-i18n="st.sheddingOff"></option><option value="auto" data-i18n="st.auto"></option></select></label>
   </div>
 </details>`;
 
@@ -90,7 +90,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
   offset.value = String(clampNum(saved.timeOffset, 0));
   if (typeof saved.warmRange === 'number' && (WARM_RANGE_MARKS as readonly number[]).includes(saved.warmRange)) range.value = String(saved.warmRange);
   buffer.value = saved.buffer === 'small' || saved.buffer === 'large' ? saved.buffer : BUFFER_AUTO;
-  shedding.value = saved.loadShedding === 'off' ? 'off' : 'auto';
+  shedding.value = saved.loadShedding === 'auto' ? 'auto' : 'off';
   if (typeof saved.videoFps === 'number' && (VIDEO_MARKS as readonly number[]).includes(saved.videoFps)) { fps.picked = saved.videoFps; video.value = String(saved.videoFps); onVideoFps(); }
 
   const savedFps = saved.fps;

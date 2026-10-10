@@ -70,8 +70,8 @@ export class ShedController {
     if (this.smooth > 0.25) {
       const base = this.budget < Infinity ? Math.min(this.budget, filled) : filled;
       this.budget = Math.max(floor, base * 0.85);
-    } else if (this.smooth < 0.08 && this.budget < Infinity) {
-      this.budget *= 1.08;
+    } else if (this.smooth < 0.15 && this.budget < Infinity) {
+      this.budget *= 1.25;
       if (this.budget > Math.max(filled, stage) * 3) this.budget = Infinity;
     }
     return this.budget;
