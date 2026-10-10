@@ -108,6 +108,12 @@ export interface PAROptions {
   /** Extra padding/inset from the bottom in layout coordinates (e.g. for player controls). Default 0. */
   bottomInset?: number;
   /**
+   * Load shedding policy under high GPU/compositing demand:
+   * 'auto' (default): sheds lower-priority sprites if compositing or frame rate severely drops;
+   * 'off': disables shedding completely to preserve all particles, effects, and visual fidelity.
+   */
+  loadShedding?: 'auto' | 'off';
+  /**
    * Called when PAR starts or stops holding/pre-buffering sprites (e.g. video start, seek or deficit).
    * `buffering`: true while holding/pre-buffering, false when ready.
    * `readySec`: how many seconds ahead of the playhead are ready (built and unheld).
@@ -144,6 +150,7 @@ export interface ResolvedOptions {
   spriteCacheMB: number;
   workers: 'auto' | 'off' | number;
   bottomInset: number;
+  loadShedding: 'auto' | 'off';
 }
 
 export interface PARMetrics {

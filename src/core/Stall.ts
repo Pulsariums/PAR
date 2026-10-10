@@ -1,5 +1,5 @@
 /** A hold shorter than this deficit (ms) is not worth pausing the video for. */
-const MIN_DEFICIT_MS = 25;
+const MIN_DEFICIT_MS = 60;
 /** Longest single hold (ms): past it playback goes on and frames are drawn with what exists (a pipeline that cannot catch up must not freeze the video). */
 const MAX_HOLD_MS = 3000;
 /** After a hold, no new one for this long (ms) unless the deficit is large again: a pessimistic estimate must not turn into a stutter of its own. */

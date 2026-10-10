@@ -68,6 +68,8 @@ export const studioPanelsEn = {
   'st.advBuffer': 'Buffer',
   'st.bufferSmall': 'small',
   'st.bufferLarge': 'large',
+  'st.advLoadShedding': 'Load Shedding',
+  'st.sheddingOff': 'Off (Full Quality)',
   'st.mon': 'Live monitor',
   'st.monFps': 'FPS',
   'st.monLag': 'Lag ms',

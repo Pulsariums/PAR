@@ -68,6 +68,8 @@ export const studioPanelsRu = {
   'st.advBuffer': 'Буфер',
   'st.bufferSmall': 'малый',
   'st.bufferLarge': 'большой',
+  'st.advLoadShedding': 'Сброс нагрузки',
+  'st.sheddingOff': 'Выкл (Полное качество)',
   'st.mon': 'Живой мониторинг',
   'st.monFps': 'FPS',
   'st.monLag': 'Задержка мс',

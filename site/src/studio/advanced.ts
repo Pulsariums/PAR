@@ -34,7 +34,7 @@ const TEMPERATURE = 50;
 const PERF_KEY = 'par.perf';
 interface Saved {
   renderMode?: string; fps?: string | number; videoFps?: number | null; timeOffset?: number;
-  buffer?: string; warmRange?: number; workers?: string | number;
+  buffer?: string; warmRange?: number; workers?: string | number; loadShedding?: string;
 }
 const load = (): Saved => {
   try { return JSON.parse(localStorage.getItem(PERF_KEY) ?? '{}') as Saved; } catch { return {}; }
@@ -65,6 +65,8 @@ export const ADVANCED_HTML = `
       <select id="stBufferMode"><option value="${BUFFER_AUTO}" data-i18n="st.auto"></option><option value="small" data-i18n="st.bufferSmall"></option><option value="large" data-i18n="st.bufferLarge"></option></select></label>
     <label class="fld"><span data-i18n="st.advWarmRange"></span>
       <select id="stWarmRange">${WARM_RANGE_MARKS.map((v) => `<option value="${v}"${v === 60 ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+    <label class="fld"><span data-i18n="st.advLoadShedding"></span>
+      <select id="stLoadShedding"><option value="auto" data-i18n="st.auto"></option><option value="off" data-i18n="st.sheddingOff"></option></select></label>
   </div>
 </details>`;
 
@@ -77,6 +79,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
   const offset = $<HTMLInputElement>('stOffset');
   const range = $<HTMLSelectElement>('stWarmRange');
   const buffer = $<HTMLSelectElement>('stBufferMode');
+  const shedding = $<HTMLSelectElement>('stLoadShedding');
 
   const saved = load();
   const clampNum = (v: unknown, dflt: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : dflt);
@@ -87,6 +90,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
   offset.value = String(clampNum(saved.timeOffset, 0));
   if (typeof saved.warmRange === 'number' && (WARM_RANGE_MARKS as readonly number[]).includes(saved.warmRange)) range.value = String(saved.warmRange);
   buffer.value = saved.buffer === 'small' || saved.buffer === 'large' ? saved.buffer : BUFFER_AUTO;
+  shedding.value = saved.loadShedding === 'off' ? 'off' : 'auto';
   if (typeof saved.videoFps === 'number' && (VIDEO_MARKS as readonly number[]).includes(saved.videoFps)) { fps.picked = saved.videoFps; video.value = String(saved.videoFps); onVideoFps(); }
 
   const savedFps = saved.fps;
@@ -111,6 +115,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
     videoFps: fps.picked, workers: workers.value,
     timeOffset: clampNum(Number(offset.value), 0),
     buffer: buffer.value, warmRange: Number(range.value),
+    loadShedding: shedding.value,
   });
   mode.addEventListener('change', () => { par.setOptions({ renderMode: mode.value as 'auto' | 'dom' | 'canvas' }); save(); });
   renderFps.addEventListener('change', () => { par.setOptions({ fps: parseFps(renderFps.value) }); save(); });
@@ -119,6 +124,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
   offset.addEventListener('change', () => { const v = Number(offset.value); par.setOptions({ timeOffset: Number.isFinite(v) ? v : 0 }); save(); });
   range.addEventListener('change', () => { buffer.value = BUFFER_AUTO; par.setOptions({ warmRangeSeconds: warmRange() }); save(); });
   buffer.addEventListener('change', () => { par.setOptions({ warmRangeSeconds: warmRange() }); save(); });
+  shedding.addEventListener('change', () => { par.setOptions({ loadShedding: shedding.value as 'auto' | 'off' }); save(); });
 
   // Restore the persisted overrides onto the engine (the temperature stays at its default; the first-play prepare sweep is always 'dense').
   par.setOptions({
@@ -129,6 +135,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
     warmRangeSeconds: warmRange(),
     temperature: TEMPERATURE,
     workers: parseWorkers(workers.value),
+    loadShedding: shedding.value as 'auto' | 'off',
   });
 
   /** The "auto" entry of the video FPS select names the measured rate; call after the video (or the language) changed. */
@@ -153,6 +160,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
     timeOffset: clampNum(Number(offset.value), 0),
     warmRangeSeconds: warmRange(),
     temperature: TEMPERATURE,
+    loadShedding: shedding.value as 'auto' | 'off',
   });
   return { sync, values };
 };

@@ -167,7 +167,7 @@ export class SpritePool {
   /** Queues a job; `flush()` sends what is queued. False when full. A key already on its way counts as taken. `prio`: lowest is built first (the time the sprite is first drawn; -1 for one a frame waits for). */
   submit(key: string, spec: SpriteSpec, prio = 0): boolean {
     if (this.inflight.has(key)) return true;
-    if (this.capacity <= 0) return false;
+    if (prio >= 0 && this.capacity <= 0) return false;
     const id = ++this.seq;
     this.out.set(id, { key, spec, gen: this.gen });
     this.inflight.set(key, performance.now());

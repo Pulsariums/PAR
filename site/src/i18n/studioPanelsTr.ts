@@ -68,6 +68,8 @@ export const studioPanelsTr = {
   'st.advBuffer': 'Tampon',
   'st.bufferSmall': 'küçük',
   'st.bufferLarge': 'büyük',
+  'st.advLoadShedding': 'Yük Kırpma (Shedding)',
+  'st.sheddingOff': 'Kapalı (Tam Kalite)',
   'st.mon': 'Canlı izleme',
   'st.monFps': 'FPS',
   'st.monLag': 'Gecikme ms',

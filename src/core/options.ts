@@ -52,6 +52,11 @@ export const validateMode = (m: unknown): 'auto' | 'dom' | 'canvas' => {
   throw new TypeError(`PAR: renderMode must be 'auto', 'dom' or 'canvas'`);
 };
 
+export const validateLoadShedding = (s: unknown): 'auto' | 'off' => {
+  if (s === 'auto' || s === 'off') return s;
+  throw new TypeError(`PAR: loadShedding must be 'auto' or 'off'`);
+};
+
 export const validateLayout = (l: LayoutOption): LayoutOption => {
   if (l === 'script') return l;
   if (l && typeof l === 'object' && finite(l.width) && finite(l.height) && l.width > 0 && l.height > 0) {
@@ -99,6 +104,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     spriteCacheMB: finite(patch.spriteCacheMB) && patch.spriteCacheMB > 0 ? patch.spriteCacheMB : prev?.spriteCacheMB ?? 96,
     workers: validateWorkers(patch.workers !== undefined ? patch.workers : prev?.workers ?? 'auto'),
     bottomInset: Math.max(0, Number(patch.bottomInset ?? prev?.bottomInset ?? 0)),
+    loadShedding: validateLoadShedding(patch.loadShedding ?? prev?.loadShedding ?? 'auto'),
   };
 };
 

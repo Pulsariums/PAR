@@ -48,6 +48,7 @@ const OVERDRAW = 2;
  */
 export class ShedController {
   budget = Infinity;
+  enabled = true;
   private smooth = 0;
   private since = 0;
   private composite = Infinity;
@@ -57,6 +58,10 @@ export class ShedController {
    * (not building them; omit when unknown). Returns the budget for the next frame.
    */
   update(late: number, filled: number, stage: number, compositeMs = Infinity): number {
+    if (!this.enabled) {
+      this.budget = Infinity;
+      return Infinity;
+    }
     this.composite = this.composite === Infinity || compositeMs === Infinity ? compositeMs : this.composite * 0.8 + compositeMs * 0.2;
     this.smooth = this.smooth * 0.8 + (this.composite < MIN_COMPOSITE_MS && filled < OVERDRAW * stage ? 0 : late) * 0.2;
     if (++this.since < 6) return this.budget;

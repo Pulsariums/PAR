@@ -107,7 +107,7 @@ export class Lookahead {
     }
     // Do not build synchronously from CanvasPath.render; the current frame must finish first.
     this.urgentRun++;
-    this.arm();
+    this.arm(true);
   }
 
   private run(budgetMs: number, exempt = true): Warmed | null {
@@ -123,7 +123,8 @@ export class Lookahead {
     if (this.mainBuilt > 0) this.budget.noteBuilds(this.mainBuilt, performance.now() - t0, this.mainEst);
     this.measure();
     this.stuck = this.planner.queued > 0 && !w.more && !w.waiting && this.planner.inFlight === 0 && w.built === 0;
-    if (w.more) this.arm();
+    const playing = performance.now() - this.lastDrawAt < IDLE_AFTER_MS;
+    if (w.more) this.arm(!playing);
     return w;
   }
 
@@ -193,10 +194,10 @@ export class Lookahead {
         this.measure();
       },
       // A worker could not build it (a face it lacks, an exception): the page thread does, same key, same pixels.
-      refused: (k) => { this.planner.requeue(k); this.arm(); },
-      free: () => { if (this.lastEnv) this.arm(); },
+      refused: (k) => { this.planner.requeue(k); this.arm(true); },
+      free: () => { if (this.lastEnv) this.arm(true); },
       // Whatever was handed to the dead workers will never arrive: plan again, the main thread builds it.
-      failed: () => { this.pool = null; this.replan = true; this.arm(); },
+      failed: () => { this.pool = null; this.replan = true; this.arm(true); },
     });
     this.pool?.setFaces(this.faces);
     if (this.pool) this.rate.guess = Math.max(0.3, this.pool.size * 0.7);
@@ -209,22 +210,37 @@ export class Lookahead {
     this.pool?.setFaces(faces);
   }
 
-  private arm(): void {
-    if (this.armed) return;
+  private arm(immediate = false): void {
+    if (this.armed) {
+      if (immediate && this.paintTask !== null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(this.paintTask);
+        this.paintTask = null;
+        this.scheduleTask();
+      }
+      return;
+    }
     this.armed = true;
+    if (immediate) {
+      this.scheduleTask();
+    } else {
+      const gen = this.gen;
+      const task = (): void => {
+        if (gen !== this.gen) return;
+        this.paintTask = null;
+        this.scheduleTask();
+      };
+      if (typeof requestAnimationFrame === 'function') this.paintTask = requestAnimationFrame(task);
+      else this.scheduleTask();
+    }
+  }
+
+  private scheduleTask(): void {
     const gen = this.gen;
     const run = (): void => { if (gen === this.gen) this.pump(); };
-    const task = (): void => {
-      if (gen !== this.gen) return;
-      this.paintTask = null;
-      if (typeof MessageChannel === 'undefined') { setTimeout(run, 0); return; }
-      const ch = new MessageChannel();
-      ch.port1.onmessage = () => { ch.port1.close(); ch.port2.close(); run(); };
-      ch.port2.postMessage(0);
-    };
-    // rAF alone runs before paint; the message task after it keeps cold work off first paint.
-    if (typeof requestAnimationFrame === 'function') this.paintTask = requestAnimationFrame(task);
-    else setTimeout(task, 0);
+    if (typeof MessageChannel === 'undefined') { setTimeout(run, 0); return; }
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => { ch.port1.close(); ch.port2.close(); run(); };
+    ch.port2.postMessage(0);
   }
 
   /** One bounded slice between frames, reduced further when recent frames are under load; a second slice is chained while the frame's own room lasts. */
@@ -242,7 +258,7 @@ export class Lookahead {
       this.run(Math.min(URGENT_SLICE_MS, Math.max(slice, this.urgentWork())));
       return;
     }
-    const budget = Math.min(COLD_SLICE_MS, slice);
+    const budget = playing ? Math.min(COLD_SLICE_MS, slice) : slice;
     // Expansion throughput: one 4 ms slice of ~128 counted requests capped a dense ending at ~3k req/s (workers 23 % idle). A slice
     // now expands on TIME inside the planner; here a further slice is chained only while this frame's measured room still lasts,
     // so a busy frame never pays for catch-up work it has no space for.

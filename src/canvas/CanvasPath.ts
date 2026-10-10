@@ -67,7 +67,7 @@ export class CanvasPath {
   /** Set by the look-ahead: the items a frame needed and did not find. */
   onMissing: (items: DrawItem[]) => void = () => undefined;
 
-  constructor(overlay: Overlay, readonly mode: () => RenderMode, capBytes: number) {
+  constructor(overlay: Overlay, readonly mode: () => RenderMode, capBytes: number, readonly loadShedding: () => 'auto' | 'off' = () => 'auto') {
     this.layer = new CanvasLayer(overlay);
     this.cache = new SpriteCache<Sprite>(capBytes);
   }
@@ -153,7 +153,7 @@ export class CanvasPath {
       open.items.push(it);
     }
     this.runs = runs.length;
-    const { resolved, missing } = this.resolve(runs, policy === 'partial' && this.load !== null);
+    const { resolved, missing } = this.resolve(runs, this.load !== null);
     this.missing = missing.length;
     this.missedTotal += missing.length;
     if (missing.length) this.onMissing(missing);
@@ -164,7 +164,9 @@ export class CanvasPath {
       return false;
     }
     if (missing.length) this.markItems(missing, 'missing');
-    if (this.load === null) this.shedding.reset();
+    const shedMode = this.loadShedding ? this.loadShedding() : 'auto';
+    this.shedding.enabled = shedMode !== 'off';
+    if (this.load === null || !this.shedding.enabled) this.shedding.reset();
     else this.shedding.update(this.load, this.layer.demandPx, this.layer.stagePx, this.layer.compositeMs);
     this.layer.draw(runs, resolved, this.shedding.budget);
     this.finishProfile(runs, resolved, started, hitsBefore, missesBefore);

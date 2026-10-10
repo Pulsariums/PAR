@@ -30,6 +30,7 @@ export const computeStage = (opts: ResolvedOptions, info: ScriptInfo | null): St
 
 /** Device pixels per layout unit: region width (CSS px) times the display's pixel ratio over the layout width. */
 export const deviceScale = (el: HTMLElement, regionW: number, layoutW: number): number => {
-  const dpr = el.ownerDocument.defaultView?.devicePixelRatio ?? 1;
+  const rawDpr = el.ownerDocument.defaultView?.devicePixelRatio ?? 1;
+  const dpr = Math.min(2.0, Math.max(1.0, rawDpr));
   return layoutW > 0 && regionW > 0 ? Math.round(((regionW * dpr) / layoutW) * 1000) / 1000 : 1;
 };

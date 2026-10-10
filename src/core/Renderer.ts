@@ -239,7 +239,13 @@ export class PARRenderer extends FontApi {
   private mount(): void {
     const { container, video } = this.opts;
     this.overlay = new Overlay(container, this.opts.zIndex);
-    this.scene = new Scene(this.overlay, () => this.opts.renderMode, this.opts.spriteCacheMB * 1048576, () => (this.opts.workers !== undefined ? this.opts.workers : debugWorkers()));
+    this.scene = new Scene(
+      this.overlay,
+      () => this.opts.renderMode,
+      this.opts.spriteCacheMB * 1048576,
+      () => (this.opts.workers !== undefined ? this.opts.workers : debugWorkers()),
+      () => this.opts.loadShedding,
+    );
     this.scene.setWarmRange(this.opts.warmRangeSeconds * 1000);
     this.scene.setTemperature(this.opts.temperature);
     this.scene.setFaces(this.fonts.shipFaces());

@@ -42,8 +42,14 @@ export class Scene {
   private markerGeneration = -1;
   private markerEpoch = -1;
 
-  constructor(private readonly overlay: Overlay, mode: () => RenderMode = () => 'auto', cacheBytes = 96 << 20, workers: () => SpriteWorkers = () => 'auto') {
-    this.canvas = new CanvasPath(overlay, mode, cacheBytes);
+  constructor(
+    private readonly overlay: Overlay,
+    mode: () => RenderMode = () => 'auto',
+    cacheBytes = 96 << 20,
+    workers: () => SpriteWorkers = () => 'auto',
+    loadShedding: () => 'auto' | 'off' = () => 'auto',
+  ) {
+    this.canvas = new CanvasPath(overlay, mode, cacheBytes, loadShedding);
     this.ahead = new Lookahead(this.canvas, () => ({
       startingIn: (a, b) => this.timeline.startingIn(a, b), visibleAt: (t) => this.timeline.visibleAt(t), startMs: this.startOf, covers: this.covers,
     }), workers);
