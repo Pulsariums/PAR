@@ -33,16 +33,22 @@ const idOf = (o: object): number => {
  * of the cache key, so the name alone identifies the reset target. A transition's `\clip` target is not read by `evalStates` (only by
  * `clipAt`, on its own path), but it is included so the signature stays conservative for any future reader of the state.
  */
+/**
+ * Strings (`\fn` names, `\r` targets, ...) are JSON-quoted so a value containing the `,` `;` `:` `|` separators cannot forge an op
+ * boundary (`{\fnA,sfs:5}` vs `{\fnA\fs5}`); numbers and `null` stay bare, which also keeps `5` and `"5"` distinct.
+ */
+const valSig = (v: number | string | null): string => (typeof v === 'string' ? JSON.stringify(v) : v === null ? 'n' : String(v));
+
 const opSig = (o: StateOp): string => {
-  if (o.type === 'r') return `r${o.style ?? ''}`;
-  if (o.type === 'set') return `s${o.key}:${o.value === null ? 'n' : String(o.value)}${o.relative ? '~' : ''}`;
+  if (o.type === 'r') return `r${o.style === null ? 'n' : JSON.stringify(o.style)}`;
+  if (o.type === 'set') return `s${o.key}:${valSig(o.value)}${o.relative ? '~' : ''}`;
   const clip = o.clip ? `c${o.clip.join(',')}` : '';
   return `t${o.t1}:${o.t2 === null ? 'n' : o.t2}:${o.accel}:${o.ops.map(opSig).join(',')}[${clip}]`;
 };
 
 /** Line structure independent of time: duration, base style and the ordered ops of every fragment. Memoized per `PreparedLine`. */
 const sigs = new WeakMap<PreparedLine, string>();
-const lineSig = (line: PreparedLine): string => {
+export const lineSig = (line: PreparedLine): string => {
   let s = sigs.get(line);
   if (s === undefined) {
     const base = idOf(line.style);

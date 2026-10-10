@@ -26,6 +26,14 @@ export class Slots {
 
   constructor(private readonly overlay: Overlay, readonly max: number) {}
 
+  /** Called when a slot's 2D context comes back after a loss: the browser has restored a BLANK canvas, every remembered frame is stale. */
+  onRestored: (() => void) | null = null;
+
+  /** True when any pooled slot's 2D context is lost: its canvas holds no pixels, so nothing may be "skipped as already painted". */
+  lost(): boolean {
+    return this.list.some((s) => s.ctx.isContextLost?.() === true);
+  }
+
   setProfile(profile: SlotProfile | null): void { this.profile = profile; }
 
   /** Device pixels per layout unit and the backing store's size in pixels. */
@@ -66,6 +74,9 @@ export class Slots {
       const ctx = el.getContext('2d');
       if (!ctx) return null;
       const s = { el, ctx, attached: false, dirty: false };
+      // A lost context paints into nothing; the restored one is a blank canvas that no remembered frame may claim to already show.
+      el.addEventListener('contextlost', () => { s.dirty = false; });
+      el.addEventListener('contextrestored', () => { s.dirty = false; this.onRestored?.(); });
       this.fit(s);
       this.list.push(s);
     }

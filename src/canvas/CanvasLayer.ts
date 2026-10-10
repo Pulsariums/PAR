@@ -3,6 +3,7 @@ import type { Size } from '../layout/Layout';
 import type { Overlay } from '../render/Overlay';
 
 import type { Baked } from './bake';
+import { filterPx, filterUserSpace } from './filterSpace';
 import { Slots, type SlotProfile } from './layerSlots';
 import { pickShed, type Candidate } from './shed';
 import type { Sprite } from './raster';
@@ -79,6 +80,8 @@ export class CanvasLayer {
 
   constructor(overlay: Overlay, readonly maxRuns = 6) {
     this.slots = new Slots(overlay, maxRuns);
+    // A context that was lost and comes back shows a blank canvas: whatever the skip thinks the stage still shows is gone.
+    this.slots.onRestored = () => { this.prevFrame = null; };
   }
 
   setProfiling(enabled: boolean): void {
@@ -121,9 +124,10 @@ export class CanvasLayer {
   draw(runs: Run[], resolved: Resolved, budget = Infinity): void {
     // Nothing the stage shows has changed since the last real compose: same runs, same draw items (keys, transforms, alpha, clip),
     // same bitmaps, same budget. Repainting would clear the stage and draw the identical pixels again — the ending pays that every
-    // display frame between two subtitle frames. Only trusted when no diagnostics hook is watching (markers must see every compose);
-    // the counters keep the last frame's values because the picture is the picture.
-    if (this.prevFrame && !this.profile && !this.onMarker && this.sameFrame(this.prevFrame, runs, resolved, budget)) return;
+    // display frame between two subtitle frames. Only trusted when no diagnostics hook is watching (markers must see every compose)
+    // and when no slot lost its 2D context (a lost-and-restored canvas comes back blank: the pixels the skip believes are there are
+    // gone, and only a repaint brings them back); the counters keep the last frame's values because the picture is the picture.
+    if (this.prevFrame && !this.profile && !this.onMarker && !this.slots.lost() && this.sameFrame(this.prevFrame, runs, resolved, budget)) return;
     this.resetOperationCounts();
     this.drawn = 0;
     this.fillPx = 0;
@@ -269,9 +273,11 @@ export class CanvasLayer {
     // Draw-time blur of an animated `\blur`: the plate is sharp and its `spec.pad` margin holds the tail, so the exact per-frame
     // sigma is a device-space filter around this single drawImage. The bitmap lands on the stage scaled by `f * s` device px per
     // bitmap px, and a baked sigma of `it.blur * spec.scale` device px would have scaled the same way: same pixels on screen.
+    // Whether Chromium multiplies `ctx.filter` lengths by the CTM (user space, which would make `f` count twice) is settled by the
+    // runtime probe in `filterSpace.ts`, not by spec readings; `filterPx` divides the radius back out only where that is the case.
     const blurPx = it.blur ? it.blur * f * s : 0;
     if (blurPx > 0) {
-      ctx.filter = `blur(${Math.round(blurPx * 1e4) / 1e4}px)`;
+      ctx.filter = `blur(${filterPx(blurPx, f, filterUserSpace())}px)`;
       this.stateChange();
     }
     ctx.drawImage(sp.canvas as CanvasImageSource, 0, 0, sp.w, sp.h, 0, 0, sp.w * k, sp.h * k);
