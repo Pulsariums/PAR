@@ -128,10 +128,15 @@ export const buildSprite = (s: SpriteSpec): Sprite | null => {
   m.fontKerning = s.kerning ? 'auto' : 'none';
   m.letterSpacing = `${s.spacing}px`;
   const tm = m.measureText(s.text);
-  const asc = Math.round(tm.fontBoundingBoxAscent);
-  const desc = Math.round(tm.fontBoundingBoxDescent);
-  // Browsers centre the glyph box in a line box of height `size` (half-leading) and round ascent / descent to whole pixels.
-  const baseline = (s.size - (asc + desc)) / 2 + asc;
+  const asc = tm.fontBoundingBoxAscent;
+  const desc = tm.fontBoundingBoxDescent;
+  // libass requests the face at the size where its (win-metrics) ascent+descent cell equals `\fs`, and the baseline sits at
+  // `winAsc/(winAsc+winDesc)` of that box. `size` here is exactly that box (`ratio` maps `\fs` to the CSS size that yields it, see
+  // `fonts/ratio.ts`), so the baseline is the measured ascent rescaled onto `size`. When the browser's own cell already sums to
+  // `size` this equals the old half-leading formula to the pixel; when the face's tables disagree it keeps the baseline inside the
+  // `\fs` box instead of drifting (which pushed tall glyphs out of absolute `\clip` masks).
+  const cell = asc + desc;
+  const baseline = cell > 0 ? (s.size * asc) / cell : (s.size - cell) / 2 + asc;
   const boxW = tm.width * s.rx;
   const b = inkBounds(s, tm, baseline, boxW);
   // Whole device pixels from the box origin: the glyph keeps the same sub-pixel phase whatever the bitmap's size.

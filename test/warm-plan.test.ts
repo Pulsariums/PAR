@@ -143,4 +143,33 @@ describe('warm plan', () => {
     m.step(p, 10, 41.7, 1e9);
     expect(m.taken.map((e) => e.spec.text)).toEqual(['A', 'B']);
   });
+
+  it('readyUntil never reaches a frame whose sprite is still with a builder', () => {
+    const m = make(ev(1000, 1500, '\\blur2', 'A'));
+    const p = new WarmPlanner(m.path);
+    // A worker-like builder: the job is dispatched but the bitmap has not landed (nothing is added to the cache).
+    const out: Entry[] = [];
+    const b: Builder = { take: (e) => { out.push(e); return 'done'; }, cost: () => 0 };
+    const step = (t: number): void => { if (p.isSeek(t)) p.seek(t, m.lines()); p.step(t, m.env, 41.7, 1e9, m.lines(), b, true); };
+    step(0);
+    expect(out.length).toBeGreaterThan(0);
+    const first = Math.min(...out.map((e) => e.ms));
+    expect(p.readyUntil()).toBeLessThanOrEqual(first - 1);
+    // every dispatch lands: the horizon is the planned coverage again.
+    for (const e of out) { m.have.add(e.key); p.landed(e.key); }
+    step(40);
+    expect(p.readyUntil()).toBeGreaterThanOrEqual(1500);
+  });
+
+  it('a promised sprite pushed out of the cache pulls the ready horizon back to its frame', () => {
+    const m = make(ev(1000, 1500, '\\blur2', 'A'));
+    const p = new WarmPlanner(m.path);
+    m.step(p, 0, 41.7, 1e9); // the default builder lands everything at once
+    expect(p.readyUntil()).toBeGreaterThan(2000);
+    expect(m.taken.length).toBeGreaterThan(0);
+    const victim = m.taken[0]; // the (time-constant) sprite promised from ms 1001
+    m.have.delete(victim.key); // pushed out of the cache after the plan called it done
+    m.step(p, 40, 41.7, 1e9);
+    expect(p.readyUntil()).toBeLessThanOrEqual(victim.ms - 1);
+  });
 });

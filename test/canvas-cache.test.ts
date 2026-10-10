@@ -60,6 +60,22 @@ describe('SpriteCache', () => {
     expect(tries).toBe(1);
   });
 
+  it('promised (pinned) sprites never let the cache run past its cap: the earliest promise goes back to the LRU, still cached', () => {
+    const cache = new SpriteCache<ReturnType<typeof sprite>>(1000);
+    cache.put('a', sprite(400), true);
+    cache.put('b', sprite(400), true);
+    expect(cache.pinnedBytes).toBe(800);
+    cache.put('c', sprite(400), true); // 800 + 400 > 1000: the earliest promise ('a') is demoted, not dropped
+    expect(cache.pinnedBytes).toBeLessThanOrEqual(1000);
+    expect(cache.has('a')).toBe(true); // demoted to the evictable LRU, not forgotten
+    expect(cache.has('c')).toBe(true);
+    expect(cache.bytes).toBeLessThanOrEqual(1400); // the cap plus at most one oversized demoted entry, never unbounded
+    // the pin path (a landed sprite promised later) is capped the same way
+    cache.store('e', () => sprite(200));
+    expect(cache.pin('e')).toBe(true);
+    expect(cache.pinnedBytes).toBeLessThanOrEqual(1000);
+  });
+
   it('lookahead builds (store) do not count as draw-time misses; clear drops everything (fonts changed)', () => {
     const cache = new SpriteCache<ReturnType<typeof sprite>>(1000);
     cache.store('x', () => sprite(10));

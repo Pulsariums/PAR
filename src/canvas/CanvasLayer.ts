@@ -26,6 +26,23 @@ const isBaked = (sp: Sprite | Baked): sp is Baked => 'x' in sp;
 const MAX_PATHS = 1024;
 const NO_SHED = new Set<DrawItem>();
 
+const sameNum = (a: number, b: number): boolean => a === b; // NaN never equals: an unset value forces a repaint, never a wrong skip
+const samePoint = (a: readonly number[], b: readonly number[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+
+/** Every field the composite reads from a draw item (the sprite itself is compared by object identity). */
+const sameItem = (a: DrawItem, b: DrawItem): boolean =>
+  a.id === b.id && a.index === b.index && a.layer === b.layer && a.key === b.key &&
+  sameNum(a.alpha, b.alpha) && samePoint(a.anchor, b.anchor) && samePoint(a.org, b.org) &&
+  sameNum(a.rot, b.rot) && sameNum(a.size, b.size) && sameNum(a.ax, b.ax) && sameNum(a.ay, b.ay) &&
+  sameNum(a.shx, b.shx) && sameNum(a.shy, b.shy) && a.still === b.still && a.spec.size === b.spec.size && a.spec.scale === b.spec.scale &&
+  a.clip.length === b.clip.length &&
+  a.clip.every((c, i) => {
+    const d = b.clip[i];
+    return (c.rect === d.rect || (c.rect !== undefined && d.rect !== undefined && samePoint(c.rect, d.rect))) &&
+      c.d === d.d && c.evenodd === d.evenodd &&
+      (c.bbox === d.bbox || (c.bbox !== undefined && d.bbox !== undefined && samePoint(c.bbox, d.bbox)));
+  });
+
 interface LayerProfile extends SlotProfile {
   drawImages: number;
   drawOps: number;
@@ -50,6 +67,8 @@ export class CanvasLayer {
   demandPx = 0;
   private shedIds = new Set<string>();
   private profile: LayerProfile | null = null;
+  /** The last frame that was really composed: same inputs mean the stage already shows them, and clear+draw again would only repaint. */
+  private prevFrame: { runs: Run[]; resolved: Resolved; budget: number } | null = null;
   /** Optional diagnostics hook; unset in normal playback. */
   onMarker: CanvasMarker | null = null;
   private readonly profileHooks: SlotProfile = {
@@ -79,7 +98,11 @@ export class CanvasLayer {
 
   get stagePx(): number { return this.slots.stagePx; }
 
-  resize(layout: Size, f: number): void { this.slots.resize(layout, f); }
+  resize(layout: Size, f: number): void {
+    // A stage resize clears and re-fits every backing store: the pixels of the last composed frame are gone, so it is no longer a match.
+    if (this.slots.needsResize(layout, f)) this.prevFrame = null;
+    this.slots.resize(layout, f);
+  }
 
   private path(d: string): Path2D {
     let p = this.paths.get(d);
@@ -95,14 +118,21 @@ export class CanvasLayer {
    * `budget` caps the pixels filled in one frame: past it the least visible items are left out (Infinity = draw everything).
    */
   draw(runs: Run[], resolved: Resolved, budget = Infinity): void {
+    // Nothing the stage shows has changed since the last real compose: same runs, same draw items (keys, transforms, alpha, clip),
+    // same bitmaps, same budget. Repainting would clear the stage and draw the identical pixels again — the ending pays that every
+    // display frame between two subtitle frames. Only trusted when no diagnostics hook is watching (markers must see every compose);
+    // the counters keep the last frame's values because the picture is the picture.
+    if (this.prevFrame && !this.profile && !this.onMarker && this.sameFrame(this.prevFrame, runs, resolved, budget)) return;
     this.resetOperationCounts();
     this.drawn = 0;
     this.fillPx = 0;
     const t0 = performance.now();
     const left = this.leave(runs, resolved, budget);
+    let unavailable = false;
     runs.forEach((run, i) => {
       const ctx = this.slots.open(i, run.layer, run.index);
       if (!ctx) {
+        unavailable = true;
         if (this.onMarker) {
           const at = performance.now();
           for (const it of run.items) this.onMarker(it, 'unavailable', at, at);
@@ -129,6 +159,21 @@ export class CanvasLayer {
     });
     this.slots.closeFrom(runs.length);
     this.compositeMs = performance.now() - t0;
+    // Remember what the stage shows now. A run whose canvas could not open left part of the frame undrawn — nothing may be
+    // "skipped as already painted" against that. An empty frame is not a picture worth remembering either.
+    this.prevFrame = !unavailable && runs.length ? { runs, resolved, budget } : null;
+  }
+
+  /** Same stage contents: identical runs, draw items and resolved bitmaps (object identity: a cached sprite is immutable) at the same budget. */
+  private sameFrame(prev: { runs: Run[]; resolved: Resolved; budget: number }, runs: Run[], resolved: Resolved, budget: number): boolean {
+    if (prev.budget !== budget || prev.runs.length !== runs.length) return false;
+    for (let i = 0; i < runs.length; i++) {
+      const a = prev.runs[i];
+      const b = runs[i];
+      if (a.layer !== b.layer || a.index !== b.index || a.items.length !== b.items.length) return false;
+      for (let k = 0; k < b.items.length; k++) if (!sameItem(a.items[k], b.items[k]) || prev.resolved[i][k] !== resolved[i][k]) return false;
+    }
+    return true;
   }
 
   /** The items to leave out for `budget` (none when it fits). */
@@ -198,12 +243,16 @@ export class CanvasLayer {
       this.stateChange();
     }
     for (const c of it.clip) this.clip(ctx, c);
-    ctx.translate(it.org[0], it.org[1]);
-    this.stateChange();
-    ctx.rotate(it.rot * DEG);
-    this.stateChange();
-    ctx.translate(-it.org[0], -it.org[1]);
-    this.stateChange();
+    // Rotation about `org`: with \frz 0 the translate-rotate-translate triplet is the exact identity (a translate and its inverse
+    // cancel in floating point), so it is skipped — fewer state changes on the many still frames of a dense ending, pixel for pixel.
+    if (it.rot !== 0) {
+      ctx.translate(it.org[0], it.org[1]);
+      this.stateChange();
+      ctx.rotate(it.rot * DEG);
+      this.stateChange();
+      ctx.translate(-it.org[0], -it.org[1]);
+      this.stateChange();
+    }
     // Box top-left (after alignment); the shear pivots there like the DOM path's box transform.
     ctx.translate(it.anchor[0] - it.ax * sp.boxW * s, it.anchor[1] - it.ay * it.size);
     this.stateChange();
@@ -236,5 +285,6 @@ export class CanvasLayer {
   destroy(): void {
     this.slots.destroy();
     this.paths.clear();
+    this.prevFrame = null;
   }
 }

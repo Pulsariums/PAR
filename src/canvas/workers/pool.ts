@@ -175,25 +175,41 @@ export class SpritePool {
     return true;
   }
 
-  /** Sends the queued jobs to the least loaded workers in batches. */
+  /** Sends the queued jobs to the least loaded workers in batches. A white mask is built once per worker that draws with it, so jobs of one shape
+   * travel together: the mask's affinity is claimed when its first job is SENT (not when it lands, late for the rest of the burst), and a batch
+   * stops at the first job whose mask lives on another worker instead of handing it a shape it would rasterise from scratch. */
   flush(): void {
     this.watch();
     const ready = this.slots.filter((s) => s.ready && s.load < PER_WORKER);
     if (this.staged.length > 1) this.staged.sort((a, b) => a.prio - b.prio);
     while (this.staged.length && ready.length && !this.dead) {
       const first = this.staged[0]!;
-      const mask = maskOf(first.spec);
-      const preferred = mask ? this.affinity.get(mask.key) : undefined;
-      const candidates = preferred === undefined ? ready : ready.filter((s) => this.slots.indexOf(s) === preferred);
-      const pool = candidates.length ? candidates : ready;
+      const fk = this.maskKey(first.spec);
+      const pref = fk === undefined ? undefined : this.affinity.get(fk);
+      const own = pref === undefined ? ready : ready.filter((s) => this.slots.indexOf(s) === pref);
+      const pool = own.length ? own : ready; // the mask worker is full or gone: any worker may build a second copy and takes the affinity
       const s = pool.reduce((a, b) => (b.load < a.load ? b : a));
-      const batch = this.staged.splice(0, Math.min(BATCH, PER_WORKER - s.load));
+      const idx = this.slots.indexOf(s);
+      if (fk !== undefined) this.affinity.set(fk, idx);
+      const cap = Math.min(BATCH, PER_WORKER - s.load);
+      let n = 1;
+      while (n < this.staged.length && n < cap) {
+        const jk = this.maskKey(this.staged[n]!.spec);
+        if (jk === undefined) { n++; continue; } // no shared mask: fits any worker
+        if (!this.affinity.has(jk)) this.affinity.set(jk, idx);
+        else if (this.affinity.get(jk) !== idx) break; // its mask lives elsewhere: send it there, not to this mailbox
+        n++;
+      }
+      const batch = this.staged.splice(0, n);
       s.load += batch.length;
       const gen = batch[0].gen;
       this.post(s, { op: 'build', gen, jobs: batch.map(({ id, spec, prio }) => ({ id, spec, prio })) }, []);
       if (s.load >= PER_WORKER) ready.splice(ready.indexOf(s), 1);
     }
   }
+
+  /** The white-mask key a spec draws from (shared by every colour of the shape), or undefined when it has none. */
+  private maskKey(spec: SpriteSpec): string | undefined { return maskOf(spec)?.key; }
 
   /** Dead-worker watch: time is counted only while the page is running frames (a frozen tab must not look like a hung worker). */
   private watch(): void {

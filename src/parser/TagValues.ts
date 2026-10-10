@@ -70,6 +70,24 @@ export const parseAlphaTag = (s: string): number | null => {
   return v === null ? null : v & 0xff;
 };
 
+/**
+ * `\alpha&HAABBGGRR&`: the four bytes are the alphas of primary, secondary, border and shadow (`\alpha` sets all four colours at
+ * once, and libass reads the low byte for the primary, then GG/BB/AA up). A bare `&HAA&` (short) sets every alpha to `AA`.
+ * Returns null when there are no hex digits (the caller leaves the alphas at their style values, like a bare `\alpha`).
+ */
+export const parseAlphaBytes = (s: string): { a1: number; a2: number; a3: number; a4: number } | null => {
+  const m = /^\s*&?H?([0-9a-f]+)/i.exec(s);
+  if (!m) return null;
+  const digits = m[1].slice(-8);
+  const v = parseInt(digits, 16);
+  if (!Number.isFinite(v)) return null;
+  if (digits.length <= 2) {
+    const a = v & 0xff;
+    return { a1: a, a2: a, a3: a, a4: a };
+  }
+  return { a1: v & 0xff, a2: (v >> 8) & 0xff, a3: (v >> 16) & 0xff, a4: (v >>> 24) & 0xff };
+};
+
 /** Style colour field: `&HAABBGGRR` (hex) or a decimal integer (SSA). */
 export const parseStyleColour = (s: string): { colour: number; alpha: number } | null => {
   const t = s.trim();

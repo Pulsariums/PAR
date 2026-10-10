@@ -40,6 +40,33 @@ describe('canvas profiling', () => {
     expect(layer.operationCounts()).toEqual({ drawImages: 0, drawOps: 0, stateChanges: 0 });
   });
 
+  it('skips the clear+repaint when the composed frame is unchanged (subtitle frame held across display frames)', () => {
+    const ctx = {
+      setTransform: vi.fn(), clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(), transform: vi.fn(), drawImage: vi.fn(),
+      globalAlpha: 1,
+    } as unknown as CanvasRenderingContext2D;
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx);
+    const layer = new CanvasLayer(new Overlay(document.body, 1));
+    layer.resize({ width: 640, height: 360 }, 1);
+    const runs = [{ layer: 0, index: 0, items: [item(0.6)] }];
+    layer.draw(runs, [[sprite]], Infinity);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    expect(ctx.clearRect).toHaveBeenCalledTimes(1);
+    // Same values through fresh item objects (what planLine produces every frame) and the same cached sprite object: nothing changed.
+    layer.draw([{ layer: 0, index: 0, items: [{ ...item(0.6) }] }], [[sprite]], Infinity);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    expect(ctx.clearRect).toHaveBeenCalledTimes(1);
+    // A changed alpha repaints; a stage resize wipes the canvas, so the next frame paints again even with identical inputs.
+    layer.draw([{ layer: 0, index: 0, items: [item(0.7)] }], [[sprite]], Infinity);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
+    layer.draw([{ layer: 0, index: 0, items: [item(0.7)] }], [[sprite]], Infinity);
+    expect(ctx.clearRect).toHaveBeenCalledTimes(2);
+    layer.resize({ width: 320, height: 180 }, 1);
+    layer.draw([{ layer: 0, index: 0, items: [item(0.7)] }], [[sprite]], Infinity);
+    expect(ctx.clearRect).toHaveBeenCalledTimes(3); // resize + the reopened slot's clear
+    expect(ctx.drawImage).toHaveBeenCalledTimes(3);
+  });
+
   it('avoids saved state for unclipped sprites but retains it for clips', () => {
     const ctx = {
       setTransform: vi.fn(), clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(), transform: vi.fn(), drawImage: vi.fn(),
@@ -52,14 +79,14 @@ describe('canvas profiling', () => {
     layer.draw([{ layer: 0, index: 0, items: [item(0.3), item(0.7)] }], [[sprite, sprite]]);
     expect(ctx.save).not.toHaveBeenCalled();
     expect(ctx.restore).not.toHaveBeenCalled();
-    expect(layer.operationCounts()).toEqual({ drawImages: 2, drawOps: 3, stateChanges: 15 });
+    expect(layer.operationCounts()).toEqual({ drawImages: 2, drawOps: 3, stateChanges: 9 });
 
     const clipped = { ...item(), clip: [{ d: '', evenodd: false, rect: [0, 0, 30, 40] as [number, number, number, number] }] };
     layer.draw([{ layer: 0, index: 0, items: [clipped] }], [[sprite]]);
     expect(ctx.save).toHaveBeenCalledTimes(1);
     expect(ctx.restore).toHaveBeenCalledTimes(1);
     expect(ctx.clip).toHaveBeenCalledTimes(1);
-    expect(layer.operationCounts()).toEqual({ drawImages: 1, drawOps: 2, stateChanges: 11 });
+    expect(layer.operationCounts()).toEqual({ drawImages: 1, drawOps: 2, stateChanges: 8 });
   });
 
   it('preserves transforms, alpha, clip isolation and draw order across mixed frames', () => {

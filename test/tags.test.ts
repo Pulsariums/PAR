@@ -50,6 +50,12 @@ describe('tag values', () => {
     expect(m.a1).toBe(0xff); // the later \1a wins over \alpha
   });
 
+  it('maps the long \\alpha bytes to primary/secondary/border/shadow like libass', () => {
+    const ops = parseBlock('{\\alpha&H80402010&}').ops as SetOp[];
+    const m = Object.fromEntries(ops.map((o) => [o.key, o.value]));
+    expect(m).toMatchObject({ a1: 0x10, a2: 0x20, a3: 0x40, a4: 0x80 }); // RR GG BB AA, not the low byte four times
+  });
+
   it('treats argument-less tags as "revert to style"', () => {
     const ops = parseBlock('{\\fs\\c\\fn}').ops as SetOp[];
     expect(ops.map((o) => o.value)).toEqual([null, null, null]);

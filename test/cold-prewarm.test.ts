@@ -60,6 +60,38 @@ describe('bounded cold-scene prewarming', () => {
     la.dispose();
   });
 
+  it('the draw path builds a frame-lacking sprite on the page thread only when the frame says so, under the frame deadline', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const k = kit(dense(), { mode: 'canvas' });
+    k.path.complexity = analyzeLine;
+    const items = k.lines().visibleAt(2500).map((l) => planLine(l, 2500 - k.lines().startMs(l), k.env, analyzeLine(l).animated, { blur: 0 }));
+    const makeCtx = (cache: SpriteCache<never>) => {
+      const ctx: Record<string, unknown> = { cache, skipped: 0, builds: 0, mark: () => undefined };
+      ctx.prebuild = (key: string) => { (ctx.builds as number)++; cache.store(key, () => ({ bytes: 4, canvas: { width: 1, height: 1 } }) as never); };
+      ctx.syncWorth = (it: unknown, left: number, built: number) =>
+        (CanvasPath.prototype as unknown as { syncWorth(this: unknown, it: unknown, left: number, built: number): boolean }).syncWorth.call(null, it, left, built);
+      return ctx;
+    };
+    const resolve = (ctx: Record<string, unknown>, sync: boolean) =>
+      (CanvasPath.prototype as unknown as { resolve(this: unknown, r: unknown, sync?: boolean): { missing: unknown[] } }).resolve.call(ctx, [{ items }], sync);
+    const idle = makeCtx(new SpriteCache<never>(96 << 20));
+    // Holding/paused frames never build on the draw path: they report what is missing exactly as before.
+    expect(resolve(idle, false).missing).toHaveLength(16);
+    expect(idle.builds).toBe(0);
+    // A playing frame fills its gaps synchronously (time frozen: the whole frame fits its budget).
+    const playing = makeCtx(new SpriteCache<never>(96 << 20));
+    expect(resolve(playing, true).missing).toHaveLength(0);
+    expect(playing.builds).toBe(16);
+    // The deadline cuts the burst off: the frame builds what still has time and reports the rest as missing (still urgent).
+    let tick = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => (tick++ === 0 ? 0 : tick * 0.7));
+    const late = makeCtx(new SpriteCache<never>(96 << 20));
+    const missing = resolve(late, true).missing;
+    expect(late.builds as number).toBeGreaterThan(0);
+    expect(missing.length).toBeGreaterThan(0);
+    expect((late.builds as number) + missing.length).toBe(16);
+  });
+
   it('resumes dense animation samples under the per-slice bound and does not expand beyond the configured range', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0);
     const k = kit(ev(1000, 59000, '\\t(0,58000,\\blur100)', 'A') + dense(9000));

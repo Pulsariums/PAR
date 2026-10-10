@@ -101,6 +101,7 @@ export class SpriteCache<S extends Sized> {
   private add(key: string, s: S | null, pin: boolean): void {
     const bytes = s ? s.bytes : 16;
     if (!pin) { this.lru.set(key, s, bytes); return; }
+    this.reservePin(bytes);
     this.pinned.set(key, { s, bytes });
     this.pinBytes += bytes;
     this.fit();
@@ -113,10 +114,32 @@ export class SpriteCache<S extends Sized> {
     if (s === undefined) return false;
     const bytes = s ? s.bytes : 16;
     this.lru.delete(key);
+    this.reservePin(bytes);
     this.pinned.set(key, { s, bytes });
     this.pinBytes += bytes;
     this.fit();
     return true;
+  }
+
+  /**
+   * Pins are a promise, not extra memory: the whole cache (pinned + LRU) must respect `cap`, or the `spriteBytes` gauge runs far past
+   * it (a dense blur burst over-commits the plan's share). Before a pin that would push the pinned total past the cap, the earliest
+   * promise (first pinned, so its `until` passes first) is demoted back to the LRU — the bitmap stays cached and usable, it just
+   * becomes evictable again. Only reached when the plan overcommits; the normal share keeps pins well below the cap so nothing moves.
+   */
+  private reservePin(bytes: number): void {
+    if (this.pinBytes + bytes <= this.cap) return;
+    const demoted: Array<{ key: string; held: Held<S> }> = [];
+    while (this.pinBytes + bytes > this.cap && this.pinned.size > 0) {
+      const k = this.pinned.keys().next().value as string;
+      const p = this.pinned.get(k)!;
+      this.pinned.delete(k);
+      this.pinBytes -= p.bytes;
+      demoted.push({ key: k, held: p });
+    }
+    // The room freed by the demotions, made on the LRU before the demoted bitmaps go in, so the loop cannot evict what it just demoted.
+    this.lru.capBytes = Math.max(0, this.cap - this.pinBytes);
+    for (const { key, held } of demoted) this.lru.set(key, held.s, held.bytes);
   }
 
   /** The promise is kept: the sprite is an ordinary (most recently used) resident again. */

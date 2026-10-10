@@ -3,7 +3,7 @@ import type { LineTags, ResetOp, SetOp, StateKey, StateOp, Transition } from '..
 import { intRect, parseClip } from './ClipParser';
 import type { KaraTag } from './KaraokeTracker';
 import { lexOverrides, type RawTag } from './TagLexer';
-import { legacyToNumpad, parseAlphaTag, parseBold, parseColorTag, parseFlag, parseFontName, parseNum, parseNumList, splitArgs } from './TagValues';
+import { legacyToNumpad, parseAlphaBytes, parseAlphaTag, parseBold, parseColorTag, parseFlag, parseFontName, parseNum, parseNumList, splitArgs } from './TagValues';
 
 export interface ParsedBlock {
   /** Ordered state operations (sets, transitions, resets). */
@@ -52,8 +52,9 @@ const stateOps = (tag: RawTag, ops: (SetOp | ResetOp)[]): boolean => {
   else if (name === 'fn') ops.push(set('fn', parseFontName(arg)));
   else if (name === 'c' || /^[1-4]c$/.test(name)) ops.push(set(`c${name === 'c' ? 1 : name[0]}` as StateKey, parseColorTag(arg)));
   else if (name === 'alpha') {
-    const a = parseAlphaTag(arg);
-    ops.push(set('a1', a), set('a2', a), set('a3', a), set('a4', a));
+    // `&HAA&` sets all four alphas; the long `&HAABBGGRR&` form carries one alpha per colour (libass/VSFilter byte order).
+    const a = parseAlphaBytes(arg);
+    ops.push(set('a1', a ? a.a1 : null), set('a2', a ? a.a2 : null), set('a3', a ? a.a3 : null), set('a4', a ? a.a4 : null));
   } else if (/^[1-4]a$/.test(name)) ops.push(set(`a${name[0]}` as StateKey, parseAlphaTag(arg)));
   else return false;
   return true;

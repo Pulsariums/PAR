@@ -32,6 +32,11 @@ export class Slots {
   get f(): number { return this.size.f; }
   get stagePx(): number { return this.size.w * this.size.h; }
 
+  /** True when `resize` would refit the backing stores (which wipes their pixels). */
+  needsResize(layout: Size, f: number): boolean {
+    return Math.max(1, Math.round(layout.width * f)) !== this.size.w || Math.max(1, Math.round(layout.height * f)) !== this.size.h || f !== this.size.f;
+  }
+
   /** Backing store size follows the stage: `f` = device pixels per layout unit. */
   resize(layout: Size, f: number): void {
     const w = Math.max(1, Math.round(layout.width * f));

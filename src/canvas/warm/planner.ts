@@ -32,7 +32,7 @@ export interface Entry { key: string; spec: SpriteSpec; ms: number; until: numbe
 /** Where entries get built: `'full'` = cannot take more right now (the caller is told when to try again). `cost`: page-thread ms the entry would take (0 when it goes to a worker). */
 export interface Builder { take(e: Entry): 'done' | 'full'; cost(e: Entry): number }
 
-interface BakeJob { base: string; key: string; item: DrawItem; clip: ClipShape; until: number }
+interface BakeJob { base: string; key: string; item: DrawItem; clip: ClipShape; until: number; ms: number }
 
 export interface Warmed {
   /** Entries handed to the builder in this slice. */
@@ -70,6 +70,8 @@ export class WarmPlanner {
   restarts = 0;
   /** Estimated work (ms) finished since the last `takeDone`, for the throughput measurement. */
   private doneCost = 0;
+  /** The earliest first-draw time of a sprite the plan promised but the cache does not hold (Infinity when every promise is real). Refreshed each `step`. */
+  private lostMs = Infinity;
 
   constructor(private readonly path: CanvasPath) { this.ahead = new Ahead(path.cache); }
 
@@ -81,8 +83,16 @@ export class WarmPlanner {
   get planned(): number { return this.expander.frontier; }
   get aheadMB(): number { return (this.path.cache.pinnedBytes + this.inflightBytes) / 1048576; }
 
-  /** Ms up to which every sprite the plan knows of is available (the plan's own frontier when none is pending). */
-  readyUntil(): number { const f = this.expander.frontier; return Math.min(this.frontier.first - 1, this.blocked || !Number.isFinite(f) ? Infinity : f); }
+  /** How far ahead of the playhead the sprites are really available: never beyond the first frame whose sprite is still queued,
+   * still with a builder, or promised but not in the cache (evicted). A gauge that said "35 s ready" while the next particle was
+   * missing would have the playhead run into a blank; this is the honest number. */
+  readyUntil(): number {
+    const f = this.expander.frontier;
+    let u = Math.min(this.frontier.first - 1, this.blocked || !Number.isFinite(f) ? Infinity : f, this.lostMs - 1);
+    // Belt and braces: a job handed to a builder and not landed yet is by definition not available at its frame.
+    for (const e of this.inflight.values()) if (e.ms - 1 < u) u = e.ms - 1;
+    return u;
+  }
 
   /** `t` is not where the playhead was heading (a jump, or the first look): the next `step` starts the plan over there. */
   isSeek(t: number): boolean { return !Number.isFinite(this.lastT) || t < this.lastT - SEEK_BACK_MS || t > this.lastT + SEEK_FORWARD_MS; }
@@ -95,7 +105,7 @@ export class WarmPlanner {
     this.bakes = [];
     this.bakeKeys.clear();
     this.inflight.clear();
-    [this.inflightBytes, this.queuedBytes, this.doneCost, this.lastT] = [0, 0, 0, NaN];
+    [this.inflightBytes, this.queuedBytes, this.doneCost, this.lastT, this.lostMs] = [0, 0, 0, NaN, Infinity];
     this.blocked = false;
   }
 
@@ -113,6 +123,9 @@ export class WarmPlanner {
     this.lastT = t;
     this.frameMs = frameMs;
     this.ahead.release(t - frameMs);
+    // Re-verify the plan's promises against the cache: a pinned sprite that was pushed out (or never landed) means the frame that
+    // draws it is not ready, whatever the queue says. Cheap (the promises are bounded), done every slice.
+    this.lostMs = this.ahead.check((k) => this.path.cache.has(k));
     const share = this.path.cache.capBytes * AHEAD_SHARE;
     const room = (): boolean => this.heap.size < MAX_QUEUE && this.path.cache.pinnedBytes + this.inflightBytes + this.queuedBytes < share * 1.25;
     const planLeft = (): number => budgetMs / 2 - (performance.now() - t0);
@@ -126,12 +139,12 @@ export class WarmPlanner {
   /** One sprite the plan wants: promised until its last frame, queued when it is not cached or on its way. */
   private want(r: SpriteReq, t: number): void {
     if (r.until < t) return;
-    this.ahead.hold(r.key, r.until);
+    this.ahead.hold(r.key, r.until, r.ms);
     if (r.bake) {
       const existing = this.bakes.find((b) => b.key === r.bake!.key);
-      if (existing) existing.until = Math.max(existing.until, r.until);
+      if (existing) { existing.until = Math.max(existing.until, r.until); existing.ms = Math.min(existing.ms, r.ms); }
       else if (this.bakes.length < MAX_BAKES) {
-        this.bakes.push({ base: r.key, ...r.bake, until: r.until });
+        this.bakes.push({ base: r.key, ...r.bake, until: r.until, ms: r.ms });
         this.bakeKeys.add(r.bake.key);
       }
     }
@@ -148,7 +161,7 @@ export class WarmPlanner {
   /** A frame found this sprite missing: it goes to the front (`t`: the playhead). */
   urgent(key: string, spec: SpriteSpec, t: number): void {
     if (this.path.cache.has(key) || this.inflight.has(key)) return;
-    this.ahead.hold(key, t + IMMINENT_MS * 3);
+    this.ahead.hold(key, t + IMMINENT_MS * 3, t);
     if (this.frontier.has(key)) {
       this.heap.update((e) => e.key === key, (e) => { e.ms = Math.min(e.ms, t); e.prio = -1; });
       this.frontier.add(key, t, estimateBuildMs(spec));
@@ -173,10 +186,10 @@ export class WarmPlanner {
     for (; i < this.bakes.length; i++) {
       const b = this.bakes[i];
       if (b.until < this.lastT) { this.bakeKeys.delete(b.key); continue; }
-      if (cache.has(b.key)) { this.bakeKeys.delete(b.key); this.ahead.hold(b.key, b.until); continue; }
+      if (cache.has(b.key)) { this.bakeKeys.delete(b.key); this.ahead.hold(b.key, b.until, b.ms); continue; }
       if (!cache.peek(b.base)) { keep.push(b); continue; }
       if (left() <= 0) break;
-      if (bakeAhead(cache, b.key, b.item, b.clip)) { this.bakeKeys.delete(b.key); this.ahead.hold(b.key, b.until); }
+      if (bakeAhead(cache, b.key, b.item, b.clip)) { this.bakeKeys.delete(b.key); this.ahead.hold(b.key, b.until, b.ms); }
     }
     const more = i < this.bakes.length;
     this.bakes = more ? keep.concat(this.bakes.slice(i)) : keep;

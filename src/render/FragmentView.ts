@@ -28,6 +28,8 @@ export class FragmentView {
   private g: CssWriter | null = null;
   private path: CssWriter | null = null;
   private readonly size: [number, number] = [0, 0];
+  /** Drawing control-box min corner: the path is shifted by -origin so the ink fills the box, exactly as libass anchors it. */
+  private readonly origin: [number, number] = [0, 0];
   private fxCarve: SvgFilter | null = null;
   private fxBlur: SvgFilter | null = null;
 
@@ -68,8 +70,12 @@ export class FragmentView {
     svg.appendChild(g);
     this.el.appendChild(svg);
     const b = drawingBounds(cmds);
-    // libass: advance = control-box width, ascent = control-box height; drawing (0,0) sits at the box's top-left.
-    if (b) this.size.splice(0, 2, Math.max(0, b[2] - b[0]), Math.max(0, b[3] - b[1]));
+    // libass anchors a drawing by its control-point bounding box: the box's own rectangle is the ink extent, so the path is shifted by
+    // the box's min corner (see `origin` / `applyDrawing`) to sit inside it. Advance = control-box width, ascent = control-box height.
+    if (b) {
+      this.size.splice(0, 2, Math.max(0, b[2] - b[0]), Math.max(0, b[3] - b[1]));
+      this.origin.splice(0, 2, b[0], b[1]);
+    }
     this.svg = new CssWriter(svg);
     this.g = new CssWriter(g);
     this.path = new CssWriter(path);
@@ -94,15 +100,18 @@ export class FragmentView {
   }
 
   /**
-   * Filter of this fragment. CSS `blur()` unless the blur has to be anisotropic (stretched text) or the
-   * glyph has to be carved out (see `svgFilter.ts`); `\be` is always CSS (device pixels).
+   * Filter of this fragment. Any `\blur` goes through the SVG filter (see `svgFilter.ts`) when the line can host a `<defs>`: the SVG
+   * filter pins `color-interpolation-filters: sRGB`, so DOM, the anisotropic/stretch case and the canvas path (`ctx.filter` blur is
+   * sRGB too) all blur in the same colour space instead of the CSS `blur()` default. Carving the glyph out of a translucent-fill
+   * plate and anisotropic blur (stretched text) also need the SVG filter. Without a `<defs>` host there is nowhere to put the filter,
+   * so the fragment falls back to the CSS chain. `\be` stays CSS (it is in device pixels, not a layout-unit gaussian).
    */
   private filterOf(st: TextState, blur: number, be: number, carve: string | null, env: StyleEnv): string {
     const bsc = env.blurScale ?? 1;
     const s = blurSigma(blur, bsc);
     const ratio = xRatio(st);
     const aniso = s > 0 && ratio > 0 && Math.abs(ratio - 1) > 1e-3;
-    if (this.defs && (carve !== null || aniso)) {
+    if (this.defs && (carve !== null || s > 0)) {
       const fx = carve !== null
         ? (this.fxCarve ??= new SvgFilter(this.defs(), true))
         : (this.fxBlur ??= new SvgFilter(this.defs(), false));
@@ -157,7 +166,7 @@ export class FragmentView {
       'vertical-align': px(-st.pbo * s),
       filter: filters.filter((f) => f !== 'none').join(' ') || 'none',
     });
-    this.g!.attr('transform', `scale(${Math.round(s * 1e5) / 1e5})`);
+    this.g!.attr('transform', `scale(${Math.round(s * 1e5) / 1e5}) translate(${Math.round(-this.origin[0] * 1000) / 1000} ${Math.round(-this.origin[1] * 1000) / 1000})`);
     if (p) {
       this.w.set({ visibility: p.visible ? 'visible' : 'hidden', position: 'relative', left: px(p.dx), top: px(p.dy) });
       const w = s > 0 ? p.strokeWidth / s : 0;

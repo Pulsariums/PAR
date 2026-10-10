@@ -4,18 +4,27 @@ import type { Overlay } from '../render/Overlay';
 
 import { bakeable, bakeKey, type Baked } from './bake';
 import { CanvasLayer, type CanvasMarkerOutcome, type Resolved, type Run } from './CanvasLayer';
+import { estimateBuildMs } from './cost';
 import { ShedController } from './shed';
 import { analyzeLine, chooseMode, type Complexity } from './eligibility';
 import type { Dropped } from './paint';
 import { planLine } from './plan';
 import { canvasSupported, type Sprite } from './raster';
 import { SpriteCache } from './SpriteCache';
+import { resetStates } from './states';
 import { buildAhead } from './mainBuild';
 import { frameSignature } from './key';
 import type { CanvasProfile, DrawItem, PathStats, RenderMode, SpriteSpec } from './types';
 
-/** What a frame does when a sprite it needs is not ready: `hold` presents nothing new (the previous frame stays, nothing is half drawn), `partial` draws what is ready. Neither builds anything. */
+/** What a frame does when a sprite it needs is not ready: `hold` presents nothing new (the previous frame stays, nothing is half drawn), `partial` draws what is ready. */
 export type Policy = 'hold' | 'partial';
+
+/** Same-frame fallback (playing, `partial`): wall ms the frame may spend building missing sprites on the page thread. */
+const SYNC_BUILD_MS = 12;
+/** ... and how many sprites it may build while it is at it (the cost model gates each one; this bounds a pathological burst). */
+const SYNC_MAX_BUILDS = 32;
+/** A sprite the cost model puts above this (ms) is never built on the draw frame: the look-ahead and the hold path own the big ones. */
+const SYNC_ITEM_MS = 4;
 
 export interface Routed {
   line: PreparedLine;
@@ -119,7 +128,7 @@ export class CanvasPath {
     const f = env.devScale ?? 1;
     const staticEnv = `${f}|${env.borderScale}|${env.blurScale ?? 1}|${env.layout.width}x${env.layout.height}`;
     // Sprites carry their scale in the key; the first render must keep what the look-ahead built before any canvas line was on screen.
-    if ((this.scale !== 0 && f !== this.scale) || (this.staticEnv !== '' && staticEnv !== this.staticEnv)) { this.cache.clear(); this.cacheGeneration++; this.staticItems.clear(); }
+    if ((this.scale !== 0 && f !== this.scale) || (this.staticEnv !== '' && staticEnv !== this.staticEnv)) { this.cache.clear(); this.cacheGeneration++; this.staticItems.clear(); resetStates(); }
     this.staticEnv = staticEnv;
     this.scale = f;
     this.cache.sweep();
@@ -143,7 +152,7 @@ export class CanvasPath {
       open.items.push(it);
     }
     this.runs = runs.length;
-    const { resolved, missing } = this.resolve(runs);
+    const { resolved, missing } = this.resolve(runs, policy === 'partial' && this.load !== null);
     this.missing = missing.length;
     this.missedTotal += missing.length;
     if (missing.length) this.onMissing(missing);
@@ -177,14 +186,24 @@ export class CanvasPath {
   }
 
   /** The bitmaps of a frame: looked up, never built. The clip-cut version of a sprite is used when the look-ahead made it (the same pixels as clipping on the draw). */
-  private resolve(runs: Run[]): { resolved: Resolved; missing: DrawItem[] } {
+  private resolve(runs: Run[], syncBuild = false): { resolved: Resolved; missing: DrawItem[] } {
+    // Same-frame fallback while playing: a sprite this frame lacks and the builders have not delivered is built on the page thread now,
+    // under a deadline and a count so a burst cannot crush the frame. `buildAhead` is the exact same construction the look-ahead does
+    // (same spec, same key, same pixels, mask/tint reuse included), so quality, timing and cache semantics are unchanged.
+    const deadline = syncBuild ? performance.now() + SYNC_BUILD_MS : 0;
+    let built = 0;
     const missing: DrawItem[] = [];
     const resolved = runs.map((run) => run.items.map((it): Sprite | Baked | null => {
       if (it.alpha < 0.004) {
         this.mark(it, 'skipped');
         return null;
       }
-      const sp = this.cache.lookup(it.key);
+      let sp = this.cache.lookup(it.key);
+      if (sp === undefined && syncBuild && this.syncWorth(it, deadline - performance.now(), built)) {
+        this.prebuild(it.key, it.spec);
+        sp = this.cache.peek(it.key);
+        built++;
+      }
       if (sp === undefined) { missing.push(it); return null; }
       if (!sp) {
         this.skipped++;
@@ -195,6 +214,14 @@ export class CanvasPath {
       return (c && (this.cache.peek(bakeKey(it, c)) as Baked | null | undefined)) || sp;
     }));
     return { resolved, missing };
+  }
+
+  /** A synchronous build starts only when the cost model says it fits the time left; the first build of a frame is allowed to overshoot so the frame is never left empty. Bounded by `SYNC_MAX_BUILDS`. */
+  private syncWorth(it: DrawItem, leftMs: number, built: number): boolean {
+    if (built >= SYNC_MAX_BUILDS) return false;
+    const cost = estimateBuildMs(it.spec);
+    if (cost > SYNC_ITEM_MS) return false;
+    return cost <= leftMs || (built === 0 && leftMs > 0);
   }
 
   private mark(item: DrawItem, outcome: CanvasMarkerOutcome): void {
@@ -231,6 +258,7 @@ export class CanvasPath {
     this.cacheGeneration++;
     this.staticEnv = '';
     this.staticItems.clear();
+    resetStates();
     this.layer.draw([], []);
   }
 

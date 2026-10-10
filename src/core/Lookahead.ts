@@ -11,6 +11,8 @@ import type { LineEnv } from '../render/LineView';
 
 /** No frame drawn for this long (ms) = nothing is playing: idle slices may be long. */
 const IDLE_AFTER_MS = 120;
+/** Slice ms a frame's missing sprites get: long enough to actually catch a burst up, capped so the main thread still breathes. */
+const URGENT_SLICE_MS = 12;
 /** Without canvas lines on screen, the look-ahead runs on every this-many-th render. */
 const QUIET_EVERY = 6;
 /** While workers are starting, sprites needed later than this (ms ahead of the playhead) wait for them instead of being built on the page thread. */
@@ -50,6 +52,11 @@ export class Lookahead {
   private mainEst = 0;
   private fromWorkers = 0;
   private waiting = new Set<string>();
+  /** What the last frame lacked (keys and specs): the estimate for the urgent slice (`urgentWork`). */
+  private urgentItems: DrawItem[] = [];
+  /** Missing-sprite reports that no slice has served yet (see `urgent` / `pump`): those slices run on the urgent budget. */
+  private urgentRun = 0;
+  private servedRun = 0;
   /** The plan has things to build and nothing is working on them (no job out, no slice coming): a frame waiting for them would wait forever. */
   stuck = false;
   /** A frame that was missing sprites now has all of them. */
@@ -87,15 +94,17 @@ export class Lookahead {
     this.arm();
   }
 
-  /** The frame needed these and did not find them: prioritize them for the next between-frame slice. */
+  /** The frame needed these and did not find them: build them next, with a slice of their own (an overdue frame is not a place for caution). */
   private urgent(items: DrawItem[]): void {
     if (!this.lastEnv) return;
     this.waiting = new Set(items.map((i) => i.key));
+    this.urgentItems = items;
     for (const it of items) {
       this.planner.urgent(it.key, it.spec, this.lastT);
       this.pool?.prioritize(it.key);
     }
     // Do not build synchronously from CanvasPath.render; the current frame must finish first.
+    this.urgentRun++;
     this.arm();
   }
 
@@ -221,7 +230,27 @@ export class Lookahead {
     // A hidden tab draws nothing and the playhead does not move: the plan has what it needs, no more CPU for it.
     if (!this.lastEnv || !this.path.enabled || (typeof document !== 'undefined' && document.hidden)) return;
     const playing = performance.now() - this.lastDrawAt < IDLE_AFTER_MS;
-    this.run(Math.min(COLD_SLICE_MS, this.budget.slice(playing, playing ? this.path.load : null)));
+    const slice = this.budget.slice(playing, playing ? this.path.load : null);
+    // An unserved missing-frame report gets an urgent slice: the load throttle exists to keep spare time off a frame that is already
+    // late — but the sprites a frame lacked ARE its work, and a short-lived line missed for caution is a line never seen. The urgent
+    // slice is capped by what the lacking frames actually need, so it cannot run away either.
+    if (this.urgentRun !== this.servedRun) {
+      this.servedRun = this.urgentRun;
+      this.run(Math.min(URGENT_SLICE_MS, Math.max(slice, this.urgentWork())));
+      return;
+    }
+    this.run(Math.min(COLD_SLICE_MS, slice));
+  }
+
+  /** Estimated page-thread ms the sprites the current frame still lacks would take; bounds the urgent slice. */
+  private urgentWork(): number {
+    let ms = 0;
+    for (const it of this.urgentItems) {
+      if (this.path.cache.has(it.key)) continue;
+      ms += estimateBuildMs(it.spec);
+      if (ms >= URGENT_SLICE_MS) return URGENT_SLICE_MS;
+    }
+    return ms;
   }
 
   /** Workers are building: only then can the builders be faster than the clock, so only then is holding the picture for them worth it. */
@@ -254,6 +283,7 @@ export class Lookahead {
     this.replan = false;
     this.quiet = 0;
     this.waiting.clear();
+    this.urgentItems = [];
     this.rate.idle();
   }
 

@@ -6,6 +6,7 @@ import { analyzeLine, AUTO_LOAD, chooseMode } from '../src/canvas/eligibility';
 import { specKey } from '../src/canvas/key';
 import { planLine } from '../src/canvas/plan';
 import { qRatio, qSigma, qSize, colourCss } from '../src/canvas/quant';
+import { cachedStates, resetStates } from '../src/canvas/states';
 import { maskOf } from '../src/canvas/tint';
 import { sampleTimes } from '../src/canvas/warm';
 import { frameMs, frameRate } from '../src/core/time';
@@ -165,6 +166,42 @@ describe('level of detail rules', () => {
     expect(m.colour).not.toBe(m2.colour);
     const bordered = line('{\\an5\\pos(5,5)\\bord2\\blur2}K').l;
     expect(maskOf(planLine(bordered, 0, env(sc), new Set(), { blur: 0 }).spec)).toBeNull();
+  });
+});
+
+describe('bounded eval-state cache', () => {
+  const three = parseScript(
+    `${HEAD}` +
+    'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,{\\an5\\pos(9,9)\\t(0,900,\\blur2\\c&H00FF00&)}A\n' +
+    'Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,{\\an5\\pos(9,9)\\t(0,900,\\blur2\\c&H00FF00&)}B\n' +
+    'Dialogue: 0,0:00:05.00,0:00:06.00,Default,,0,0,0,,{\\an5\\pos(9,9)\\t(0,900,\\blur9\\c&H00FF00&)}C\n',
+  );
+  const [a, b, c] = three.events.map((e) => prepareLine(e, three.styles, three.info));
+
+  it('equals a fresh evalStates at every time, and planLine agrees with it', () => {
+    resetStates();
+    for (const t of [0, 450, 900, 1337]) expect(cachedStates(a, t, three.styles)).toEqual(evalStates(a, t, three.styles));
+  });
+
+  it('shares one evaluation between events with identical tags and duration at the same rel time', () => {
+    resetStates();
+    // A and B differ only in text/absolute start; their ops, style and duration are equal, so rel=500 resolves to the same state.
+    expect(cachedStates(a, 500, three.styles)).toBe(cachedStates(b, 500, three.styles));
+    // C animates a different blur => different op signature => a distinct evaluation (and a distinct sprite key).
+    const ca = cachedStates(a, 500, three.styles);
+    const cc = cachedStates(c, 500, three.styles);
+    expect(ca).not.toBe(cc);
+    expect(ca[0].blur).not.toBe(cc[0].blur);
+    // a different rel time is a different cache entry
+    expect(cachedStates(a, 501, three.styles)).not.toBe(ca);
+  });
+
+  it('is dropped wholesale on reset (script / font / layout change)', () => {
+    resetStates();
+    const first = cachedStates(a, 500, three.styles);
+    resetStates();
+    expect(cachedStates(a, 500, three.styles)).not.toBe(first); // rebuilt, still equal
+    expect(cachedStates(a, 500, three.styles)).toEqual(first);
   });
 });
 

@@ -33,6 +33,13 @@ const render = (ass: string) => {
 const boxes = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLElement>('.par-box'));
 const frag = (box: HTMLElement) => box.querySelector<HTMLElement>('.par-frag')!;
 
+/** The `stdDeviation` of the SVG blur filter an element's `filter: url(#..)` points at (all DOM `\blur` is an sRGB SVG filter). */
+const svgBlur = (root: HTMLElement, el: HTMLElement): string => {
+  const id = /url\("?#(par-blur-\d+)"?\)/.exec(el.style.filter)?.[1];
+  if (!id) throw new Error(`no SVG blur filter on ${el.style.filter}`);
+  return root.querySelector(`filter[id="${id}"] feGaussianBlur`)!.getAttribute('stdDeviation')!;
+};
+
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -67,16 +74,16 @@ describe('plates: DOM structure', () => {
     expect(frag(shadow).style.visibility).toBe('visible');
     expect(frag(shadow).style.left).toBe('2px');
     expect(frag(outline).style.getPropertyValue('-webkit-text-stroke-width')).toBe('6px');
-    // fill stays sharp next to a border; the outline and the shadow are blurred
+    // fill stays sharp next to a border; the outline and the shadow are blurred (sRGB SVG filter, sigma = 2 * 0.8493)
     expect(frag(fill).style.filter).toBe('none');
-    expect(frag(outline).style.filter).toContain('blur(1.699px)');
-    expect(frag(shadow).style.filter).toContain('blur(1.699px)');
+    expect(svgBlur(par.element, frag(outline))).toBe('1.699');
+    expect(svgBlur(par.element, frag(shadow))).toBe('1.699');
   });
 
   it('blurs the fill when there is no border, in a single element', () => {
     const par = render(script(['{\\bord0\\blur3}Hello']));
     expect(boxes(par.element)).toHaveLength(1);
-    expect(frag(boxes(par.element)[0]).style.filter).toBe('blur(2.548px)');
+    expect(svgBlur(par.element, frag(boxes(par.element)[0]))).toBe('2.548');
   });
 
   it('keeps one element for plain bordered text', () => {
@@ -107,7 +114,7 @@ describe('plates: DOM structure', () => {
     const style = 'Style: Default,Arial,40,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,3,3,0,2,10,10,10,1';
     const par = render(script(['{\\blur2}Hello'], style));
     expect(boxes(par.element)).toHaveLength(1);
-    expect(frag(boxes(par.element)[0]).style.filter).toBe('blur(1.699px)');
+    expect(svgBlur(par.element, frag(boxes(par.element)[0]))).toBe('1.699');
   });
 
   it('blurs stretched text round on screen (SVG blur with one sigma per axis)', () => {
@@ -136,5 +143,21 @@ describe('drawings', () => {
     const svg = par.element.querySelector<SVGElement>('svg')!;
     expect(svg.style.width).toBe('90px');
     expect(svg.style.height).toBe('110px');
+  });
+
+  // libass anchors a drawing by the min corner of its control-point box, not by the raw (0,0): the path is shifted by -min so the ink
+  // fills the box (the ReZero E06 bar `m -24 -176 ...` was 24px left and 176px high without this). See `FragmentView.origin`.
+  it('shifts the path by the bounding-box min so the ink fills the box for any alignment', () => {
+    for (const an of ['an2', 'an5', 'an7']) {
+      const par = render(script([`{\\${an}\\pos(960,1070)\\p1\\bord0}m -24 -176 l 1520 -176 1520 574 -24 574`]));
+      const g = par.element.querySelector<SVGElement>('svg > g')!;
+      expect(g.getAttribute('transform')).toContain('translate(24 176)');
+    }
+  });
+
+  it('leaves a drawing already starting at (0,0) unshifted', () => {
+    const par = render(script(['{\\an5\\pos(320,180)\\p1\\bord0}m 0 0 l 40 0 40 40 0 40']));
+    const g = par.element.querySelector<SVGElement>('svg > g')!;
+    expect(g.getAttribute('transform')).toContain('translate(0 0)');
   });
 });
