@@ -23,6 +23,8 @@ export class SvgFilter {
   readonly id: string;
   private readonly blur: SVGElement;
   private readonly flood: SVGElement | null = null;
+  private lastDev = '';
+  private lastColor = '';
 
   constructor(defs: SVGElement, carve: boolean) {
     this.id = `par-${carve ? 'carve' : 'blur'}-${++seq}`;
@@ -41,11 +43,26 @@ export class SvgFilter {
 
   /** Sigma per axis in layout units; `color` (carve only) is a CSS `rgba()` string. */
   set(sx: number, sy: number, color?: string): void {
-    const r = (n: number): string => String(Math.max(0.01, Math.round(n * 1000) / 1000));
-    this.blur.setAttribute('stdDeviation', sx === sy ? r(sx) : `${r(sx)} ${r(sy)}`);
-    const m = color ? RGBA.exec(color) : null;
-    if (!m || !this.flood) return;
-    this.flood.setAttribute('flood-color', `rgb(${m[1]}, ${m[2]}, ${m[3]})`);
-    this.flood.setAttribute('flood-opacity', m[4] ?? '1');
+    const q = (n: number): number => {
+      if (n <= 8) return Math.round(n * 1000) / 1000;
+      if (n <= 20) return Math.round(n * 5) / 5;
+      if (n <= 35) return Math.round(n * 2) / 2;
+      return Math.round(n);
+    };
+    const qx = Math.max(0.01, q(sx));
+    const qy = Math.max(0.01, q(sy));
+    const dev = qx === qy ? String(qx) : `${qx} ${qy}`;
+    if (dev !== this.lastDev) {
+      this.blur.setAttribute('stdDeviation', dev);
+      this.lastDev = dev;
+    }
+    if (color && this.flood && color !== this.lastColor) {
+      const m = RGBA.exec(color);
+      if (m) {
+        this.flood.setAttribute('flood-color', `rgb(${m[1]}, ${m[2]}, ${m[3]})`);
+        this.flood.setAttribute('flood-opacity', m[4] ?? '1');
+        this.lastColor = color;
+      }
+    }
   }
 }

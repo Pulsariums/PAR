@@ -11,6 +11,8 @@ export class Timeline {
   private readonly starts: number[];
   private readonly ends: number[];
   private readonly maxDuration: number;
+  private lastT = -1;
+  private lastOut: PreparedLine[] = [];
 
   constructor(lines: readonly PreparedLine[]) {
     const keyed = lines.map((l) => ({ l, s: msOf(l.event.start), e: msOf(l.event.end) }));
@@ -54,12 +56,16 @@ export class Timeline {
 
   /** Lines with `startMs <= tMs < endMs`, ordered by (layer, file order). `tMs` is an integer. */
   visibleAt(tMs: number): PreparedLine[] {
+    if (tMs === this.lastT) return this.lastOut;
     const out: PreparedLine[] = [];
     const end = this.upper(tMs);
     const begin = this.upper(tMs - this.maxDuration);
     for (let i = Math.max(0, begin - 1); i < end; i++) {
       if (this.starts[i] <= tMs && tMs < this.ends[i]) out.push(this.lines[i]);
     }
-    return out.sort((a, b) => a.event.layer - b.event.layer || a.event.index - b.event.index);
+    out.sort((a, b) => a.event.layer - b.event.layer || a.event.index - b.event.index);
+    this.lastT = tMs;
+    this.lastOut = out;
+    return out;
   }
 }
