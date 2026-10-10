@@ -46,6 +46,8 @@ export interface SpriteSpec {
   animBlur?: boolean;
   /** Extra margin (layout units) around the whole bitmap: room for the widest blur tail the line can reach (`3 * sigmaMaxForClass`). */
   pad?: number;
+  /** Cached stable string key of this spec. */
+  key?: string;
 }
 
 /** What to draw for one event in one frame: pure data, no canvas objects. */

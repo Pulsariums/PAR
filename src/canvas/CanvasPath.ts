@@ -138,7 +138,8 @@ export class CanvasPath {
     for (const r of seq) {
       if (!r.canvas) { open = null; continue; }
       const animated = this.complexity(r.line).animated;
-      const cacheKey = !animated ? `${r.line.event.id}:${this.cacheGeneration}:${env.devScale ?? 1}` : '';
+      const isStatic = !r.line.animated && animated.size === 0;
+      const cacheKey = isStatic ? `${r.line.event.id}:${this.cacheGeneration}:${env.devScale ?? 1}` : '';
       let it: DrawItem;
       if (cacheKey) {
         const hit = this.staticItems.get(cacheKey);

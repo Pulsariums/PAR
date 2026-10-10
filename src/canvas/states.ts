@@ -67,10 +67,10 @@ const cache = new ByteLru<string, TextState[]>(16 << 20);
 
 /** The states of `line` at integer-ms `t`, evaluated once per distinct (structure, styles-map, t) for the whole canvas pass. */
 export const cachedStates = (line: PreparedLine, t: number, styles: Map<string, AssStyle>): TextState[] => {
-  const key = `${idOf(styles)}|${lineSig(line)}|${t}`;
+  const key = line.hasTransitions ? `${idOf(styles)}|${lineSig(line)}|${t}` : `${idOf(styles)}|${lineSig(line)}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const states = evalStates(line, t, styles);
+  const states = evalStates(line, line.hasTransitions ? t : 0, styles);
   cache.set(key, states, estimateBytes(states));
   return states;
 };

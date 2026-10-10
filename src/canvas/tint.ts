@@ -18,7 +18,7 @@ const WHITE = 'rgb(255,255,255)';
 export const maskOf = (s: SpriteSpec): Mask | null => {
   const p = s.plates.length === 1 ? s.plates[0] : null;
   if (!p || !p.fill || p.stroke || p.shadow || p.carve || !p.fill.startsWith('rgb(') || p.fill === WHITE) return null;
-  const spec: SpriteSpec = { ...s, plates: [{ ...p, fill: WHITE }] };
+  const spec: SpriteSpec = { ...s, key: undefined, plates: [{ ...p, fill: WHITE }] };
   return { spec, key: specKey(spec), colour: p.fill };
 };
 

@@ -26,6 +26,8 @@ export interface PreparedLine {
   plated: boolean;
   /** True when anything changes over time (`\t`, `\move`, `\fad`, `\fade`, karaoke). */
   animated: boolean;
+  /** True when at least one fragment contains a `\t` transition. */
+  hasTransitions: boolean;
   /** `\t(...\clip(x1,y1,x2,y2)...)` transitions from all fragments, in order. */
   clipTransitions: Transition[];
   /** Whole script area: where `\t(\clip)` starts when the line has no rect clip. */
@@ -45,7 +47,8 @@ export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: S
     moveParams = lt.moveParams ??= createPosParams(lt.pos, durationMs);
   }
   const transitions = ev.fragments.flatMap((f) => f.ops.filter((o): o is Transition => o.type === 't'));
-  const animated = transitions.length > 0 || !!lt.move || !!lt.fad || !!lt.fade || ev.fragments.some((f) => !!f.karaoke);
+  const hasTransitions = transitions.length > 0;
+  const animated = hasTransitions || !!lt.move || !!lt.fad || !!lt.fade || ev.fragments.some((f) => !!f.karaoke);
   return {
     event: ev,
     style,
@@ -59,9 +62,10 @@ export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: S
     },
     positioned: !!(lt.pos || lt.move),
     kerning: info.kerning,
-    stacks: takesPartInStacking(lt, transitions.length > 0),
+    stacks: takesPartInStacking(lt, hasTransitions),
     plated: isPlated(ev, style, styles),
     animated,
+    hasTransitions,
     clipTransitions: transitions.filter((t) => !!t.clip),
     fullRect: [0, 0, info.playResX, info.playResY],
     moveParams,

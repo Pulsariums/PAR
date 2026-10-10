@@ -55,8 +55,30 @@ const MIN_BAKE_MS = 200;
 const isStill = (line: PreparedLine, animated: ReadonlySet<string>): boolean =>
   line.durationMs >= MIN_BAKE_MS && !line.event.lineTags.move && line.clipTransitions.length === 0 && !animated.has('fs') && !animated.has('fscx') && !animated.has('fscy');
 
+interface InvariantPlan {
+  envDevScale: number;
+  spec: SpriteSpec;
+  key: string;
+  alpha: number;
+  sigma: number;
+  xr: number;
+  rot: number;
+  size: number;
+  ax: number;
+  ay: number;
+  shx: number;
+  shy: number;
+  still: boolean;
+}
+const invariantPlans = new WeakMap<PreparedLine, InvariantPlan>();
+
 /** What the sprite of one event at `t` ms since line start is made of: its spec, cache key, the shared opacity and the draw-time sigma (no placement, no clip). */
 export const specAt = (line: PreparedLine, t: number, env: LineEnv, animated: ReadonlySet<string>, dropped: Dropped): { spec: SpriteSpec; key: string; alpha: number; sigma: number } => {
+  if (!line.hasTransitions) {
+    const devScale = env.devScale ?? 1;
+    const inv = invariantPlans.get(line);
+    if (inv && inv.envDevScale === devScale) return { spec: inv.spec, key: inv.key, alpha: inv.alpha, sigma: inv.sigma };
+  }
   const st = cachedStates(line, t, env.styles)[0];
   const { spec, alpha, sigma } = buildSpec(line.event.fragments[0].text, line.plated, st, env, line.kerning, animated, dropped, blurEnvelope(line));
   return { spec, key: specKey(spec), alpha, sigma };
@@ -67,6 +89,41 @@ export const specAt = (line: PreparedLine, t: number, env: LineEnv, animated: Re
  * (`evalStates`, `positionAt`, `fadeAlphaAt`, `clipAt`) the DOM path uses. Pure: no canvas, no DOM.
  */
 export const planLine = (line: PreparedLine, t: number, env: LineEnv, animated: ReadonlySet<string>, dropped: Dropped): DrawItem => {
+  if (!line.hasTransitions) {
+    const devScale = env.devScale ?? 1;
+    let inv = invariantPlans.get(line);
+    if (!inv || inv.envDevScale !== devScale) {
+      const st = cachedStates(line, 0, env.styles)[0];
+      const { spec, alpha, sigma } = buildSpec(line.event.fragments[0].text, line.plated, st, env, line.kerning, animated, dropped, blurEnvelope(line));
+      const xr = xRatio(st);
+      inv = {
+        envDevScale: devScale,
+        spec,
+        key: specKey(spec),
+        alpha,
+        sigma,
+        xr,
+        rot: -st.frz,
+        size: (st.fs * st.fscy) / 100,
+        ax: alignX(line.an),
+        ay: alignY(line.an),
+        shx: st.fax * xr,
+        shy: xr > 0 ? st.fay / xr : 0,
+        still: isStill(line, animated),
+      };
+      invariantPlans.set(line, inv);
+    }
+    const anchor = positionAt(line.event.lineTags, t, line.durationMs) ?? marginAnchor(line.an, line.margins, env.layout, env.layout.bottomInset ?? env.bottomInset ?? 0);
+    const fade = fadeAlphaAt(line.event.lineTags, t, line.durationMs);
+    return {
+      id: line.event.id, index: line.event.index, layer: line.event.layer, spec: inv.spec, key: inv.key,
+      alpha: inv.alpha * (1 - fade / 255), anchor, org: line.event.lineTags.org ?? anchor, rot: inv.rot,
+      size: inv.size, rx: inv.xr, ax: inv.ax, ay: inv.ay, clip: clipsAt(line, t),
+      shx: inv.shx, shy: inv.shy,
+      blur: inv.sigma > 0 ? inv.sigma : undefined,
+      still: inv.still,
+    };
+  }
   const st = cachedStates(line, t, env.styles)[0];
   const { spec, alpha, sigma } = buildSpec(line.event.fragments[0].text, line.plated, st, env, line.kerning, animated, dropped, blurEnvelope(line));
   const anchor = positionAt(line.event.lineTags, t, line.durationMs) ?? marginAnchor(line.an, line.margins, env.layout, env.layout.bottomInset ?? env.bottomInset ?? 0);
