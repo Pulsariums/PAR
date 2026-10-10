@@ -27,7 +27,7 @@ export const ADVANCED_HTML = `
   <label class="fld"><span data-i18n="st.advOffset"></span>
     <input id="stOffset" type="number" step="0.1" value="0" inputmode="decimal" /></label>
   <label class="fld"><span data-i18n="st.advWarmRange"></span>
-    <select id="stWarmRange">${WARM_RANGE_MARKS.map((v) => `<option value="${v}"${v === 30 ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+    <select id="stWarmRange">${WARM_RANGE_MARKS.map((v) => `<option value="${v}"${v === 60 ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
   <label class="fld"><span data-i18n="st.advTemp"></span>
     <input id="stTemp" type="number" min="1" step="1" value="50" inputmode="numeric" /></label>
   <label class="fld"><span data-i18n="st.advPrepare"></span>
@@ -49,7 +49,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
   rate.addEventListener('change', () => par.setOptions({ fps: (rate.value === 'auto' ? 'auto' : Number(rate.value)) as FpsOption }));
   video.addEventListener('change', () => { fps.picked = video.value === '' ? null : Number(video.value); par.setOptions({ videoFps: fps.option }); onVideoFps(); });
   offset.addEventListener('change', () => { const v = Number(offset.value); par.setOptions({ timeOffset: Number.isFinite(v) ? v : 0 }); });
-  range.addEventListener('change', () => { const v = Number(range.value); par.setOptions({ warmRangeSeconds: Number.isFinite(v) ? v : 30 }); });
+  range.addEventListener('change', () => { const v = Number(range.value); par.setOptions({ warmRangeSeconds: Number.isFinite(v) ? v : 60 }); });
   temp.addEventListener('change', () => { const v = Number(temp.value); par.setOptions({ temperature: Number.isFinite(v) && v >= 1 ? Math.floor(v) : 50 }); });
   prepare.addEventListener('change', () => par.setOptions({ seekBuffer: modeValue() !== 'off' }));
 
@@ -67,7 +67,7 @@ export const initAdvanced = (par: PARRenderer, fps: VideoFpsState, onVideoFps: (
     fps: (rate.value === 'auto' ? 'auto' : Number(rate.value)) as 'auto' | number,
     videoFps: fps.option,
     timeOffset: Number.isFinite(Number(offset.value)) ? Number(offset.value) : 0,
-    warmRangeSeconds: Number.isFinite(Number(range.value)) ? Number(range.value) : 30,
+    warmRangeSeconds: Number.isFinite(Number(range.value)) ? Number(range.value) : 60,
     temperature: Number.isFinite(Number(temp.value)) && Number(temp.value) >= 1 ? Math.floor(Number(temp.value)) : 50,
     prepareMode: modeValue(),
   });

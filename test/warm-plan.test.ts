@@ -92,7 +92,7 @@ describe('warm plan', () => {
     expect(m.taken.map((e) => e.spec.text)).toEqual(['K', 'Z', 'Y']); // a 60 s horizon sees them all at once
     m.step(p, 29000, 41.7, 1e9);
     expect(p.restarts).toBe(2);
-    expect(m.taken.map((e) => e.spec.text)).toEqual(['K', 'Z', 'Y']); // 1-30 s skipped
+    expect(m.taken.map((e) => e.spec.text)).toEqual(['K', 'Z', 'Y']); // the planner keeps the already planned horizon
     m.step(p, 100, 41.7, 1e9); // backwards
     expect(p.restarts).toBe(3);
     expect(p.planned).toBeGreaterThanOrEqual(10000);

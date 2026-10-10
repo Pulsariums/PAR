@@ -80,7 +80,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     providerTimeout: patch.providerTimeout ?? prev?.providerTimeout ?? 5000,
     onMissingFonts: patch.onMissingFonts !== undefined ? patch.onMissingFonts : prev?.onMissingFonts ?? null,
     windowSeconds: validateWindow(patch.windowSeconds ?? prev?.windowSeconds ?? 12),
-    warmRangeSeconds: validateWarmRange(patch.warmRangeSeconds ?? prev?.warmRangeSeconds ?? 30),
+    warmRangeSeconds: validateWarmRange(patch.warmRangeSeconds ?? prev?.warmRangeSeconds ?? 60),
     temperature: validateTemperature(patch.temperature ?? prev?.temperature ?? 50),
     seekBuffer: patch.seekBuffer ?? prev?.seekBuffer ?? true,
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
