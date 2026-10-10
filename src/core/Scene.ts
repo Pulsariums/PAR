@@ -100,8 +100,7 @@ export class Scene {
 
   /** Whether the frame at `tMs` can be drawn from already built sprites and source events. */
   readyAt(tMs: number): boolean {
-    const stats = this.ahead.stats();
-    return stats.pending === 0 && stats.planQueued === 0 && (!this.covers || this.covers(tMs));
+    return (!this.covers || this.covers(tMs)) && (this.ahead.deficit(tMs) === 0 || this.ahead.readyUntil() >= tMs);
   }
 
   /** Work is planned and nothing is working on it: a frame waiting for it would wait forever. */
