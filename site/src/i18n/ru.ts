@@ -3,6 +3,7 @@ import { watchRu } from './watchRu';
 import { libRu } from './libRu';
 import { studioPanelsRu } from './studioPanelsRu';
 import { studioRu } from './studioRu';
+import { compareRu } from './compareRu';
 import type { Dict } from './en';
 export const ru: Dict = {
   'nav.skip': 'Перейти к плееру', 'nav.features': 'Возможности', 'nav.docs': 'Документация',
@@ -43,4 +44,5 @@ export const ru: Dict = {
   ...convertRu,
   ...watchRu,
   ...studioRu,
+  ...compareRu,
 };

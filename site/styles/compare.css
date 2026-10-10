@@ -1,0 +1,218 @@
+/* PAR vs JASSUB vs libass Comparison Section */
+
+#compare {
+  padding-top: 48px;
+  padding-bottom: 48px;
+}
+
+.cmp-head {
+  margin-bottom: 24px;
+}
+
+.cmp-head h2 {
+  margin-bottom: 8px;
+}
+
+.cmp-head .lead {
+  margin-bottom: 0;
+}
+
+.cmp-table-wrap {
+  position: relative;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  margin-bottom: 32px;
+}
+
+.cmp-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: left;
+  min-width: 660px;
+}
+
+.cmp-th-dim {
+  width: 22%;
+  min-width: 160px;
+  background: var(--bg-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  padding: 14px 16px;
+  border-bottom: 2px solid var(--line);
+}
+
+.cmp-th-target {
+  width: 26%;
+  min-width: 180px;
+  padding: 14px 16px;
+  border-bottom: 2px solid var(--line);
+  background: var(--card);
+  vertical-align: middle;
+}
+
+.cmp-th-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cmp-th-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cmp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  border: 1px solid transparent;
+}
+
+.cmp-badge.ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+.cmp-badge.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+}
+
+.cmp-badge.neutral {
+  background: var(--bg-2);
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.cmp-col-highlight {
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--card));
+  border-inline: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+th.cmp-col-highlight {
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--card));
+  border-bottom-color: var(--accent);
+}
+
+.cmp-dim-cell {
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-2);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px;
+  vertical-align: top;
+}
+
+.cmp-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  color: var(--text);
+}
+
+.cmp-table tbody tr:last-child td,
+.cmp-table tbody tr:last-child .cmp-dim-cell {
+  border-bottom: none;
+}
+
+.cmp-table tbody tr:hover td {
+  background-color: color-mix(in srgb, var(--bg-2) 45%, var(--card));
+}
+
+.cmp-table tbody tr:hover td.cmp-col-highlight {
+  background-color: color-mix(in srgb, var(--accent-soft) 50%, var(--card));
+}
+
+.cmp-highlight {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cmp-val {
+  display: block;
+}
+
+.cmp-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 16px;
+}
+
+.cmp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 20px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cmp-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.cmp-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cmp-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.cmp-card p {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  #compare {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  .cmp-dim-cell,
+  th.cmp-th-dim {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    box-shadow: 2px 0 6px rgb(0 0 0 / 0.06);
+  }
+
+  th.cmp-th-dim {
+    z-index: 3;
+  }
+}

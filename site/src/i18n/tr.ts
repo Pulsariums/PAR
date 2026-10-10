@@ -3,6 +3,7 @@ import { watchTr } from './watchTr';
 import { libTr } from './libTr';
 import { studioPanelsTr } from './studioPanelsTr';
 import { studioTr } from './studioTr';
+import { compareTr } from './compareTr';
 import type { Dict } from './en';
 export const tr: Dict = {
   'nav.skip': 'Oynatıcıya geç', 'nav.features': 'Özellikler', 'nav.docs': 'Belgeler',
@@ -43,4 +44,5 @@ export const tr: Dict = {
   ...convertTr,
   ...watchTr,
   ...studioTr,
+  ...compareTr,
 };

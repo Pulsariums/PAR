@@ -3,6 +3,7 @@ import { watchEn } from './watchEn';
 import { libEn } from './libEn';
 import { studioPanelsEn } from './studioPanelsEn';
 import { studioEn } from './studioEn';
+import { compareEn } from './compareEn';
 export const en = {
   'nav.skip': 'Skip to the player', 'nav.features': 'Features', 'nav.docs': 'Docs',
   'lang.label': 'Language', 'theme.toggle': 'Toggle light / dark theme',
@@ -42,5 +43,6 @@ export const en = {
   ...convertEn,
   ...watchEn,
   ...studioEn,
+  ...compareEn,
 };
 export type Dict = Record<keyof typeof en, string>;
