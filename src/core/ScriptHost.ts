@@ -76,6 +76,8 @@ export class ScriptHost {
 
   private loadSource(src: SubtitleSource): void {
     const token = this.token;
+    // The window size is read here, at source load: `windowSeconds` (whose default follows `warmRangeSeconds`, see `options.ts`)
+    // therefore does not resize an ACTIVE window feed when either option changes later — the new size applies to the next load.
     const feed = new WindowFeed(src, { onChange: (a, r) => this.onWindow(a, r, feed), onError: (e) => this.d.error(e) }, this.d.windowSeconds());
     feed.setDiagnostics(this.diagnosticsEnabled);
     const win = src.script;

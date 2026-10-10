@@ -115,7 +115,10 @@ export const inkBounds = (s: SpriteSpec, tm: TextMetrics, baseline: number, boxW
     y0 = Math.min(y0, baseline - up + Math.min(...dys) - sw - 3 * p.blur);
     y1 = Math.max(y1, baseline + down + Math.max(...dys) + sw + 3 * p.blur);
   }
-  return Number.isFinite(x0) ? { x0, y0, x1, y1 } : { x0: 0, y0: 0, x1: boxW, y1: s.size };
+  // Draw-time blur (`animBlur`): the plate is sharp, so the room for the widest tail the animation can reach is carried as plain padding.
+  const pad = s.pad ?? 0;
+  if (pad > 0) { x0 -= pad; y0 -= pad; x1 += pad; y1 += pad; }
+  return Number.isFinite(x0) ? { x0, y0, x1, y1 } : { x0: -pad, y0: -pad, x1: boxW + pad, y1: s.size + pad };
 };
 
 /** Rasterises a sprite: every plate in order, blurred plates through a scratch bitmap (`ctx.filter`). Null when it cannot be built. */

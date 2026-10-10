@@ -2,7 +2,7 @@ import type { CanvasPath } from '../canvas/CanvasPath';
 import { estimateBuildMs } from '../canvas/cost';
 import type { DrawItem, WarmStats } from '../canvas/types';
 import { SliceBudget } from '../canvas/warm/budget';
-import { WarmPlanner, type Builder, type Entry, type Lines } from '../canvas/warm/planner';
+import { WarmPlanner, type Builder, type Entry, type Lines, type Warmed } from '../canvas/warm/planner';
 import { Throughput } from '../canvas/warm/rate';
 import { createSpritePool } from '../canvas/workers/create';
 import type { SpritePool, FaceInfo } from '../canvas/workers/pool';
@@ -22,6 +22,8 @@ const MARGIN_FRAMES = 2;
 /** Default look-ahead window (ms), adjustable at runtime through `range`. */
 export const COLD_RANGE_MS = 30000;
 export const COLD_SLICE_MS = 4;
+/** At most this many slices chained in one pump (only while the measured room of the last frames still lasts). */
+const PUMP_MAX_SLICES = 4;
 
 /**
  * Builds the sprites the coming frames need, ahead of the frame that draws them. The warm plan (`WarmPlanner`) says what and in
@@ -108,9 +110,9 @@ export class Lookahead {
     this.arm();
   }
 
-  private run(budgetMs: number, exempt = true): void {
+  private run(budgetMs: number, exempt = true): Warmed | null {
     const env = this.lastEnv;
-    if (!env) return;
+    if (!env) return null;
     this.syncOption();
     if (this.replan) { this.planner.seek(this.lastT, this.lines()); this.replan = false; }
     this.mainBuilt = 0;
@@ -122,6 +124,7 @@ export class Lookahead {
     this.measure();
     this.stuck = this.planner.queued > 0 && !w.more && !w.waiting && this.planner.inFlight === 0 && w.built === 0;
     if (w.more) this.arm();
+    return w;
   }
 
   private measure(): void {
@@ -224,7 +227,7 @@ export class Lookahead {
     else setTimeout(task, 0);
   }
 
-  /** One bounded slice between frames, reduced further when recent frames are under load. */
+  /** One bounded slice between frames, reduced further when recent frames are under load; a second slice is chained while the frame's own room lasts. */
   private pump(): void {
     this.armed = false;
     // A hidden tab draws nothing and the playhead does not move: the plan has what it needs, no more CPU for it.
@@ -239,7 +242,15 @@ export class Lookahead {
       this.run(Math.min(URGENT_SLICE_MS, Math.max(slice, this.urgentWork())));
       return;
     }
-    this.run(Math.min(COLD_SLICE_MS, slice));
+    const budget = Math.min(COLD_SLICE_MS, slice);
+    // Expansion throughput: one 4 ms slice of ~128 counted requests capped a dense ending at ~3k req/s (workers 23 % idle). A slice
+    // now expands on TIME inside the planner; here a further slice is chained only while this frame's measured room still lasts,
+    // so a busy frame never pays for catch-up work it has no space for.
+    const from = performance.now();
+    for (let i = 0; i < PUMP_MAX_SLICES; i++) {
+      const w = this.run(budget);
+      if (!w || !w.more || performance.now() - from >= budget) break;
+    }
   }
 
   /** Estimated page-thread ms the sprites the current frame still lacks would take; bounds the urgent slice. */

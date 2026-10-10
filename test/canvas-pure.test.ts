@@ -7,8 +7,10 @@ import { specKey } from '../src/canvas/key';
 import { planLine } from '../src/canvas/plan';
 import { qRatio, qSigma, qSize, colourCss } from '../src/canvas/quant';
 import { cachedStates, resetStates } from '../src/canvas/states';
+import { spriteRequestSamples, spriteRequests } from '../src/canvas/sprites';
 import { maskOf } from '../src/canvas/tint';
 import { sampleTimes } from '../src/canvas/warm';
+import { blurSigma } from '../src/render/blur';
 import { frameMs, frameRate } from '../src/core/time';
 import { parseScript } from '../src/parser/ScriptParser';
 import type { LineEnv } from '../src/render/LineView';
@@ -139,6 +141,88 @@ describe('frame plan equals direct evaluation', () => {
     expect(ts.every((t, i) => i === 0 || t > ts[i - 1])).toBe(true);
     // a static event needs one sample whatever the start
     expect(sampleTimes(line('{\\an5\\pos(5,5)}K').l, f, start)).toEqual([0]);
+  });
+});
+
+describe('animated blur is a draw-time parameter, not a sprite class', () => {
+  const animated = new Set(['blur']);
+  const animTag = '{\\an5\\pos(5,5)\\bord2\\blur2\\t(0,1000,\\blur12)}K';
+
+  it('one sprite per content over the whole blur animation, in the A namespace, with padding for the tail', () => {
+    const { sc, l } = line(animTag);
+    const reqs = [...spriteRequestSamples(l, env(sc), animated, 1000 / 24, 1000)];
+    expect(reqs).toHaveLength(1); // ~24 frames, ONE shape sprite: the per-frame blur class left the key
+    expect(reqs[0].key).toMatch(/^A/);
+    expect(reqs[0].spec.animBlur).toBe(true);
+    expect(reqs[0].spec.pad).toBeCloseTo(3 * blurSigma(12), 6); // the envelope max, three sigma
+    expect(reqs[0].spec.plates.every((p) => p.blur === 0)).toBe(true);
+  });
+  it('every frame shares the key and carries its own EXACT sigma (no 1.2x classes)', () => {
+    const { sc, l } = line(animTag);
+    const keys = new Set<string>();
+    for (const rel of [0, 125, 250, 517, 999]) {
+      const it = planLine(l, rel, env(sc), animated, { blur: 0 });
+      keys.add(it.key);
+      const st = evalStates(l, rel, sc.styles)[0];
+      // the EXACT per-frame sigma of this very state (libass figure), not any class of it; `\t` here runs 2 -> 12 linearly
+      expect(it.blur).toBeCloseTo(blurSigma(st.blur), 6);
+      expect(it.blur).toBeCloseTo(blurSigma(2 + 10 * (rel / 1000)), 6);
+      expect(it.spec.pad).toBeGreaterThan(it.blur!); // the plate was padded for at least this tail
+      expect(it.key).toMatch(/^A/);
+    }
+    expect(keys.size).toBe(1);
+  });
+
+  it('a static blur stays baked exactly as before (key namespace, plate sigma, no DrawItem blur)', () => {
+    const { sc, l } = line('{\\an5\\pos(5,5)\\bord2\\blur3}K');
+    const it = planLine(l, 0, env(sc), new Set(), { blur: 0 });
+    expect(it.key[0]).not.toBe('A');
+    expect(it.blur).toBeUndefined();
+    // The style border (3) is overridden by `\bord2`: outline plate carries the exact sigma, the fill plate never does with a border.
+    expect(it.spec.plates.map((p) => p.blur)).toEqual([Math.round(blurSigma(3) * 100) / 100, 0]);
+    expect(specKey(it.spec)).toBe(it.key);
+  });
+
+  it('animated and static variants of the same shape can never collide in the cache', () => {
+    const { sc, l } = line('{\\an5\\pos(5,5)\\blur2\\t(0,1000,\\blur2)}K'); // animates blur, but to the same value
+    const anim = planLine(l, 500, env(sc), animated, { blur: 0 });
+    const stat = planLine(line('{\\an5\\pos(5,5)\\blur2}K').l, 500, env(sc, 1), new Set(), { blur: 0 });
+    expect(anim.key).not.toBe(stat.key);
+    expect(anim.key.startsWith('A')).toBe(true);
+    // and both draw the same frame-identical blur amount: the animated one through the composition filter only
+    expect(anim.blur).toBeCloseTo(blurSigma(2), 6);
+  });
+
+  it('the sub-threshold drop rule counts the same for draw-time blur as baked', () => {
+    const { sc, l } = line('{\\an5\\pos(5,5)\\blur0.3\\t(0,100,\\blur0.3)}K');
+    const d = { blur: 0 };
+    const it = planLine(l, 0, env(sc, 0.5), animated, d);
+    expect(it.blur).toBeUndefined(); // 0.3 * ~0.85 sigma * 0.5 scale < 0.35 device px
+    expect(d.blur).toBe(1);
+  });
+
+  it('animated-blur particles still share one white mask between colours', () => {
+    const a = line('{\\an5\\pos(5,5)\\bord0\\blur2\\c&H0000FF&\\t(0,900,\\blur8)}K').l;
+    const b = line('{\\an5\\pos(5,5)\\bord0\\blur2\\c&H00FF00&\\t(0,900,\\blur8)}K').l;
+    const sc = line('{\\an5\\pos(5,5)}K').sc;
+    const ia = planLine(a, 300, env(sc), animated, { blur: 0 });
+    const ib = planLine(b, 300, env(sc), animated, { blur: 0 });
+    const ma = maskOf(ia.spec)!;
+    const mb = maskOf(ib.spec)!;
+    expect(ma.key).toBe(mb.key); // same shape, same padding, white: ONE mask
+    expect(ia.key).not.toBe(ib.key); // recoloured sprites stay distinct
+  });
+
+  it('spriteRequests merges to distinct keys but keeps every colour variant of a frame-quantised animation', () => {
+    const { sc, l } = line('{\\an5\\pos(5,5)\\bord2\\blur2\\t(0,1000,\\blur12\\c&H00FF00&)}K');
+    const reqs = spriteRequests(l, env(sc), new Set(['blur', 'c1']), 1000 / 24, 1000);
+    const frames = sampleTimes(l, 1000 / 24, 1000, true).length;
+    // The colour animation still classes (5 bits) and survives; the blur animation contributes nothing:
+    // distinct requests can only differ in a plate colour, never in a blur class.
+    expect(reqs.length).toBeLessThanOrEqual(frames);
+    expect(new Set(reqs.map((r) => r.spec.plates[1].fill)).size).toBe(reqs.length);
+    expect(reqs.every((r) => r.key.startsWith('A'))).toBe(true);
+    expect(reqs.every((r) => r.spec.plates.every((p) => p.blur === 0))).toBe(true);
   });
 });
 

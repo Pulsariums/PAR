@@ -11,18 +11,31 @@ export interface Dropped { blur: number }
 
 interface Used { bgr: number; a: number; key: string }
 
-/** Sprite spec (and the shared opacity) of one text state: what the DOM path expresses as plates / text-shadow / filter. */
+/**
+ * Sprite spec (and the shared opacity) of one text state: what the DOM path expresses as plates / text-shadow / filter.
+ *
+ * When the line animates `\blur` (`animated` has `blur`) the plates are built sharp and the exact per-frame sigma goes into the
+ * returned `sigma` (the `DrawItem.blur` the composition applies); `blurMax` (the largest `\blur` value the line reaches) reserves
+ * `pad` = 3 sigma of margin on the bitmap so the draw-time tail cannot clip. Static blur stays baked into the plates exactly as
+ * before. `sigma` is 0 for static sprites (their bitmap is complete as it is).
+ */
 export const buildSpec = (
   text: string, plated: boolean, st: TextState, env: StyleEnv & { devScale?: number }, kerning: boolean,
-  animated: ReadonlySet<string>, dropped: Dropped,
-): { spec: SpriteSpec; alpha: number } => {
+  animated: ReadonlySet<string>, dropped: Dropped, blurMax = 0,
+): { spec: SpriteSpec; alpha: number; sigma: number } => {
   const f = env.devScale ?? 1;
   const font = env.fonts.resolve(st.fn, st.b, st.i);
   const l = layering(st, env, false);
   const bs = env.borderScale;
-  const raw = qSigma(blurSigma(st.blur, env.blurScale ?? 1), animated.has('blur'));
-  const sigma = raw * f >= MIN_SIGMA_DEVICE ? raw : 0;
-  if (st.blur > 0 && sigma === 0) dropped.blur++;
+  const anim = animated.has('blur');
+  const exact = blurSigma(st.blur, env.blurScale ?? 1);
+  // Below the device-pixel threshold the blur is invisible and left out, exactly as the baked path leaves it out.
+  const live = exact * f >= MIN_SIGMA_DEVICE ? exact : 0;
+  // The plate blur baked into the bitmap: static = the exact sigma (unchanged from before); animated = none (applied at
+  // composition, per frame).
+  const baked = qSigma(exact, false);
+  const sigma = anim ? 0 : (baked * f >= MIN_SIGMA_DEVICE ? baked : 0);
+  if (st.blur > 0 && (anim ? live : sigma) === 0) dropped.blur++;
   const c1: Used = { bgr: st.c1, a: st.a1, key: 'c1' };
   const c3: Used = { bgr: st.c3, a: st.a3, key: 'c3' };
   const c4: Used = { bgr: st.c4, a: st.a4, key: 'c4' };
@@ -50,5 +63,11 @@ export const buildSpec = (
     text, family: font.family, weight: font.weight, italic: font.italic, size: qSize((st.fs * st.fscy) / 100), ratio: font.ratio,
     rx: qRatio(xRatio(st)), spacing: (st.fsp * st.fscy) / 100, kerning, plates, scale: f,
   };
-  return { spec, alpha: shared ? 1 - alphas[0] / 255 : 1 };
+  if (anim) {
+    // Room for the widest tail the animation can reach (libass clamps `\blur` at BLUR_MAX, so this is bounded by the same figure
+    // the baked path already carries for its largest class): three sigmas of the envelope maximum.
+    spec.animBlur = true;
+    spec.pad = 3 * blurSigma(Math.max(blurMax, st.blur), env.blurScale ?? 1);
+  }
+  return { spec, alpha: shared ? 1 - alphas[0] / 255 : 1, sigma: anim ? live : 0 };
 };

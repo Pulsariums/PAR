@@ -7,7 +7,7 @@ import type { ClipShape } from '../../render/clipCss';
 import type { DrawItem, SpriteSpec } from '../types';
 
 import { Ahead } from './ahead';
-import { Expander, MAX_SLICE_REQUESTS, type Lines } from './expand';
+import { Expander, EXPAND_MS, MAX_SLICE_REQUESTS, PLAN_SHARE, type Lines } from './expand';
 import { Frontier } from './frontier';
 import { MinHeap } from './heap';
 
@@ -15,8 +15,10 @@ export type { Lines } from './expand';
 
 /** How far ahead (ms of subtitle time) the plan may look; queue admission remains tightly bounded below. */
 export const HORIZON_MS = 60_000;
-/** Bound pending variants so dense animated scripts cannot monopolize the cache or worker mailboxes. */
-const MAX_QUEUE = 512;
+/** Bound the planned queue so dense animated scripts cannot monopolize the cache or worker mailboxes (~1 s of build work at the measured rate). */
+const MAX_QUEUE = 3400;
+/** Urgent (frame-lacking) entries may top `MAX_QUEUE` off by this much; beyond it they stage in `overflow` until the queue drains (nothing is ever lost). */
+const MAX_URGENT = 2048;
 const MAX_BAKES = 5000;
 /** A jump of the playhead beyond this (forward) or this much back is a seek: the plan starts over from the new time. */
 const SEEK_FORWARD_MS = 3000;
@@ -58,6 +60,8 @@ export class WarmPlanner {
   private readonly heap = new MinHeap<Entry>((e) => e.prio);
   private readonly expander = new Expander();
   private readonly inflight = new Map<string, Entry>();
+  /** Urgent admissions past the queue's urgent bound, waiting for room (see `urgent` / `drainOverflow`); nothing staged here is ever lost. */
+  private readonly overflow = new Map<string, { spec: SpriteSpec; t: number }>();
   private inflightBytes = 0;
   private queuedBytes = 0;
   private bakes: BakeJob[] = [];
@@ -105,6 +109,7 @@ export class WarmPlanner {
     this.bakes = [];
     this.bakeKeys.clear();
     this.inflight.clear();
+    this.overflow.clear();
     [this.inflightBytes, this.queuedBytes, this.doneCost, this.lastT, this.lostMs] = [0, 0, 0, NaN, Infinity];
     this.blocked = false;
   }
@@ -119,7 +124,6 @@ export class WarmPlanner {
 
   step(t: number, env: LineEnv, frameMs: number, budgetMs: number, lines: Lines, builder: Builder, exempt = true, rangeMs = HORIZON_MS): Warmed {
     const t0 = performance.now();
-    const left = (): number => budgetMs - (performance.now() - t0);
     this.lastT = t;
     this.frameMs = frameMs;
     this.ahead.release(t - frameMs);
@@ -128,9 +132,16 @@ export class WarmPlanner {
     this.lostMs = this.ahead.check((k) => this.path.cache.has(k));
     const share = this.path.cache.capBytes * AHEAD_SHARE;
     const room = (): boolean => this.heap.size < MAX_QUEUE && this.path.cache.pinnedBytes + this.inflightBytes + this.queuedBytes < share * 1.25;
-    const planLeft = (): number => budgetMs / 2 - (performance.now() - t0);
+    // Expansion is the pipeline's bottleneck (a count-bound of 128 requests per slice capped a dense ending at ~3k req/s against a
+    // measured need of ~8k, while raw build throughput sat 23 % idle): it gets a time budget of its own, at least `EXPAND_MS` wall
+    // ms or `PLAN_SHARE` of the slice when the slice is bigger. Building then still gets the full `budgetMs` (below): a slice of
+    // enumeration must never eat the frame's own construction window — urgent and imminent sprites are the reason the slice exists.
+    const planLeft = (): number => Math.max(EXPAND_MS, budgetMs * PLAN_SHARE) - (performance.now() - t0);
+    this.drainOverflow(t);
     const r = this.expander.run(this.path, t, env, frameMs, lines, t + Math.min(HORIZON_MS, rangeMs), room, planLeft, (q) => this.want(q, t));
     this.blocked = r.blocked;
+    const tb = performance.now();
+    const left = (): number => budgetMs - (performance.now() - tb);
     const out = this.build(t, left, builder, exempt);
     const baking = this.bake(left);
     return { built: out.built, more: out.more || r.more || baking, waiting: out.waiting };
@@ -167,7 +178,26 @@ export class WarmPlanner {
       this.frontier.add(key, t, estimateBuildMs(spec));
       return;
     }
+    // A repeat report of a staged miss must not stage a second copy either.
+    const had = this.overflow.get(key);
+    if (had) { had.t = Math.min(had.t, t); had.spec = spec; return; }
+    // Overflow: the urgent path may not silently grow the queue without bound (a dense ending that misses everything for a while
+    // would park thousands of prio -1 entries behind the worker mailbox). Entries past the bound stage here and are re-admitted,
+    // highest urgency first, as soon as the queue drains; a frame that still lacks the sprite re-reports it, so nothing is lost.
+    if (this.heap.size >= MAX_QUEUE + MAX_URGENT) { this.overflow.set(key, { spec, t }); return; }
     this.push({ key, spec, ms: t, until: t + IMMINENT_MS * 3, bytes: estimateBytes(spec), cost: estimateBuildMs(spec), prio: -1 });
+  }
+
+  /** Re-admit staged urgent entries while the queue has room below its urgent bound. Expired promises (their frames have passed)
+   * are left to fall out: a frame that needs the sprite again reports it again (`urgent` re-stages it). */
+  private drainOverflow(t: number): void {
+    if (this.overflow.size === 0) return;
+    for (const [key, o] of this.overflow) {
+      if (this.heap.size >= MAX_QUEUE + MAX_URGENT) return;
+      if (o.t + IMMINENT_MS * 3 < t || this.path.cache.has(key) || this.inflight.has(key) || this.frontier.has(key)) { this.overflow.delete(key); continue; }
+      this.overflow.delete(key);
+      this.push({ key, spec: o.spec, ms: o.t, until: o.t + IMMINENT_MS * 3, bytes: estimateBytes(o.spec), cost: estimateBuildMs(o.spec), prio: -1 });
+    }
   }
 
   /** The sprite is available now (built here, or delivered by a worker; `null` sprites count too: nothing more to wait for). */

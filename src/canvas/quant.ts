@@ -10,7 +10,11 @@ export const qSize = (px: number): number => (px > 0 ? Math.round(Math.exp(Math.
 /** Horizontal scale ratio to 2 %. */
 export const qRatio = (r: number): number => Math.round(r * 50) / 50 || 1;
 
-/** Blur sigma (layout units): exact when static, 20 % geometric classes when a `\t` animates it. */
+/**
+ * Blur sigma (layout units): exact when static. A `\t`-animated blur is no longer quantised here at all — it is applied at
+ * composition time with the exact per-frame sigma (see `plan.ts` / `CanvasLayer`); this geometric 1.2x classing remains only for
+ * callers that still key animated sigmas (kept for the level-of-detail rules of earlier passes).
+ */
 export const qSigma = (s: number, animated: boolean): number => {
   if (s <= 0) return 0;
   if (!animated) return Math.round(s * 100) / 100;

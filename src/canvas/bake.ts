@@ -33,10 +33,13 @@ const place = (it: DrawItem, sp: Sprite) => {
  * Complex vector clips (hundreds of vertices) are slow to apply on every draw. When the event neither rotates nor has a clip that
  * animates, glyph and clip are fixed on screen, so the cut result is the same every frame (only opacity changes): it is built once,
  * into a bitmap as small as the clip's box, and drawn as a plain sprite.
+ *
+ * Never for a draw-time-blurred item (`blur`): baking would freeze the clip cut of the unblurred plate, and blurring the cut bitmap
+ * afterwards changes the pixels at the clip border. The draw path clips around the blurred draw instead (see `CanvasLayer.item`).
  */
 export const bakeable = (it: DrawItem): ClipShape | null => {
   const c = it.clip.length === 1 ? it.clip[0] : null;
-  return c && it.still && !c.rect && !c.evenodd && c.bbox && it.rot === 0 && it.shx === 0 && it.shy === 0 ? c : null;
+  return c && it.still && !it.blur && !c.rect && !c.evenodd && c.bbox && it.rot === 0 && it.shx === 0 && it.shy === 0 ? c : null;
 };
 
 /** Cache key of the baked sprite: sprite, placement and clip. */

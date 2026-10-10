@@ -39,4 +39,12 @@ describe('sprite bounds', () => {
     const b = inkBounds(spec([plate()]), tm({}), baseline, 24);
     expect(b).toEqual({ x0: 0, y0: 0, x1: 24, y1: 40 });
   });
+
+  it('grows a draw-time-blur plate by its padding on every side', () => {
+    const sharp = inkBounds(spec([plate()]), ink, baseline, 20);
+    const padded = inkBounds({ ...spec([plate()]), animBlur: true, pad: 6 }, ink, baseline, 20);
+    expect(padded).toEqual({ x0: sharp.x0 - 6, y0: sharp.y0 - 6, x1: sharp.x1 + 6, y1: sharp.y1 + 6 });
+    const fallback = inkBounds({ ...spec([plate()]), animBlur: true, pad: 6 }, tm({}), baseline, 24);
+    expect(fallback).toEqual({ x0: -6, y0: -6, x1: 30, y1: 46 });
+  });
 });

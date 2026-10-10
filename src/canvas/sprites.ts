@@ -10,7 +10,7 @@ import { planLine, specAt } from './plan';
 import type { DrawItem, SpriteSpec } from './types';
 
 /** Most frames of one event that are sampled for sprites (a `\t` that lasts longer than this at 24 fps is planned up to here; the rest is built when drawn). */
-const MAX_SAMPLES = 1200;
+export const MAX_SAMPLES = 1200;
 
 /** `\t` targets that only move, turn or shear the finished bitmap: they never change which sprite is drawn. */
 const KEY_NEUTRAL: ReadonlySet<string> = new Set(['frz', 'fax', 'fay']);
@@ -74,17 +74,26 @@ export const spriteRequests = (line: PreparedLine, env: LineEnv, animated: Reado
   return [...seen.values()];
 };
 
-/** Resumable exact requests for a loaded range; playback never expands a full event's variants at once. */
+/**
+ * Resumable exact requests for a loaded range. Consecutive samples that resolve to the same sprite (the whole point of the draw-time
+ * animated `\blur`: every frame of the blur animation shares one shape key) are merged into one request whose `until` reaches the
+ * last of them, so the plan is fed one admission per distinct sprite instead of one per frame.
+ */
 export function* spriteRequestSamples(line: PreparedLine, env: LineEnv, animated: ReadonlySet<string>, frameMs: number, startMs: number, dropped: Dropped = { blur: 0 }, withBake = false, range?: readonly [number, number]): Generator<SpriteReq> {
   const keyed = keyAnimated(animated);
   const clipped = withBake && !!(line.event.lineTags.clip || line.event.lineTags.vclip);
   const end = startMs + line.durationMs;
   if (range && (end <= range[0] || startMs >= range[1])) return;
+  let prev: SpriteReq | null = null;
   for (const rel of sampleTimes(line, frameMs, startMs, keyed, range)) {
     const { key, spec } = specAt(line, rel, env, animated, dropped);
     const at = startMs + rel;
-    yield { key, spec, ms: range ? Math.max(at, range[0]) : at, until: keyed ? at + frameMs : end, bake: clipped ? bakeOf(line, rel, env, animated, dropped) : undefined };
+    const bake = clipped ? bakeOf(line, rel, env, animated, dropped) : undefined;
+    if (prev && prev.key === key && (prev.bake?.key ?? '') === (bake?.key ?? '')) { prev.until = Math.max(prev.until, keyed ? at + frameMs : end); continue; }
+    if (prev) yield prev;
+    prev = { key, spec, ms: range ? Math.max(at, range[0]) : at, until: keyed ? at + frameMs : end, bake };
   }
+  if (prev) yield prev;
 }
 
 const bakeOf = (line: PreparedLine, rel: number, env: LineEnv, animated: ReadonlySet<string>, dropped: Dropped): SpriteReq['bake'] => {

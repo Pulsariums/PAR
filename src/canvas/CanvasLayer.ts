@@ -34,7 +34,8 @@ const sameItem = (a: DrawItem, b: DrawItem): boolean =>
   a.id === b.id && a.index === b.index && a.layer === b.layer && a.key === b.key &&
   sameNum(a.alpha, b.alpha) && samePoint(a.anchor, b.anchor) && samePoint(a.org, b.org) &&
   sameNum(a.rot, b.rot) && sameNum(a.size, b.size) && sameNum(a.ax, b.ax) && sameNum(a.ay, b.ay) &&
-  sameNum(a.shx, b.shx) && sameNum(a.shy, b.shy) && a.still === b.still && a.spec.size === b.spec.size && a.spec.scale === b.spec.scale &&
+  sameNum(a.shx, b.shx) && sameNum(a.shy, b.shy) && sameNum(a.blur ?? 0, b.blur ?? 0) && a.still === b.still &&
+  a.spec.size === b.spec.size && a.spec.scale === b.spec.scale &&
   a.clip.length === b.clip.length &&
   a.clip.every((c, i) => {
     const d = b.clip[i];
@@ -265,8 +266,20 @@ export class CanvasLayer {
     ctx.globalAlpha = Math.min(1, Math.max(0, it.alpha));
     this.stateChange();
     const k = s / it.spec.scale;
+    // Draw-time blur of an animated `\blur`: the plate is sharp and its `spec.pad` margin holds the tail, so the exact per-frame
+    // sigma is a device-space filter around this single drawImage. The bitmap lands on the stage scaled by `f * s` device px per
+    // bitmap px, and a baked sigma of `it.blur * spec.scale` device px would have scaled the same way: same pixels on screen.
+    const blurPx = it.blur ? it.blur * f * s : 0;
+    if (blurPx > 0) {
+      ctx.filter = `blur(${Math.round(blurPx * 1e4) / 1e4}px)`;
+      this.stateChange();
+    }
     ctx.drawImage(sp.canvas as CanvasImageSource, 0, 0, sp.w, sp.h, 0, 0, sp.w * k, sp.h * k);
     this.drawImage();
+    if (blurPx > 0) {
+      ctx.filter = 'none';
+      this.stateChange();
+    }
     if (clipped) {
       ctx.restore();
       this.stateChange();

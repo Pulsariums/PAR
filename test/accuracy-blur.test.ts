@@ -7,6 +7,7 @@ import { layering, platePaint } from '../src/render/plates';
 import { staticFontEnv } from '../src/fonts/env';
 import { parseBlock } from '../src/parser/TagParser';
 import { foldOps } from '../src/anim/State';
+import { buildSpec } from '../src/canvas/paint';
 
 const env = { borderScale: 1, fonts: staticFontEnv({}) };
 const base = () => ({ ...stateFromStyle({ ...DEFAULT_STYLE, outline: 3, shadow: 0 }) });
@@ -96,5 +97,30 @@ describe('plates (libass FILTER_* decisions)', () => {
 
   it('uses the larger of \\xbord / \\ybord', () => {
     expect(layering({ ...base(), xbord: 6, ybord: 1 }, env, false).border).toBe(6);
+  });
+});
+
+describe('canvas sprite spec: baked vs draw-time blur (libass sigma, exact per frame)', () => {
+  const canvasEnv = { borderScale: 1, blurScale: 1, devScale: 1, fonts: { resolve: () => ({ family: 'Arial', weight: 400, italic: false, ratio: 1 }) } };
+  const blurred = () => ({ ...base(), blur: 4 });
+
+  it('a static line bakes the exact sigma into the plate (nothing at draw time)', () => {
+    const { spec, sigma } = buildSpec('A', false, blurred(), canvasEnv as never, false, new Set(), { blur: 0 });
+    // Static bakes the sigma to 2 decimals exactly as before (`qSigma` rounding); nothing moves to draw time.
+    expect(spec.plates[0].blur).toBe(Math.round(blurSigma(4) * 100) / 100);
+    expect(sigma).toBe(0);
+    expect(spec.animBlur).toBeUndefined();
+  });
+
+  it('an animated \\blur bakes NOTHING and returns the exact sigma with padding for the envelope', () => {
+    const { spec, sigma } = buildSpec('A', false, blurred(), canvasEnv as never, false, new Set(['blur']), { blur: 0 }, 12);
+    expect(spec.plates.every((p) => p.blur === 0)).toBe(true);
+    expect(spec.animBlur).toBe(true);
+    expect(sigma).toBeCloseTo(blurSigma(4), 6); // exact 4 * BLUR_SIGMA, no 1.2x classing
+    expect(spec.pad).toBeCloseTo(3 * blurSigma(12), 6); // 3 sigma of the largest blur the line reaches
+    // the sigma of any later frame of the same line would key identically: the blur left the spec
+    const later = buildSpec('A', false, { ...base(), blur: 11.3 }, canvasEnv as never, false, new Set(['blur']), { blur: 0 }, 12);
+    expect(later.spec.pad).toBe(spec.pad);
+    expect(later.sigma).toBeCloseTo(blurSigma(11.3), 6);
   });
 });

@@ -30,6 +30,20 @@ describe('look-ahead and its workers', () => {
   let perfNow = 0;
   beforeEach(() => { perfNow = 0; vi.spyOn(performance, 'now').mockImplementation(() => perfNow); });
   afterEach(() => { vi.restoreAllMocks(); });
+
+  it('a dense ending of 200 overlapping animated events is admitted within a few pumps', () => {
+    const text = Array.from({ length: 200 }, (_v, i) => ev(1000 + (i % 100) * 30, 2000 + (i % 100) * 30, `\\t(0,800,\\blur${3 + (i % 4)})`, `P${i}`)).join('');
+    const k = kit(text, { mode: 'canvas' });
+    const la = new Lookahead(k.path, k.lines, () => 'off');
+    la.note(1000, k.env, 1);
+    let pumps = 0;
+    while (k.built.length < 200 && pumps++ < 6) pump(la);
+    // The old 128-request count slice needed ~2 pumps per event burst; the time-based slice with merged draw-time blur keys
+    // admits every event's shape sprite (and builds the due ones) within the first pumps.
+    expect(k.built.length).toBeGreaterThanOrEqual(200);
+    expect(pumps).toBeLessThanOrEqual(3);
+    la.dispose();
+  });
   it('starts no worker until a sprite could use one (a quiet page never pays for threads)', () => {
     const k = kit(ev(1000, 2000, ''), { mode: 'auto' });
     (k.path as unknown as { busy: () => boolean }).busy = () => false;

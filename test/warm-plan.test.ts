@@ -172,4 +172,47 @@ describe('warm plan', () => {
     m.step(p, 40, 41.7, 1e9);
     expect(p.readyUntil()).toBeLessThanOrEqual(victim.ms - 1);
   });
+
+  it('draw-time animated blur keeps the working set small: the byte gate does not collapse the horizon', () => {
+    // The ED pattern in miniature: many short overlapping events, each animating `\blur` across several old 1.2x classes.
+    // One padded shape sprite per event (each living only ~2.4 frames of playhead time) instead of one per blur class per frame.
+    const text = Array.from({ length: 48 }, (_v, i) => ev(1000 + i * 50, 2000 + i * 50, `\\t(0,900,\\blur${2 + (i % 6)})`, `E${i}`)).join('');
+    const m = make(text, { cap: 1 << 20 }); // 1 MB: the per-frame blur classes (~240 sprites) would have filled its ahead share
+    const p = new WarmPlanner(m.path);
+    m.step(p, 0, 1000 / 24, 1e9);
+    expect(m.taken.length).toBe(48); // one shape sprite per event
+    expect(m.taken.every((e) => e.spec.animBlur === true && (e.spec.pad ?? 0) > 0)).toBe(true);
+    expect(p.planned).toBe(60000); // the frontier walked the whole horizon: the gate never squeezed it
+    expect(p.aheadMB * 1048576).toBeLessThan(1 << 20);
+  });
+
+  it('a dense ending (200 overlapping animated events) is admitted whole within a few slices', () => {
+    const text = Array.from({ length: 200 }, (_v, i) => ev(1000 + (i % 100) * 30, 2000 + (i % 100) * 30, `\\t(0,800,\\blur${3 + (i % 4)})`, `P${i}`)).join('');
+    const m = make(text);
+    const p = new WarmPlanner(m.path);
+    let steps = 0;
+    while (m.taken.length < 200 && steps < 4) { m.step(p, 0, 1000 / 24, 1e9); steps++; }
+    // Time-bounded expansion + merged shape keys: every event's first-frame sprite admitted within a few slices, far above the
+    // old per-slice count cap of 128 (a scene like this needed dozens of pumps through that).
+    expect(m.taken.length).toBe(200);
+    expect(steps).toBeLessThanOrEqual(4);
+    expect(new Set(m.taken.map((e) => e.spec.text)).size).toBe(200);
+    expect(m.taken.every((e) => e.ms >= 1000 && e.ms <= 4000)).toBe(true);
+  });
+
+  it('urgent re-admission is bounded and complete: excess misses stage and re-enter as the queue drains', () => {
+    const m = make(''); // no events at all: every admission below comes through the urgent path
+    const p = new WarmPlanner(m.path);
+    p.seek(0, m.lines());
+    const spec = { text: 'x', family: 'Arial', weight: 400, italic: false, size: 20, ratio: 1, rx: 1, spacing: 0, kerning: false, plates: [], scale: 1 };
+    // A frame burst that misses 6000 distinct sprites (more than the queue's urgent bound allows): all must stay planned.
+    for (let i = 0; i < 6000; i++) p.urgent(`A|${i}`, spec as never, 0);
+    expect(p.queued).toBe(3400 + 2048); // pending never silently exceeds the bound...
+    p.urgent('A|5999', spec as never, 10); // ...and a repeat report of a staged miss neither duplicates it nor loses it
+    const taken: Entry[] = [];
+    m.builder.take = (e) => { taken.push(e); return 'done'; };
+    for (let i = 0; i < 40 && taken.length < 6000; i++) p.step(0, m.env, 1000 / 24, 1e9, m.lines(), m.builder);
+    expect(taken).toHaveLength(6000); // nothing dropped: the overflow re-entered as the queue drained
+    expect(new Set(taken.map((e) => e.key)).size).toBe(6000);
+  });
 });

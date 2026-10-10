@@ -92,21 +92,33 @@ describe('bounded cold-scene prewarming', () => {
     expect((late.builds as number) + missing.length).toBe(16);
   });
 
-  it('resumes dense animation samples under the per-slice bound and does not expand beyond the configured range', () => {
+  it('admits every remaining variant of a dense animated line in one pass, bounded by time', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0);
     const k = kit(ev(1000, 59000, '\\t(0,58000,\\blur100)', 'A') + dense(9000));
     const expander = new Expander();
     expander.restart(0, k.lines());
     const requests: number[] = [];
     let more = true;
-    while (more) {
+    let slices = 0;
+    while (more && slices++ < 64) {
       const before = requests.length;
       more = expander.run(k.path, 0, k.env, 1000 / 24, k.lines(), COLD_RANGE_MS, () => true, () => 4, (r) => requests.push(r.ms)).more;
+      // One merged request per distinct sprite (time-bound keeps the slice finite); never more than the hard bound per slice.
       expect(requests.length - before).toBeLessThanOrEqual(MAX_SLICE_REQUESTS);
     }
-    expect(requests.length).toBeGreaterThan(1);
-    expect(requests.every((t) => t >= 1000 && t < COLD_RANGE_MS)).toBe(true);
+    // The whole 58 s `\t(\blur)` animation is ONE shape sprite now: first touch enumerated its frame grid and every sample
+    // collapsed into the single draw-time-blur key, admitted at the line's own start.
+    expect(requests).toEqual([1000]);
     expect(expander.frontier).toBe(COLD_RANGE_MS);
+    // A slice whose time runs out resumes where it stopped, and a full walk still never passes the configured range.
+    const e2 = new Expander();
+    e2.restart(0, k.lines());
+    let left = 4;
+    const t = (): number => (left -= 0.05);
+    let r2 = e2.run(k.path, 0, k.env, 1000 / 24, k.lines(), COLD_RANGE_MS, () => true, t, () => undefined);
+    expect(r2.more || r2.blocked).toBe(true); // the draining clock cut this slice off before the horizon
+    while ((r2 = e2.run(k.path, 0, k.env, 1000 / 24, k.lines(), COLD_RANGE_MS, () => true, t, () => undefined)).more) left = 4;
+    expect(e2.frontier).toBe(COLD_RANGE_MS);
     const at = 5000;
     const line = k.lines().visibleAt(at)[0];
     const key = planLine(line, at - k.lines().startMs(line), k.env, k.path.complexity(line).animated, { blur: 0 }).key;
@@ -114,7 +126,10 @@ describe('bounded cold-scene prewarming', () => {
     la.setRange(4000); // the runtime default is wider; this checks the bound is honoured
     la.note(0, k.env, null);
     for (let i = 0; i < 20; i++) pump(la);
-    expect(k.cache.has(key)).toBe(false);
+    // Planning stopped at the range (leadMs ≤ 4000): the variant first drawn at 5000 was never admitted. (With the animated
+    // blur collapsing to one shape sprite that variant and the first frame share a key, so the cache check is on the PLANNED
+    // horizon, not on a per-blur-class bitmap.)
+    expect(la.stats().leadMs).toBeLessThanOrEqual(4000);
     la.note(2000, k.env, 1);
     for (let i = 0; i < 30; i++) pump(la);
     expect(k.cache.has(key)).toBe(true);
@@ -135,7 +150,8 @@ describe('bounded cold-scene prewarming', () => {
 
   it('stops at queue and loaded-window bounds and resumes when coverage arrives', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0);
-    const k = kit(Array.from({ length: 800 }, (_, i) => ev(2000, 6000, '', String.fromCharCode(0x400 + i))).join(''));
+    // More events than the queue bound (MAX_QUEUE = 3400, ~1 s of build work at the measured rate): admission must stop exactly there.
+    const k = kit(Array.from({ length: 3600 }, (_, i) => ev(2000, 6000, '', String.fromCharCode(0x400 + i))).join(''));
     k.path.complexity = (l) => ({ ...analyzeLine(l), eligible: true, animated: new Set() });
     let covered = 1500;
     const lines = () => ({ ...k.lines(), covers: (t: number) => t < covered });
@@ -147,15 +163,15 @@ describe('bounded cold-scene prewarming', () => {
     expect(planner.queued).toBe(0);
     covered = 5000;
     for (let i = 0; i < 50; i++) planner.step(0, k.env, 1000 / 24, 4, lines(), builder, true, COLD_RANGE_MS);
-    expect(planner.queued).toBe(512);
+    expect(planner.queued).toBe(3400);
     const taken: Entry[] = [];
     builder.take = (e) => { taken.push(e); k.cache.set(e.key, {}); return 'done'; };
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
       const result = planner.step(0, k.env, 1000 / 24, 4, lines(), builder, true, COLD_RANGE_MS);
       expect(result.built).toBeLessThanOrEqual(MAX_SLICE_REQUESTS);
     }
-    expect(taken).toHaveLength(800);
-    expect(new Set(taken.map((e) => e.key)).size).toBe(800);
+    expect(taken).toHaveLength(3600);
+    expect(new Set(taken.map((e) => e.key)).size).toBe(3600);
   });
 
   it('cancels scheduled cold work on replacement and latest seek wins', () => {

@@ -84,7 +84,8 @@ export interface PAROptions {
   providerTimeout?: number;
   /** Decides what happens when the script's fonts are missing. Default (not set): continue with fallback fonts. `null` clears it. */
   onMissingFonts?: MissingFontsHandler | null;
-  /** `subtitle` given as a `SubtitleSource`: seconds of events kept in memory (about 1/6 behind the playhead, the rest ahead). Default 12. Read when a source is loaded. */
+  /** `subtitle` given as a `SubtitleSource`: seconds of events kept in memory (about 1/6 behind the playhead, the rest ahead).
+   * When not set, the effective default follows the warm horizon: `max(12, warmRangeSeconds + 8)`. Read when a source is loaded. */
   windowSeconds?: number;
   /** How far ahead (subtitle seconds) live preparation may plan. Default 30; adjustable at runtime. */
   warmRangeSeconds?: number;
@@ -122,6 +123,8 @@ export interface ResolvedOptions {
   providerTimeout: number;
   onMissingFonts: MissingFontsHandler | null;
   windowSeconds: number;
+  /** Internal: the caller set `windowSeconds` explicitly (then later `warmRangeSeconds` changes do not move it). */
+  windowExplicit: boolean;
   warmRangeSeconds: number;
   temperature: number;
   seekBuffer: boolean;

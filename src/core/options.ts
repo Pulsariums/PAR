@@ -63,6 +63,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
   if (videoFps !== null && !(finite(videoFps) && videoFps > 0)) throw new RangeError('PAR: videoFps must be a positive number or null');
   const timeOffset = patch.timeOffset ?? prev?.timeOffset ?? 0;
   if (!finite(timeOffset)) throw new TypeError('PAR: timeOffset must be a finite number');
+  const warmRangeSeconds = validateWarmRange(patch.warmRangeSeconds ?? prev?.warmRangeSeconds ?? 60);
   return {
     video,
     container,
@@ -79,8 +80,11 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     fontProviders: [...(patch.fontProviders ?? prev?.fontProviders ?? [])],
     providerTimeout: patch.providerTimeout ?? prev?.providerTimeout ?? 5000,
     onMissingFonts: patch.onMissingFonts !== undefined ? patch.onMissingFonts : prev?.onMissingFonts ?? null,
-    windowSeconds: validateWindow(patch.windowSeconds ?? prev?.windowSeconds ?? 12),
-    warmRangeSeconds: validateWarmRange(patch.warmRangeSeconds ?? prev?.warmRangeSeconds ?? 60),
+    // Effective window default follows the warm horizon: a caller who never set `windowSeconds` gets coverage at least as far ahead
+    // as preparation plans (max(12, warmRangeSeconds + 8)); an explicit value is kept forever. Nothing is persisted.
+    windowSeconds: validateWindow(patch.windowSeconds !== undefined ? patch.windowSeconds : prev?.windowExplicit === true ? prev.windowSeconds : Math.max(12, warmRangeSeconds + 8)),
+    windowExplicit: patch.windowSeconds !== undefined || prev?.windowExplicit === true,
+    warmRangeSeconds,
     temperature: validateTemperature(patch.temperature ?? prev?.temperature ?? 50),
     seekBuffer: patch.seekBuffer ?? prev?.seekBuffer ?? true,
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,

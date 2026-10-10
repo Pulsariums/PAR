@@ -174,5 +174,36 @@ describe('canvas profiling', () => {
     expect(first).toMatch(/^[0-9a-f]{8}$/);
     expect(frameSignature(runs, [[sprite]])).toBe(first);
     expect(frameSignature([{ ...runs[0], items: [item(0.5)] }], [[sprite]])).not.toBe(first);
+    // the per-frame blur sigma of a draw-time-blurred sprite is one of the effective frame inputs
+    const b1 = [{ ...runs[0], items: [{ ...item(), blur: 1 }] }];
+    const b2 = [{ ...runs[0], items: [{ ...item(), blur: 2 }] }];
+    expect(frameSignature(b1, [[sprite]])).not.toBe(first);
+    expect(frameSignature(b2, [[sprite]])).not.toBe(frameSignature(b1, [[sprite]]));
+  });
+
+  it('composes a draw-time-blurred item with one device-space blur filter around its single drawImage', () => {
+    const filters: string[] = [];
+    const ctxMock = {
+      setTransform: vi.fn(), clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(), transform: vi.fn(),
+      drawImage: vi.fn(() => { filters.push('draw'); }), beginPath: vi.fn(), rect: vi.fn(), clip: vi.fn(), globalAlpha: 1,
+      set filter(v: string) { filters.push(v); },
+      get filter() { return ''; },
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctxMock as unknown as CanvasRenderingContext2D);
+    const layer = new CanvasLayer(new Overlay(document.body, 1));
+    layer.resize({ width: 640, height: 360 }, 2);
+    // sigma 1.5 layout units at stage scale 2, drawn at its own size class -> device blur 3 px; the padded plate supplies the tail.
+    const blurred = { ...item(0.8), blur: 1.5, spec: { ...item().spec, animBlur: true, pad: 6 } };
+    layer.draw([{ layer: 0, index: 0, items: [blurred] }], [[sprite]], Infinity);
+    expect(filters).toEqual(['blur(3px)', 'draw', 'none']);
+    // identical inputs again: nothing repaints; a changed sigma does (and gets its own radius)
+    ctxMock.drawImage.mockClear();
+    layer.draw([{ layer: 0, index: 0, items: [{ ...blurred }] }], [[sprite]], Infinity);
+    expect(ctxMock.drawImage).not.toHaveBeenCalled();
+    ctxMock.drawImage.mockClear();
+    filters.length = 0;
+    layer.draw([{ layer: 0, index: 0, items: [{ ...blurred, blur: 2 }] }], [[sprite]], Infinity);
+    expect(ctxMock.drawImage).toHaveBeenCalledTimes(1);
+    expect(filters[0]).toBe('blur(4px)');
   });
 });

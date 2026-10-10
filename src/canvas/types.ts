@@ -38,6 +38,14 @@ export interface SpriteSpec {
   plates: PlateSpec[];
   /** Device pixels per layout unit the bitmap is rasterised at. */
   scale: number;
+  /**
+   * The line animates `\blur`: the plates are built sharp (every `PlateSpec.blur` is 0) and the exact per-frame sigma is applied at
+   * composition time (`DrawItem.blur`, see `CanvasLayer`). Such sprites live in their own key namespace (`specKey`) and share one
+   * bitmap across the frames of the animation instead of one per blur class; static blur stays baked exactly as before.
+   */
+  animBlur?: boolean;
+  /** Extra margin (layout units) around the whole bitmap: room for the widest blur tail the line can reach (`3 * sigmaMaxForClass`). */
+  pad?: number;
 }
 
 /** What to draw for one event in one frame: pure data, no canvas objects. */
@@ -60,6 +68,11 @@ export interface DrawItem {
   /** Shear in the final (horizontally scaled) space, about the box's top-left corner: x' = x + shx * y, y' = y + shy * x (`\fax` / `\fay` with the x-scale folded in, as the DOM path composes them). */
   shx: number;
   shy: number;
+  /**
+   * Exact per-frame gaussian sigma (layout units) to apply to the sprite at composition time (`spec.animBlur` sprites are built
+   * sharp; the blur tail lives in `spec.pad`). Undefined = the bitmap is complete as it is (static blur, baked at its exact sigma).
+   */
+  blur?: number;
   clip: ClipShape[];
   /** Position, size and clip stay as they are for the event's life and it lasts a while: worth baking a vector clip into the sprite. */
   still: boolean;
