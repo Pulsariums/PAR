@@ -143,10 +143,10 @@ export class ScriptHost {
       this.d.changed();
       return;
     }
-    if (this.pending?.feed === feed) this.commitPending(this.d.timeMs(), added, removed);
+    if (this.pending?.feed === feed) this.commitPending(this.d.timeMs(), removed);
   }
 
-  private commitPending(tMs = this.d.timeMs(), added: readonly AssEvent[] = [], removed: readonly number[] = []): void {
+  private commitPending(tMs = this.d.timeMs(), removed: readonly number[] = []): void {
     const p = this.pending;
     if (!p) return;
     if (p.token !== this.token) { p.feed.dispose(); this.pending = null; return; }
