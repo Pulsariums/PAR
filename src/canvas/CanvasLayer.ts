@@ -35,7 +35,8 @@ const sameItem = (a: DrawItem, b: DrawItem): boolean =>
   a.id === b.id && a.index === b.index && a.layer === b.layer && a.key === b.key &&
   sameNum(a.alpha, b.alpha) && samePoint(a.anchor, b.anchor) && samePoint(a.org, b.org) &&
   sameNum(a.rot, b.rot) && sameNum(a.size, b.size) && sameNum(a.ax, b.ax) && sameNum(a.ay, b.ay) &&
-  sameNum(a.shx, b.shx) && sameNum(a.shy, b.shy) && sameNum(a.blur ?? 0, b.blur ?? 0) && a.still === b.still &&
+  sameNum(a.shx, b.shx) && sameNum(a.shy, b.shy) && sameNum(a.blur ?? 0, b.blur ?? 0) &&
+  sameNum(a.rx ?? 1, b.rx ?? 1) && a.still === b.still &&
   a.spec.size === b.spec.size && a.spec.scale === b.spec.scale &&
   a.clip.length === b.clip.length &&
   a.clip.every((c, i) => {
@@ -146,7 +147,13 @@ export class CanvasLayer {
       }
       run.items.forEach((it, k) => {
         const sp = resolved[i][k];
-        if (!sp) return;
+        if (!sp) {
+          this.drawn++;
+          const started = this.onMarker ? performance.now() : 0;
+          this.fallbackItem(ctx, it);
+          if (this.onMarker) this.onMarker(it, 'rendered', started, performance.now());
+          return;
+        }
         if (left.has(it)) {
           if (this.onMarker) {
             const at = performance.now();
@@ -239,6 +246,7 @@ export class CanvasLayer {
   private item(ctx: CanvasRenderingContext2D, it: DrawItem, sp: Sprite): void {
     const f = this.slots.f;
     const s = it.size / it.spec.size;
+    const rxScale = (it.rx && it.spec.rx) ? it.rx / it.spec.rx : 1;
     ctx.setTransform(f, 0, 0, f, 0, 0);
     this.stateChange();
     // Transform and alpha are set for every item; only clipping needs a saved state.
@@ -259,13 +267,13 @@ export class CanvasLayer {
       this.stateChange();
     }
     // Box top-left (after alignment); the shear pivots there like the DOM path's box transform.
-    ctx.translate(it.anchor[0] - it.ax * sp.boxW * s, it.anchor[1] - it.ay * it.size);
+    ctx.translate(it.anchor[0] - it.ax * sp.boxW * s * rxScale, it.anchor[1] - it.ay * it.size);
     this.stateChange();
     if (it.shx !== 0 || it.shy !== 0) {
       ctx.transform(1, it.shy, it.shx, 1, 0, 0);
       this.stateChange();
     }
-    ctx.translate(sp.ox * s, sp.oy * s);
+    ctx.translate(sp.ox * s * rxScale, sp.oy * s);
     this.stateChange();
     ctx.globalAlpha = Math.min(1, Math.max(0, it.alpha));
     this.stateChange();
@@ -280,7 +288,7 @@ export class CanvasLayer {
       ctx.filter = `blur(${filterPx(blurPx, f, filterUserSpace())}px)`;
       this.stateChange();
     }
-    ctx.drawImage(sp.canvas as CanvasImageSource, 0, 0, sp.w, sp.h, 0, 0, sp.w * k, sp.h * k);
+    ctx.drawImage(sp.canvas as CanvasImageSource, 0, 0, sp.w, sp.h, 0, 0, sp.w * k * rxScale, sp.h * k);
     this.drawImage();
     if (blurPx > 0) {
       ctx.filter = 'none';
@@ -292,7 +300,94 @@ export class CanvasLayer {
     }
   }
 
+  private fallbackItem(ctx: CanvasRenderingContext2D, it: DrawItem): void {
+    const f = this.slots.f;
+    const spec = it.spec;
+    ctx.save();
+    this.stateChange();
+
+    ctx.setTransform(f, 0, 0, f, 0, 0);
+    this.stateChange();
+
+    for (const c of it.clip) this.clip(ctx, c);
+
+    if (it.rot !== 0) {
+      ctx.translate(it.org[0], it.org[1]);
+      this.stateChange();
+      ctx.rotate(it.rot * DEG);
+      this.stateChange();
+      ctx.translate(-it.org[0], -it.org[1]);
+      this.stateChange();
+    }
+
+    if (it.shx !== 0 || it.shy !== 0) {
+      ctx.transform(1, it.shy, it.shx, 1, 0, 0);
+      this.stateChange();
+    }
+
+    const fontPx = it.size * (spec.ratio ?? 1);
+    ctx.font = `${spec.italic ? 'italic ' : ''}${spec.weight} ${fontPx}px ${spec.family}`;
+    if ('fontKerning' in ctx) (ctx as any).fontKerning = spec.kerning ? 'auto' : 'none';
+    if ('letterSpacing' in ctx) (ctx as any).letterSpacing = `${spec.spacing}px`;
+    ctx.textBaseline = 'alphabetic';
+    this.stateChange();
+
+    const tm = typeof ctx.measureText === 'function' ? ctx.measureText(spec.text) : null;
+    const asc = tm?.fontBoundingBoxAscent ?? tm?.actualBoundingBoxAscent ?? fontPx * 0.8;
+    const desc = tm?.fontBoundingBoxDescent ?? tm?.actualBoundingBoxDescent ?? fontPx * 0.2;
+    const cell = asc + desc;
+    const baseline = cell > 0 ? (it.size * asc) / cell : (it.size - cell) / 2 + asc;
+    const boxW = (tm?.width ?? 0) * (spec.rx ?? 1);
+
+    ctx.translate(it.anchor[0] - it.ax * boxW, it.anchor[1] - it.ay * it.size);
+    this.stateChange();
+
+    const rx = (it.rx && spec.rx) ? it.rx : (spec.rx ?? 1);
+    if (typeof ctx.scale === 'function' && rx !== 1) {
+      ctx.scale(rx, 1);
+      this.stateChange();
+    }
+
+    ctx.globalAlpha = Math.min(1, Math.max(0, it.alpha));
+    this.stateChange();
+
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = 4;
+    for (const p of spec.plates) {
+      if (p.shadow) {
+        if (p.strokeW > 0) {
+          ctx.lineWidth = p.strokeW;
+          ctx.strokeStyle = p.shadow.colour;
+          if (typeof ctx.strokeText === 'function') ctx.strokeText(spec.text, p.dx + p.shadow.dx, baseline + p.dy + p.shadow.dy);
+          this.drawOp();
+        }
+        ctx.fillStyle = p.shadow.colour;
+        if (typeof ctx.fillText === 'function') ctx.fillText(spec.text, p.dx + p.shadow.dx, baseline + p.dy + p.shadow.dy);
+        this.drawOp();
+      }
+      if (p.stroke && p.strokeW > 0) {
+        ctx.lineWidth = p.strokeW;
+        ctx.strokeStyle = p.stroke;
+        if (typeof ctx.strokeText === 'function') ctx.strokeText(spec.text, p.dx, baseline + p.dy);
+        this.drawOp();
+      }
+      if (p.fill) {
+        ctx.fillStyle = p.fill;
+        if (typeof ctx.fillText === 'function') ctx.fillText(spec.text, p.dx, baseline + p.dy);
+        this.drawOp();
+      }
+    }
+
+    ctx.restore();
+    this.stateChange();
+  }
+
   private stateChange(): void { if (this.profile) this.profile.stateChanges++; }
+
+  private drawOp(): void {
+    if (!this.profile) return;
+    this.profile.drawOps++;
+  }
 
   private drawImage(): void {
     if (!this.profile) return;

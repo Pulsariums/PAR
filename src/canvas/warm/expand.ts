@@ -14,7 +14,7 @@ export interface Lines {
 
 const CHUNK_MS = 500;
 /** Minimum requests one slice is worth dispatching to the builders (and the floor the time budget is calibrated against). */
-export const MAX_SLICE_REQUESTS = 340;
+export const MAX_SLICE_REQUESTS = 480;
 /** Wall ms a slice's expansion may take before time cuts it off (measured: ~23 µs per derived request on the bench machine). */
 export const EXPAND_MS = 16;
 /** Share of the slice budget the expansion may claim even when it is above `EXPAND_MS`. */

@@ -45,7 +45,7 @@ export interface ResolveEnv {
 const PRIORITY: Record<FontSourceKind, number> = { user: 0, embedded: 1, provider: 2, local: 3 };
 
 /** ASS name as written, minus surrounding spaces and the leading `@` (vertical writing). */
-export const cleanName = (fn: string): string => fn.trim().replace(/^@/, '').trim();
+export const cleanName = (fn: string): string => fn.trim().replace(/^@/, '').replace(/^["']|["']$/g, '').trim();
 
 /** ASS name => lookup key: cleaned and case-insensitive (like libass/Windows). */
 export const normalizeName = (fn: string): string => cleanName(fn).toLowerCase();

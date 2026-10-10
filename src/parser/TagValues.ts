@@ -23,7 +23,7 @@ export const parseBold = (s: string): number | null => {
 
 /** `\fn` argument: empty or `0` means the style font (null). */
 export const parseFontName = (s: string): string | null => {
-  const t = s.trim();
+  const t = s.trim().replace(/^["']|["']$/g, '').trim();
   return t === '' || t === '0' ? null : t;
 };
 

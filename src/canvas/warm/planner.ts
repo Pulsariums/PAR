@@ -16,7 +16,7 @@ export type { Lines } from './expand';
 /** How far ahead (ms of subtitle time) the plan may look; queue admission remains tightly bounded below. */
 export const HORIZON_MS = 60_000;
 /** Bound the planned queue so dense animated scripts cannot monopolize the cache or worker mailboxes (~1 s of build work at the measured rate). */
-const MAX_QUEUE = 3400;
+const MAX_QUEUE = 4800;
 /** Urgent (frame-lacking) entries may top `MAX_QUEUE` off by this much; beyond it they stage in `overflow` until the queue drains (nothing is ever lost). */
 const MAX_URGENT = 2048;
 const MAX_BAKES = 5000;
@@ -24,7 +24,7 @@ const MAX_BAKES = 5000;
 const SEEK_FORWARD_MS = 3000;
 const SEEK_BACK_MS = 150;
 /** Share of the sprite cache that sprites promised to later frames may hold: the rest is room for what was drawn lately. */
-export const AHEAD_SHARE = 0.5;
+export const AHEAD_SHARE = 0.75;
 /** Sprites needed within this many ms may use the whole cache, not only the ahead share (the frame is about to need them). */
 const IMMINENT_MS = 600;
 

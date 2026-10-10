@@ -20,7 +20,7 @@ const BOOT_WAIT_MS = 1500;
 /** Safety margin (frames) between a sprite landing and the frame that draws it, for the deficit estimate. */
 const MARGIN_FRAMES = 2;
 /** Default look-ahead window (ms), adjustable at runtime through `range`. */
-export const COLD_RANGE_MS = 30000;
+export const COLD_RANGE_MS = 60000;
 export const COLD_SLICE_MS = 4;
 /** At most this many slices chained in one pump (only while the measured room of the last frames still lasts). */
 const PUMP_MAX_SLICES = 4;

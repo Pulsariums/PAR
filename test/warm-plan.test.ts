@@ -205,14 +205,14 @@ describe('warm plan', () => {
     const p = new WarmPlanner(m.path);
     p.seek(0, m.lines());
     const spec = { text: 'x', family: 'Arial', weight: 400, italic: false, size: 20, ratio: 1, rx: 1, spacing: 0, kerning: false, plates: [], scale: 1 };
-    // A frame burst that misses 6000 distinct sprites (more than the queue's urgent bound allows): all must stay planned.
-    for (let i = 0; i < 6000; i++) p.urgent(`A|${i}`, spec as never, 0);
-    expect(p.queued).toBe(3400 + 2048); // pending never silently exceeds the bound...
-    p.urgent('A|5999', spec as never, 10); // ...and a repeat report of a staged miss neither duplicates it nor loses it
+    // A frame burst that misses 8000 distinct sprites (more than the queue's urgent bound allows): all must stay planned.
+    for (let i = 0; i < 8000; i++) p.urgent(`A|${i}`, spec as never, 0);
+    expect(p.queued).toBe(4800 + 2048); // pending never silently exceeds the bound...
+    p.urgent('A|7999', spec as never, 10); // ...and a repeat report of a staged miss neither duplicates it nor loses it
     const taken: Entry[] = [];
     m.builder.take = (e) => { taken.push(e); return 'done'; };
-    for (let i = 0; i < 40 && taken.length < 6000; i++) p.step(0, m.env, 1000 / 24, 1e9, m.lines(), m.builder);
-    expect(taken).toHaveLength(6000); // nothing dropped: the overflow re-entered as the queue drained
-    expect(new Set(taken.map((e) => e.key)).size).toBe(6000);
+    for (let i = 0; i < 40 && taken.length < 8000; i++) p.step(0, m.env, 1000 / 24, 1e9, m.lines(), m.builder);
+    expect(taken).toHaveLength(8000); // nothing dropped: the overflow re-entered as the queue drained
+    expect(new Set(taken.map((e) => e.key)).size).toBe(8000);
   });
 });

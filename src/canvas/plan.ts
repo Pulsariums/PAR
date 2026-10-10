@@ -75,7 +75,7 @@ export const planLine = (line: PreparedLine, t: number, env: LineEnv, animated: 
   return {
     id: line.event.id, index: line.event.index, layer: line.event.layer, spec, key: specKey(spec),
     alpha: alpha * (1 - fade / 255), anchor, org: line.event.lineTags.org ?? anchor, rot: -st.frz,
-    size: (st.fs * st.fscy) / 100, ax: alignX(line.an), ay: alignY(line.an), clip: clipsAt(line, t),
+    size: (st.fs * st.fscy) / 100, rx: xr, ax: alignX(line.an), ay: alignY(line.an), clip: clipsAt(line, t),
     shx: st.fax * xr, shy: xr > 0 ? st.fay / xr : 0,
     blur: sigma > 0 ? sigma : undefined,
     still: isStill(line, animated),

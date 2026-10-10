@@ -94,7 +94,7 @@ describe('bounded cold-scene prewarming', () => {
 
   it('admits every remaining variant of a dense animated line in one pass, bounded by time', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0);
-    const k = kit(ev(1000, 59000, '\\t(0,58000,\\blur100)', 'A') + dense(9000));
+    const k = kit(ev(1000, 48000, '\\t(0,47000,\\blur100)', 'A') + dense(9000));
     const expander = new Expander();
     expander.restart(0, k.lines());
     const requests: number[] = [];
@@ -150,8 +150,8 @@ describe('bounded cold-scene prewarming', () => {
 
   it('stops at queue and loaded-window bounds and resumes when coverage arrives', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0);
-    // More events than the queue bound (MAX_QUEUE = 3400, ~1 s of build work at the measured rate): admission must stop exactly there.
-    const k = kit(Array.from({ length: 3600 }, (_, i) => ev(2000, 6000, '', String.fromCharCode(0x400 + i))).join(''));
+    // More events than the queue bound (MAX_QUEUE = 4800, ~1 s of build work at the measured rate): admission must stop exactly there.
+    const k = kit(Array.from({ length: 5000 }, (_, i) => ev(2000, 6000, '', String.fromCharCode(0x400 + i))).join(''));
     k.path.complexity = (l) => ({ ...analyzeLine(l), eligible: true, animated: new Set() });
     let covered = 1500;
     const lines = () => ({ ...k.lines(), covers: (t: number) => t < covered });
@@ -163,15 +163,15 @@ describe('bounded cold-scene prewarming', () => {
     expect(planner.queued).toBe(0);
     covered = 5000;
     for (let i = 0; i < 50; i++) planner.step(0, k.env, 1000 / 24, 4, lines(), builder, true, COLD_RANGE_MS);
-    expect(planner.queued).toBe(3400);
+    expect(planner.queued).toBe(4800);
     const taken: Entry[] = [];
     builder.take = (e) => { taken.push(e); k.cache.set(e.key, {}); return 'done'; };
     for (let i = 0; i < 100; i++) {
       const result = planner.step(0, k.env, 1000 / 24, 4, lines(), builder, true, COLD_RANGE_MS);
       expect(result.built).toBeLessThanOrEqual(MAX_SLICE_REQUESTS);
     }
-    expect(taken).toHaveLength(3600);
-    expect(new Set(taken.map((e) => e.key)).size).toBe(3600);
+    expect(taken).toHaveLength(5000);
+    expect(new Set(taken.map((e) => e.key)).size).toBe(5000);
   });
 
   it('cancels scheduled cold work on replacement and latest seek wins', () => {

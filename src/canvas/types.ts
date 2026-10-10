@@ -63,6 +63,8 @@ export interface DrawItem {
   rot: number;
   /** Font size this frame, layout px (the sprite is scaled by `size / spec.size`). */
   size: number;
+  /** Horizontal scale ratio this frame (\fscx / \fscy). */
+  rx?: number;
   ax: number;
   ay: number;
   /** Shear in the final (horizontally scaled) space, about the box's top-left corner: x' = x + shx * y, y' = y + shy * x (`\fax` / `\fay` with the x-scale folded in, as the DOM path composes them). */
