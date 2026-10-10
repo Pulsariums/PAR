@@ -12,7 +12,7 @@ const HEAD = '[Script Info]\nPlayResX: 640\nPlayResY: 360\n[V4+ Styles]\nFormat:
 const fonts = { resolve: () => ({ family: 'Arial', weight: 400, italic: false, ratio: 1 }) };
 const T = (ms: number): string => `0:00:${String(Math.floor(ms / 1000)).padStart(2, '0')}.${String(Math.floor((ms % 1000) / 10)).padStart(2, '0')}`;
 const ev = (s: number, e: number, tags: string, text = 'K'): string => `Dialogue: 0,${T(s)},${T(e)},Default,,0,0,0,,{\\an5\\pos(10,10)${tags}}${text}\n`;
-const ANIM = '\\blur2\\t(0,900,\\fscx150\\fscy150\\blur6)';
+const ANIM = '\\blur2\\t(0,900,\\c&H00FF00&\\blur6)';
 
 const make = (text: string, o: { cap?: number; mode?: string } = {}) => {
   const sc = parseScript(HEAD + text);

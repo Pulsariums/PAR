@@ -1,9 +1,9 @@
 import type { TextState } from '../anim/State';
 import { blurSigma } from '../render/blur';
 import { layering } from '../render/plates';
-import { xRatio, type StyleEnv } from '../render/textCss';
+import type { StyleEnv } from '../render/textCss';
 
-import { colourCss, MIN_SIGMA_DEVICE, qRatio, qSigma, qSize } from './quant';
+import { colourCss, MIN_SIGMA_DEVICE, qSigma, qSize } from './quant';
 import type { PlateSpec, SpriteSpec } from './types';
 
 /** Counts of details this resolution left out (`CanvasStats.detailDropped`). */
@@ -60,8 +60,8 @@ export const buildSpec = (
     shadow: p.shadow ? { dx: st.xshad * bs, dy: st.yshad * bs, colour: col(p.shadow) } : null,
   }));
   const spec: SpriteSpec = {
-    text, family: font.family, weight: font.weight, italic: font.italic, size: qSize((st.fs * st.fscy) / 100), ratio: font.ratio,
-    rx: qRatio(xRatio(st)), spacing: (st.fsp * st.fscy) / 100, kerning, plates, scale: f,
+    text, family: font.family, weight: font.weight, italic: font.italic, size: qSize(st.fs), ratio: font.ratio,
+    rx: 1, spacing: st.fsp, kerning, plates, scale: f,
   };
   if (anim) {
     // Room for the widest tail the animation can reach (libass clamps `\blur` at BLUR_MAX, so this is bounded by the same figure

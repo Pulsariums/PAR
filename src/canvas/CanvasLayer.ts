@@ -59,6 +59,7 @@ interface LayerProfile extends SlotProfile {
 export class CanvasLayer {
   private readonly slots: Slots;
   private readonly paths = new Map<string, Path2D>();
+  private readonly fallbackMetrics = new Map<string, { baseline: number; boxW: number }>();
   /** Items drawn and device pixels covered by the last `draw`. */
   drawn = 0;
   fillPx = 0;
@@ -332,12 +333,19 @@ export class CanvasLayer {
     ctx.textBaseline = 'alphabetic';
     this.stateChange();
 
-    const tm = typeof ctx.measureText === 'function' ? ctx.measureText(spec.text) : null;
-    const asc = tm?.fontBoundingBoxAscent ?? tm?.actualBoundingBoxAscent ?? fontPx * 0.8;
-    const desc = tm?.fontBoundingBoxDescent ?? tm?.actualBoundingBoxDescent ?? fontPx * 0.2;
-    const cell = asc + desc;
-    const baseline = cell > 0 ? (it.size * asc) / cell : (it.size - cell) / 2 + asc;
-    const boxW = (tm?.width ?? 0) * (spec.rx ?? 1);
+    const metricKey = `${spec.family}|${fontPx}|${spec.text}|${spec.spacing}`;
+    let m = this.fallbackMetrics.get(metricKey);
+    if (!m) {
+      const tm = typeof ctx.measureText === 'function' ? ctx.measureText(spec.text) : null;
+      const asc = tm?.fontBoundingBoxAscent ?? tm?.actualBoundingBoxAscent ?? fontPx * 0.8;
+      const desc = tm?.fontBoundingBoxDescent ?? tm?.actualBoundingBoxDescent ?? fontPx * 0.2;
+      const cell = asc + desc;
+      const baseline = cell > 0 ? (it.size * asc) / cell : (it.size - cell) / 2 + asc;
+      const boxW = (tm?.width ?? 0) * (spec.rx ?? 1);
+      m = { baseline, boxW };
+      if (this.fallbackMetrics.size < 512) this.fallbackMetrics.set(metricKey, m);
+    }
+    const { baseline, boxW } = m;
 
     ctx.translate(it.anchor[0] - it.ax * boxW, it.anchor[1] - it.ay * it.size);
     this.stateChange();
