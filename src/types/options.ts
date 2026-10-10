@@ -103,6 +103,8 @@ export interface PAROptions {
   renderMode?: 'auto' | 'dom' | 'canvas';
   /** Memory cap of the canvas sprite cache, MB. Default 96. */
   spriteCacheMB?: number;
+  /** Number of Web Workers used for parallel sprite rasterization ('auto', 'off' / 0, or explicit thread count). */
+  workers?: 'auto' | 'off' | number;
   /** Extra padding/inset from the bottom in layout coordinates (e.g. for player controls). Default 0. */
   bottomInset?: number;
 }
@@ -133,6 +135,7 @@ export interface ResolvedOptions {
   zIndex: number;
   renderMode: 'auto' | 'dom' | 'canvas';
   spriteCacheMB: number;
+  workers: 'auto' | 'off' | number;
   bottomInset: number;
 }
 

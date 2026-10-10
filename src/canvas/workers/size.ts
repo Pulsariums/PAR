@@ -1,14 +1,13 @@
-/** `'auto'` sizes the pool from the machine, `'off'` / 0 keeps every sprite on the main thread, a number asks for that many (at most 4). Only tests and benches pick anything but `'auto'`. */
+/** `'auto'` sizes the pool from the machine, `'off'` / 0 keeps every sprite on the main thread, a number asks for that many (at most 8). Only tests and benches pick anything but `'auto'`. */
 export type SpriteWorkers = 'auto' | 'off' | number;
 
-export const MAX_WORKERS = 4;
+export const MAX_WORKERS = 8;
 
 /**
  * Workers to run: none without OffscreenCanvas and Workers, and none on a single core (a worker would only take the page thread's
  * time slices); 1 up to four cores or when the core count is unknown (measured: a second worker on four cores competes with the compositor and
- * raster threads of a heavy frame and makes the bursts' own frames slower than one worker does); otherwise half the cores, at
- * most 4. Little memory (`navigator.deviceMemory`, GB) caps it further: every
- * worker holds its own canvases, masks and fonts.
+ * raster threads of a heavy frame and makes the bursts' own frames slower than one worker does); otherwise half the cores (up to 8).
+ * Little memory (`navigator.deviceMemory`, GB) caps it further: every worker holds its own canvases, masks and fonts.
  */
 export const poolSize = (opt: SpriteWorkers, cores: number | undefined, available: boolean, memoryGB?: number): number => {
   if (!available || opt === 'off') return 0;

@@ -40,18 +40,18 @@ describe('slice budget adapts to the machine', () => {
 });
 
 describe('pool size', () => {
-  it('follows the cores, one on two or fewer, never more than four, none when unavailable or off', () => {
+  it('follows the cores, one on two or fewer, at most eight, none when unavailable or off', () => {
     expect(poolSize('auto', 2, true)).toBe(1);
     expect(poolSize('auto', 1, true)).toBe(0); // one core: a worker would only take the page thread's time
     expect(poolSize('auto', undefined, true)).toBe(1);
     expect(poolSize('auto', 4, true)).toBe(1); // measured: a second worker on four cores slows the bursts' own frames
     expect(poolSize('auto', 6, true)).toBe(3);
     expect(poolSize('auto', 8, true)).toBe(4);
-    expect(poolSize('auto', 32, true)).toBe(4);
+    expect(poolSize('auto', 32, true)).toBe(8);
     expect(poolSize('auto', 8, false)).toBe(0);
     expect(poolSize('off', 8, true)).toBe(0);
     expect(poolSize(3, 2, true)).toBe(3);
-    expect(poolSize(9, 2, true)).toBe(4);
+    expect(poolSize(9, 2, true)).toBe(8);
     expect(poolSize(0, 8, true)).toBe(0);
   });
   it('only the internal switch changes the default, and the public options have no such field', () => {

@@ -41,6 +41,12 @@ export const validateTemperature = (v: number): number => {
   return Math.max(1, Math.floor(v));
 };
 
+export const validateWorkers = (w: unknown): 'auto' | 'off' | number => {
+  if (w === 'auto' || w === 'off') return w;
+  if (finite(w) && (w as number) >= 0) return Math.round(w as number);
+  return 'auto';
+};
+
 export const validateMode = (m: unknown): 'auto' | 'dom' | 'canvas' => {
   if (m === 'auto' || m === 'dom' || m === 'canvas') return m;
   throw new TypeError(`PAR: renderMode must be 'auto', 'dom' or 'canvas'`);
@@ -90,6 +96,7 @@ export const resolveOptions = (patch: PAROptions, prev?: ResolvedOptions): Resol
     zIndex: patch.zIndex ?? prev?.zIndex ?? 1,
     renderMode: validateMode(patch.renderMode ?? prev?.renderMode ?? 'auto'),
     spriteCacheMB: finite(patch.spriteCacheMB) && patch.spriteCacheMB > 0 ? patch.spriteCacheMB : prev?.spriteCacheMB ?? 96,
+    workers: validateWorkers(patch.workers !== undefined ? patch.workers : prev?.workers ?? 'auto'),
     bottomInset: Math.max(0, Number(patch.bottomInset ?? prev?.bottomInset ?? 0)),
   };
 };
