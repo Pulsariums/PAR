@@ -4,15 +4,25 @@ import { t } from '../i18n/i18n';
 import { $ } from '../player/dom';
 import type { Player } from '../player/player';
 
+import { initHeatmap, type TimelineHeatmap } from './heatmap';
 import { nextStart, prevStart } from './neighbors';
 
 const editable = (el: EventTarget | null): boolean => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName) && !(el instanceof HTMLInputElement && el.type === 'range'));
 
 /** Timeline controls (ids `st*` of `transportMarkup`): play / pause, scrub, +-1 s / 5 s / 1 frame, previous / next line, speed, loop, keys. Polled from the Studio loop. */
-export const initTransport = (player: Player, videoFps: () => number, onSeek: (t: number) => void, source: () => SubtitleSource | null, beforePlay?: () => Promise<void>) => {
+export const initTransport = (
+  player: Player,
+  videoFps: () => number,
+  onSeek: (t: number) => void,
+  source: () => SubtitleSource | null,
+  beforePlay?: () => Promise<void>,
+  heatmapInstance?: TimelineHeatmap,
+) => {
   const p = 'st';
   const play = $<HTMLButtonElement>(`${p}Play`);
   const seek = $<HTMLInputElement>(`${p}Seek`);
+  const heatmapEl = document.getElementById(`${p}Heatmap`) as HTMLCanvasElement | null;
+  const heatmap = heatmapInstance ?? (heatmapEl ? initHeatmap(heatmapEl) : null);
   let dragging = false;
   const tr = () => player.transport;
   const dur = (): number => tr().duration || source()?.duration || 0;
@@ -21,6 +31,7 @@ export const initTransport = (player: Player, videoFps: () => number, onSeek: (t
     const t1 = Math.min(Math.max(0, t0), Math.max(0, dur() - 1e-3));
     tr().seek(t1);
     onSeek(t1);
+    heatmap?.setTime(t1, dur());
   };
   const frame = (d: number): void => {
     const r = frameRate(videoFps());
@@ -76,11 +87,13 @@ export const initTransport = (player: Player, videoFps: () => number, onSeek: (t
 
   return {
     label,
+    heatmap,
     update(): void {
       const d = dur();
       seek.max = String(d || 1);
       const now = tr().time;
       if (!dragging) seek.value = String(now);
+      heatmap?.setTime(now, d);
       $(`${p}Cur`).textContent = clock(now);
       $(`${p}Total`).textContent = clock(d);
       const want = t(tr().playing ? 'st.pause' : 'st.play');

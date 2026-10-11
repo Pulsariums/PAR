@@ -78,6 +78,7 @@ export const initStudio = (root: HTMLElement): void => {
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem('par.theme', next); } catch { /* storage unavailable */ }
     syncTheme();
+    transport.heatmap?.render();
   });
   syncTheme();
   const mode = (): void => { $('stMode').textContent = t(`st.mode.${studioMode(player.hasVideo, session !== null)}`); };
@@ -89,7 +90,12 @@ export const initStudio = (root: HTMLElement): void => {
       session = s;
       prepareToken++;
       prepared = false;
-      if (!s) stats.opened();
+      if (!s) {
+        stats.opened();
+        transport.heatmap?.clear();
+      } else {
+        void transport.heatmap?.sync(s, player);
+      }
       exporter.setSession(s);
       fonts.setUsed(s ? [...s.source.script.styles.values()].map((x) => x.fontName) : []);
       mode();

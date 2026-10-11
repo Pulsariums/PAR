@@ -1,3 +1,4 @@
+import type { ChunkRef } from '../../../src/format/indexBlock';
 import type { ParHeader } from '../../../src/format';
 import type { SubtitleSource } from '../../../src/index';
 
@@ -11,4 +12,6 @@ export interface StudioSession {
   openMs: number;
   /** XPAR / PAR provenance and settings (container files only). */
   header: ParHeader | null;
+  /** Chunk index for fast event density computation (XPAR / PAR). */
+  chunks?: readonly ChunkRef[];
 }

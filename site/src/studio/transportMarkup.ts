@@ -6,7 +6,10 @@ const p = 'st';
 export const transportMarkup = (): string => `
   <div class="st-seekrow">
     <output id="${p}Cur" class="mono">00:00.00</output>
-    <input id="${p}Seek" type="range" min="0" max="1" step="0.001" value="0" data-i18n-attr="aria-label:st.seek" />
+    <div class="st-seek-wrap">
+      <canvas id="${p}Heatmap" class="st-heatmap"></canvas>
+      <input id="${p}Seek" type="range" min="0" max="1" step="0.001" value="0" data-i18n-attr="aria-label:st.seek" />
+    </div>
     <output id="${p}Total" class="mono">00:00.00</output>
   </div>
   <div class="st-btns" role="group" data-i18n-attr="aria-label:st.pl">

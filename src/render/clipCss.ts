@@ -35,9 +35,17 @@ const computeShape = (clip: ClipSpec): ClipShape | null => {
   let bbox: [number, number, number, number] | undefined;
   let boxRect: [number, number, number, number] | undefined;
   if (clip.rect) {
-    const [x1, y1, x2, y2] = clip.rect;
+    let [x1, y1, x2, y2] = clip.rect;
     // libass does not reorder the corners: an empty rect hides everything (`\clip`) or nothing (`\iclip`).
     if (x2 <= x1 || y2 <= y1) return clip.inverse ? null : EMPTY;
+    // When a rectangular clip is narrow (x2 - x1 <= 1.05), apply a subtle subpixel bleed
+    // so adjacent 1-pixel vertical strip slices overlap slightly in browser subpixel space.
+    // This eliminates the transparent/black gaps (comb artifact) under 3D transforms (\frx, \fry).
+    if (x2 - x1 <= 1.05) {
+      x1 -= 0.25;
+      x2 += 0.25;
+    }
+    boxRect = [x1, y1, x2, y2];
     inner = `M ${f(x1)} ${f(y1)} H ${f(x2)} V ${f(y2)} H ${f(x1)} Z`;
   } else if (clip.drawing) {
     const cmds = parseDrawing(clip.drawing);
@@ -51,7 +59,7 @@ const computeShape = (clip: ClipSpec): ClipShape | null => {
     if (!inner.endsWith('Z')) inner += ' Z';
   } else return null;
   if (clip.inverse) return { d: `${OUTER} ${inner}`, evenodd: true };
-  if (clip.rect) return { d: inner, evenodd: false, rect: clip.rect };
+  if (clip.rect) return { d: inner, evenodd: false, rect: boxRect ?? clip.rect };
   // A rectangle drawn as a vector clip clips like a rect (the canvas applies `rect()`, far cheaper than a path).
   return boxRect ? { d: inner, evenodd: false, rect: boxRect } : { d: inner, evenodd: false, bbox };
 };

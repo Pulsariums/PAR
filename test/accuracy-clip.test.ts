@@ -48,6 +48,13 @@ describe('clip semantics (libass)', () => {
     expect(clipPathCss({ inverse: false, rect: [0, 0, 5, 5] })).toBe('path("M 0 0 H 5 V 5 H 0 Z")');
   });
 
+  it('applies subpixel bleed to narrow rectangular clips to avoid comb artifacts', () => {
+    // 1-pixel wide strip: x2 - x1 = 1 <= 1.05
+    expect(clipPathCss({ inverse: false, rect: [10, 0, 11, 100] })).toBe('path("M 9.75 0 H 11.25 V 100 H 9.75 Z")');
+    // wider clip stays exact
+    expect(clipPathCss({ inverse: false, rect: [10, 0, 13, 100] })).toBe('path("M 10 0 H 13 V 100 H 10 Z")');
+  });
+
   it('keeps the LAST rect clip but the FIRST vector clip, and both apply together', () => {
     const t = tags('{\\clip(0,0,1,1)\\clip(5,5,9,9)\\clip(m 0 0 l 4 0 4 4)\\iclip(m 1 1 l 2 1 2 2)}a{\\clip(7,7,8,8)\\clip(m 9 9 l 8 8 7 9)}');
     expect(t.clip).toEqual({ inverse: false, rect: [7, 7, 8, 8] });

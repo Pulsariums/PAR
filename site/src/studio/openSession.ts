@@ -15,6 +15,11 @@ export const openSession = async (blob: Blob, name: string, opts: { signal?: Abo
   const source = await openSourceInWorker(blob, { worker: sourceWorker, kind, signal: opts.signal, onProgress: opts.onProgress });
   if (opts.signal?.aborted) { source.close?.(); throw new DOMException('aborted', 'AbortError'); }
   let header: ParHeader | null = null;
-  if (kind !== 'ass') header = parHeader(await openXpar(blob));
-  return { name, blob, kind, source, openMs: performance.now() - t0, header };
+  let chunks: readonly (import('../../../src/format/indexBlock').ChunkRef)[] | undefined;
+  if (kind !== 'ass') {
+    const xpar = await openXpar(blob);
+    header = parHeader(xpar);
+    chunks = xpar.chunks;
+  }
+  return { name, blob, kind, source, openMs: performance.now() - t0, header, chunks };
 };
