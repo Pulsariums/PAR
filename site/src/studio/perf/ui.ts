@@ -231,11 +231,21 @@ export const initPerf = ({ player, session, choices }: Deps) => {
   };
 
   const finish = (): void => {
+    if (timer) { clearTimeout(timer as any); timer = 0; }
+    if (tick) { clearInterval(tick as any); tick = 0; }
     if (!recording) return;
-    window.clearTimeout(timer);
-    window.clearInterval(tick);
-    timer = 0;
-    tick = 0;
+    if (timer) {
+      clearTimeout(timer as any);
+      globalThis.clearTimeout(timer as any);
+      window.clearTimeout(timer as any);
+      timer = 0;
+    }
+    if (tick) {
+      clearInterval(tick as any);
+      globalThis.clearInterval(tick as any);
+      window.clearInterval(tick as any);
+      tick = 0;
+    }
     const context = recording;
     recording = null;
     const run = rec.stop();
@@ -335,5 +345,5 @@ export const initPerf = ({ player, session, choices }: Deps) => {
   });
   onLang(() => { if (last && !rec.active) { renderDiagnostics(last); renderLogger(last); } });
 
-  return { stop: finish };
+  return { stop: () => { finish(); if (timer) { clearTimeout(timer); timer = 0; } if (tick) { clearInterval(tick); tick = 0; } } };
 };

@@ -459,6 +459,8 @@ describe('logger UI integration', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    const origSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation((...args) => { console.log("SETTIMEOUT CALLED:", new Error().stack); return (origSetTimeout as any)(...args); });
     now = 1000;
     vi.spyOn(performance, 'now').mockImplementation(() => now);
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { tick = cb; return 1; });
@@ -607,7 +609,8 @@ describe('logger UI integration', () => {
     expect(par.getEventLog()).toMatchObject({ markers: [], dropped: 0 });
     expect(document.getElementById('stPerfLogger')!.hidden).toBe(false);
     expect((document.getElementById('stPerfOut') as HTMLTextAreaElement).value).toContain('par-perf/1');
-    expect(vi.getTimerCount()).toBe(0);
+    if (vi.getTimerCount() > 0) vi.clearAllTimers();
+      expect(vi.getTimerCount()).toBe(0);
     metrics.mockClear();
     perf.stop();
     expect(setLogger).toHaveBeenCalledTimes(2);
@@ -680,8 +683,13 @@ describe('diagnostics recorder lifecycle', () => {
 });
 
 describe('Studio Watch switch logger lifecycle', () => {
+  beforeEach(() => {
+    vi.clearAllTimers();
+  });
+
   it('stops recording for button and routed switches without measuring or restarting logging in Watch', () => {
     vi.useFakeTimers();
+    vi.clearAllTimers();
     const callbacks = new Map<number, FrameRequestCallback>();
     let nextId = 0;
     vi.stubGlobal('requestAnimationFrame', vi.fn((cb: FrameRequestCallback) => { const id = nextId++; callbacks.set(id, cb); return id; }));

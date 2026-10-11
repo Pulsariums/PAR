@@ -7,8 +7,8 @@ import { PERF_HTML } from './perf/ui';
 import { REFERENCE_HTML } from './reference';
 import { transportMarkup } from './transportMarkup';
 
-const SHELVES = ['Videos', 'Subs', 'Fonts'] as const;
-const KEY = { Videos: 'st.videos', Subs: 'st.subs', Fonts: 'st.fonts' } as const;
+const SHELVES = ['Videos', 'Subs', 'Fonts', 'Opt'] as const;
+const KEY = { Videos: 'st.videos', Subs: 'st.subs', Fonts: 'st.fonts', Opt: 'st.optTab' } as const;
 
 /** Static markup of the Studio (ids use the `st` prefix; shelves, export panel and the two collapsible panels are filled by the studio modules). */
 export const STUDIO_HTML = `
