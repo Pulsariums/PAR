@@ -73,7 +73,7 @@ export const initSubShelf = (host: HTMLElement, player: Player, hooks: { session
     player.setSource(s.source);
     hooks.session(s);
     hooks.status(t('st.subReady', { name: item.name, n: s.source.eventCount.toLocaleString('en-US') }));
-    prewarm = scheduleSubtitlePrewarm(s.source, () => player.transport.time);
+    prewarm = scheduleSubtitlePrewarm(s.source, () => player.transport.time, 10);
   };
 
   shelf.subscribe(() => { apply(); draw(); });

@@ -62,6 +62,7 @@ export const initStudio = (root: HTMLElement): void => {
     if (prepared) return;
     const token = prepareToken;
     status(t('st.preparing', { cur: 0, total: 0 }));
+    player.par.renderAt(player.transport.time);
     await player.par.prepare('dense', (cur, total) => {
       if (token === prepareToken) status(t('st.preparing', { cur: Math.round(cur / 1000), total: Math.round(total / 1000) }));
     });
