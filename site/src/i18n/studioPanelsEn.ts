@@ -53,8 +53,6 @@ export const studioPanelsEn = {
   'st.m.shed': 'Left out under load',
   'st.m.dropped': 'Detail dropped / skipped',
   'st.m.frameMs': 'Frame time p50 / p95',
-  'st.heavy': 'Heavy scene: up to {n} lines at once. The engine adapts by itself — nothing needs to be tuned.',
-  'st.heavyDom': 'Heavy scene: up to {n} lines at once in dom mode. The engine adapts by itself — nothing needs to be tuned.',
   'st.expert': 'Expert settings',
   'st.advMode': 'Render mode',
   'st.advFps': 'Render FPS',

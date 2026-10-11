@@ -5,7 +5,7 @@ import { $ } from '../player/dom';
 import { FpsMeter, fpsText } from '../player/fpsMeter';
 import type { Player } from '../player/player';
 
-import { HeavyHint, renderRows, type MetricRow } from './metricRows';
+import { renderRows, type MetricRow } from './metricRows';
 
 const row = (k: string, v: string): string => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
 const heap = (): string => {
@@ -15,21 +15,18 @@ const heap = (): string => {
 
 /**
  * The metrics panel under the player (collapsible): transport, windowed source, render path and measured FPS. The one-line summary is always
- * visible; the rows are only built while the panel is open. The "Heavy scene" hint shows whenever many lines are on screen.
+ * visible; the rows are only built while the panel is open.
  */
 export const initStats = (player: Player, videoFps: () => number) => {
   const box = $<HTMLDetailsElement>('stMetrics');
   const dl = $<HTMLDListElement>('stStats');
   const sum = $('stMetricsSum');
-  const heavyEl = $('stHeavy');
   const meter = new FpsMeter();
-  const heavy = new HeavyHint();
   let openedAt = 0;
   let firstMs: number | null = null;
   let seekAt = 0;
   let seekTo = 0;
   let seekMs: number | null = null;
-  let heavyShown = '';
 
   const covered = (time: number): boolean => {
     const r = player.par.getSourceStats().windowRange;
@@ -62,15 +59,6 @@ export const initStats = (player: Player, videoFps: () => number) => {
       row(t('st.m.seek'), ms(seekMs));
   };
 
-  const hint = (lines: number, mode: 'auto' | 'dom' | 'canvas', now: number): void => {
-    const state = heavy.update(lines, mode, now);
-    const text = state === 'none' ? '' : t(state === 'dom' ? 'st.heavyDom' : 'st.heavy', { n: heavy.peak });
-    if (text === heavyShown) return;
-    heavyShown = text;
-    heavyEl.textContent = text;
-    heavyEl.hidden = !text;
-  };
-
   box.addEventListener('toggle', draw);
   return {
     /** A subtitle is being opened: start timing the first frame. */
@@ -81,7 +69,6 @@ export const initStats = (player: Player, videoFps: () => number) => {
       const now = performance.now();
       if (openedAt && firstMs === null && covered(player.transport.time)) firstMs = now - openedAt;
       if (seekAt && covered(seekTo)) { seekMs = now - seekAt; seekAt = 0; }
-      hint(m.activeLines, m.render.mode, now);
       if (meter.sample(m.time, player.transport.playing, now)) draw();
     },
     draw,

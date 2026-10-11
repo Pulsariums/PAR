@@ -53,8 +53,6 @@ export const studioPanelsTr = {
   'st.m.shed': 'Yük altında çizilmeyen',
   'st.m.dropped': 'Atlanan ayrıntı / kare',
   'st.m.frameMs': 'Kare süresi p50 / p95',
-  'st.heavy': 'Ağır sahne: aynı anda en çok {n} satır. Motor kendini kendiliğinden düzeltir — ayar gerekmez.',
-  'st.heavyDom': 'Ağır sahne: dom kipinde aynı anda en çok {n} satır. Motor kendini kendiliğinden düzeltir — ayar gerekmez.',
   'st.expert': 'Uzman ayarları',
   'st.advMode': 'Çizim kipi',
   'st.advFps': 'Çizim FPS',
