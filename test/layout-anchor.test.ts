@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { create } from '../src/index';
 import { resolveOptions } from '../src/core/options';
 import { marginAnchor } from '../src/layout/Anchor';
 import { resolveLayoutSize } from '../src/layout/Layout';
@@ -113,5 +114,47 @@ Dialogue: 0,0:00:00.00,0:00:05.00,Default,,0,0,0,,Bottom Text
     const [, ay] = view.anchorAt(0, env.layout);
     expect(ay).toBe(640);
     view.destroy();
+  });
+
+  it('dynamically shifting bottomInset via setOptions relayouts and shifts bottom lines', () => {
+    const script = `
+[Script Info]
+PlayResX: 1280
+PlayResY: 720
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,20,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:05.00,Default,,0,0,0,,Bottom Text
+`;
+    const c = document.createElement('div');
+    Object.defineProperty(c, 'clientWidth', { value: 1280 });
+    Object.defineProperty(c, 'clientHeight', { value: 720 });
+    document.body.appendChild(c);
+
+    const par = create({ container: c, subtitle: script, renderMode: 'dom' });
+    par.renderAt(1.0);
+
+    const box = par.element.querySelector<HTMLElement>('.par-line .par-box')!;
+    expect(box).toBeTruthy();
+    // Default: anchor Y = 720 - 20 = 700
+    expect(box.style.top).toBe('700px');
+
+    // Change bottomInset dynamically to 80
+    par.setOptions({ bottomInset: 80 });
+    const boxAfter = par.element.querySelector<HTMLElement>('.par-line .par-box')!;
+    // Anchor Y = 720 - 20 - 80 = 620
+    expect(boxAfter.style.top).toBe('620px');
+
+    // Reset bottomInset back to 0
+    par.setOptions({ bottomInset: 0 });
+    const boxReset = par.element.querySelector<HTMLElement>('.par-line .par-box')!;
+    expect(boxReset.style.top).toBe('700px');
+
+    par.destroy();
+    c.remove();
   });
 });

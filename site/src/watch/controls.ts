@@ -42,7 +42,13 @@ export const initControls = (stage: WatchStage): { update(): void } => {
 
   const syncInset = (): void => {
     const visible = !box.classList.contains('idle');
-    stage.par.setOptions({ bottomInset: avoidControls && visible ? 60 : 0 });
+    const sy = stage.par.getMetrics().scaleY || 1;
+    const barHeightScreen = 80;
+    const insetInLayout = Math.round(barHeightScreen / (sy > 0 ? sy : 1));
+    stage.par.setOptions({ bottomInset: avoidControls && visible ? insetInLayout : 0 });
+    if (m().paused) {
+      stage.par.refresh();
+    }
   };
 
   avoidCb.addEventListener('change', () => {

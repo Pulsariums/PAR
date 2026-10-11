@@ -31,9 +31,9 @@ export const STUDIO_HTML = `
     <div class="stage st-stage" id="stStage" tabindex="0" role="application" data-i18n-attr="aria-label:st.stage">
       <canvas id="stCard" aria-hidden="true"></canvas><video id="stVid" playsinline hidden></video>
       <div class="st-frame" id="stFrame" hidden aria-hidden="true"><span class="st-tag" id="stFrameTag"></span></div>
+      <p class="hint st-heavy st-lab" id="stHeavy" role="status" hidden></p>
     </div>
     <p class="hint st-status" id="stStatus" role="status" aria-live="polite"></p>
-    <p class="hint st-heavy st-lab" id="stHeavy" role="status" hidden></p>
     ${transportMarkup()}
   </div>
   <div class="st-side">

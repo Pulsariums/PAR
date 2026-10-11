@@ -392,9 +392,10 @@ export class PARRenderer extends FontApi {
     this.layoutDirty = false;
     const { region, layout, resolved, transform: st } = computeStage(this.opts, this.host.info);
     const prev = this.env;
-    if (prev.layout.width !== layout.width || prev.layout.height !== layout.height) {
+    if (prev.layout.width !== layout.width || prev.layout.height !== layout.height || (prev.layout.bottomInset ?? 0) !== (layout.bottomInset ?? 0)) {
       this.scene.clear();
       this.logger.segment();
+      this.forceNext = true;
     }
     const devScale = deviceScale(this.opts.container, region.width, layout.width);
     this.env = { ...prev, layout, borderScale: st.borderScale, blurScale: st.blurScale, devScale, frameMs: 1000 / (this.opts.videoFps ?? 24), bottomInset: layout.bottomInset ?? this.opts.bottomInset };
