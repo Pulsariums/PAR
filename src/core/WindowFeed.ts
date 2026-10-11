@@ -1,5 +1,4 @@
 import type { SourceStats, SubtitleSource } from '../source/types';
-import { inWindow } from '../source/window';
 import type { AssEvent } from '../types/script';
 
 import { msOf } from './time';
@@ -21,7 +20,7 @@ export interface SourceStatsReport {
 
 /** After a seek / at the start: the first read only covers the frames about to be shown (ms). */
 const QUICK_BACK = 100;
-const QUICK_AHEAD = 400;
+const QUICK_AHEAD = 300;
 
 export interface FeedHooks {
   /** The window changed: events added / removed (by `index`). */
@@ -135,8 +134,13 @@ export class WindowFeed {
       this.ev.clear();
       [this.lo, this.hi, this.has] = [a, b, true];
     } else [this.lo, this.hi] = [Math.min(this.lo, a), Math.max(this.hi, b)];
+    const hasExisting = this.ev.size > 0;
     for (const e of events) {
-      if (!inWindow(e, a / 1000, b / 1000) || this.ev.has(e.index)) continue;
+      if (hasExisting && this.ev.has(e.index)) continue;
+      const s = msOf(e.start);
+      if (s >= b) continue;
+      const end = msOf(e.end);
+      if (end <= a || end <= s) continue;
       this.ev.set(e.index, e);
       added.push(e);
     }

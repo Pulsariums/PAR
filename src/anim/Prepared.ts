@@ -46,9 +46,21 @@ export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: S
   } else if (lt.pos) {
     moveParams = lt.moveParams ??= createPosParams(lt.pos, durationMs);
   }
-  const transitions = ev.fragments.flatMap((f) => f.ops.filter((o): o is Transition => o.type === 't'));
-  const hasTransitions = transitions.length > 0;
-  const animated = hasTransitions || !!lt.move || !!lt.fad || !!lt.fade || ev.fragments.some((f) => !!f.karaoke);
+  let transitions: Transition[] | null = null;
+  let hasKaraoke = false;
+  for (let i = 0; i < ev.fragments.length; i++) {
+    const f = ev.fragments[i];
+    if (f.karaoke) hasKaraoke = true;
+    for (let j = 0; j < f.ops.length; j++) {
+      const o = f.ops[j];
+      if (o.type === 't') {
+        if (!transitions) transitions = [o];
+        else transitions.push(o);
+      }
+    }
+  }
+  const hasTransitions = transitions !== null && transitions.length > 0;
+  const animated = hasTransitions || !!lt.move || !!lt.fad || !!lt.fade || hasKaraoke;
   return {
     event: ev,
     style,
@@ -66,7 +78,7 @@ export const prepareLine = (ev: AssEvent, styles: Map<string, AssStyle>, info: S
     plated: isPlated(ev, style, styles),
     animated,
     hasTransitions,
-    clipTransitions: transitions.filter((t) => !!t.clip),
+    clipTransitions: transitions ? transitions.filter((t) => !!t.clip) : [],
     fullRect: [0, 0, info.playResX, info.playResY],
     moveParams,
   };

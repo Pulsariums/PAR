@@ -30,6 +30,7 @@ export const addChars = (into: Set<number>, text: string): void => {
 export const collectUsage = (lines: readonly PreparedLine[], styles: Map<string, AssStyle>): Map<string, FontUse> => {
   const out = new Map<string, FontUse>();
   for (const line of lines) {
+    if (!line.event.fragments.some((f) => f.drawingScale === 0 && f.text.trim() !== '')) continue;
     const states = evalStates(line, 0, styles);
     line.event.fragments.forEach((frag, i) => {
       if (frag.drawingScale > 0 || frag.text.trim() === '') return;

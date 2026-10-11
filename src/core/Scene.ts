@@ -14,6 +14,32 @@ import { Timeline } from './Timeline';
 import { RenderLogger, type SceneDiagnosticsSample } from './Diagnostics';
 import type { CanvasMarkerOutcome } from '../canvas/CanvasLayer';
 
+export const MAX_DOM_BUDGET = 256;
+
+const isStripClip = (line: PreparedLine): boolean => {
+  const clip = line.event.lineTags.clip;
+  if (clip?.rect) {
+    const [x1, y1, x2, y2] = clip.rect;
+    if (Math.abs(x2 - x1) <= 1 || Math.abs(y2 - y1) <= 1) return true;
+  }
+  for (const t of line.clipTransitions) {
+    if (t.clip) {
+      const [x1, y1, x2, y2] = t.clip;
+      if (Math.abs(x2 - x1) <= 1 || Math.abs(y2 - y1) <= 1) return true;
+    }
+  }
+  return false;
+};
+
+const isVectorDrawing = (line: PreparedLine): boolean => {
+  if (line.event.lineTags.vclip?.drawing) return true;
+  return line.event.fragments.some((f) => f.drawingScale > 0 || !!f.drawing);
+};
+
+const hasActualText = (line: PreparedLine): boolean => {
+  return line.event.fragments.some((f) => f.drawingScale === 0 && f.text.trim().length > 0);
+};
+
 /**
  * Keeps the DOM in sync with the visible events: builds a LineView when an event appears,
  * updates only animated lines per frame, and releases the DOM when it disappears.
@@ -48,12 +74,16 @@ export class Scene {
     cacheBytes = 96 << 20,
     workers: () => SpriteWorkers = () => 'auto',
     loadShedding: () => 'auto' | 'off' = () => 'auto',
+    private maxDomBudget = MAX_DOM_BUDGET,
   ) {
     this.canvas = new CanvasPath(overlay, mode, cacheBytes, loadShedding);
     this.ahead = new Lookahead(this.canvas, () => ({
       startingIn: (a, b) => this.timeline.startingIn(a, b), visibleAt: (t) => this.timeline.visibleAt(t), startMs: this.startOf, covers: this.covers,
     }), workers);
   }
+
+  setDomBudget(budget: number): void { this.maxDomBudget = Math.max(1, budget); }
+  get domBudget(): number { return this.maxDomBudget; }
 
   /** Fonts the page has loaded (bytes), for the sprite workers. */
   setFaces(faces: FaceInfo[]): void { this.ahead.setFaces(faces); }
@@ -141,10 +171,19 @@ export class Scene {
     this.diagnosticSample = null;
     this.pendingReadyEpoch = -1;
     this.pendingReadyGeneration = -1;
-    removed.forEach((i) => this.cache.delete(i));
-    const fresh = added.map((e) => prepareLine(e, script.styles, script.info));
-    fresh.forEach((l) => this.cache.set(l.event.index, l));
-    this.timeline = new Timeline(events.map((e) => this.cache.get(e.index)!).filter(Boolean));
+    for (let i = 0; i < removed.length; i++) this.cache.delete(removed[i]);
+    const fresh: PreparedLine[] = new Array(added.length);
+    for (let i = 0; i < added.length; i++) {
+      const l = prepareLine(added[i], script.styles, script.info);
+      fresh[i] = l;
+      this.cache.set(l.event.index, l);
+    }
+    const lines: PreparedLine[] = [];
+    for (let i = 0; i < events.length; i++) {
+      const l = this.cache.get(events[i].index);
+      if (l) lines.push(l);
+    }
+    this.timeline = new Timeline(lines);
     return fresh;
   }
 
@@ -171,7 +210,37 @@ export class Scene {
     const all = this.covers && !this.covers(t) ? [] : this.timeline.visibleAt(t);
     const visible = this.hold ? all.filter((l) => !this.hold!.has(l.event.index)) : all;
     const route = this.canvas.route(visible, t);
-    const ids = new Set(visible.filter((_, i) => !route[i]).map((l) => l.event.id));
+    const domCandidates = visible.filter((_, i) => !route[i]);
+    let domLinesToRender: PreparedLine[];
+    if (domCandidates.length <= this.maxDomBudget) {
+      domLinesToRender = domCandidates;
+    } else {
+      const isHeavy = (l: PreparedLine): boolean => isVectorDrawing(l) || isStripClip(l);
+      const isTrueText = (l: PreparedLine): boolean => hasActualText(l) && !isHeavy(l);
+
+      const textLines: PreparedLine[] = [];
+      const heavyLines: PreparedLine[] = [];
+      for (let i = 0; i < domCandidates.length; i++) {
+        const l = domCandidates[i];
+        if (isTrueText(l)) textLines.push(l);
+        else heavyLines.push(l);
+      }
+
+      // True text / dialogue lines ALWAYS get priority and are rendered first.
+      // For vector drawing lines or 1-pixel strip clips, cap the number of active DOM elements up to the budget.
+      const remainingBudget = Math.max(0, this.maxDomBudget - textLines.length);
+      if (heavyLines.length > remainingBudget) {
+        heavyLines.sort((a, b) => {
+          const aActive = this.views.has(a.event.id) ? 0 : 1;
+          const bActive = this.views.has(b.event.id) ? 0 : 1;
+          if (aActive !== bActive) return aActive - bActive;
+          return (a.event.layer - b.event.layer) || (a.event.index - b.event.index);
+        });
+      }
+      const allowedHeavy = heavyLines.slice(0, remainingBudget);
+      domLinesToRender = [...textLines, ...allowedHeavy];
+    }
+    const ids = new Set(domLinesToRender.map((l) => l.event.id));
     for (const [id, view] of this.views) {
       if (ids.has(id)) continue;
       view.destroy();
@@ -179,8 +248,10 @@ export class Scene {
       this.placed.delete(id);
     }
     const domStart = this.diagnosticsEnabled ? performance.now() : 0;
-    visible.forEach((line, i) => { if (!route[i]) this.renderDom(line, t, env, force); });
-    const domMs = this.diagnosticsEnabled && visible.some((_, i) => !route[i]) ? performance.now() - domStart : null;
+    for (let i = 0; i < domLinesToRender.length; i++) {
+      this.renderDom(domLinesToRender[i], t, env, force);
+    }
+    const domMs = this.diagnosticsEnabled && domLinesToRender.length > 0 ? performance.now() - domStart : null;
     this.canvasLines = route.filter(Boolean).length;
     let canvasMs: number | null = null;
     if (this.canvasLines > 0 || this.canvasOn) {

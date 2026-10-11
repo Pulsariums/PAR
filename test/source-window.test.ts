@@ -47,12 +47,12 @@ describe('renderer with a windowed source', () => {
     expect(shown(par.element)).toEqual([]);
     expect(par.getSourceStats()).toMatchObject({ loading: true, windowEvents: 0, windowRange: null, bytesRead: 123 });
     expect(m.calls).toHaveLength(1);
-    expect([m.calls[0].t0, m.calls[0].t1]).toEqual([10.1, 10.6]);
+    expect([m.calls[0].t0, m.calls[0].t1]).toEqual([10.1, 10.5]);
     m.calls[0].done();
     await tick();
     expect(shown(par.element)).toEqual(['L9', 'L10']);
-    expect(par.getSourceStats()).toMatchObject({ loading: true, windowRange: [10.1, 10.6] }); // the quick window is short: the next slice is already on its way
-    expect([m.calls[1].t0, m.calls[1].t1]).toEqual([10.6, 11.85]);
+    expect(par.getSourceStats()).toMatchObject({ loading: true, windowRange: [10.1, 10.5] }); // the quick window is short: the next slice is already on its way
+    expect([m.calls[1].t0, m.calls[1].t1]).toEqual([10.5, 11.75]);
     par.destroy();
     expect(m.closed()).toBe(true);
   });
@@ -82,7 +82,7 @@ describe('renderer with a windowed source', () => {
     par.renderAt(10);
     await tick();
     par.renderAt(10.2);
-    par.renderAt(10.35);
+    par.renderAt(10.25);
     expect(m.calls).toHaveLength(1);
     par.destroy();
   });
@@ -92,14 +92,14 @@ describe('renderer with a windowed source', () => {
     const par = create({ container: box(), subtitle: m.source, windowSeconds: 12 });
     par.renderAt(20);
     await tick();
-    expect([m.calls[0].t0, m.calls[0].t1]).toEqual([19.9, 20.4]);
+    expect([m.calls[0].t0, m.calls[0].t1]).toEqual([19.9, 20.3]);
     await settle(m.calls);
-    expect(m.calls.slice(1).map((c) => [c.t0, c.t1])).toEqual([[20.4, 22.9], [22.9, 25.4]]);
-    expect(par.getSourceStats()).toMatchObject({ windowRange: [19.9, 25.4], loading: false });
+    expect(m.calls.slice(1).map((c) => [c.t0, c.t1])).toEqual([[20.3, 22.8], [22.8, 25.3]]);
+    expect(par.getSourceStats()).toMatchObject({ windowRange: [19.9, 25.3], loading: false });
     par.renderAt(21);
     await settle(m.calls);
     expect(m.calls).toHaveLength(4);
-    expect([m.calls[3].t0, m.calls[3].t1]).toEqual([25.4, 27.9]);
+    expect([m.calls[3].t0, m.calls[3].t1]).toEqual([25.3, 27.8]);
     const full = par.getSourceStats().windowEvents;
     expect(full).toBeGreaterThan(5);
     for (const t of [24, 27, 30, 33, 36]) { par.renderAt(t); await settle(m.calls); }

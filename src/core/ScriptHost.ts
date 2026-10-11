@@ -5,6 +5,7 @@ import { isSubtitleSource, type SourceScript, type SubtitleSource } from '../sou
 import type { AssEvent, AssStyle, ParsedScript, ScriptInfo } from '../types/script';
 
 import type { Scene } from './Scene';
+import { msOf } from './time';
 import { WindowFeed, type SourceStatsReport } from './WindowFeed';
 
 export interface HostDeps {
@@ -140,7 +141,26 @@ export class ScriptHost {
       if (!this.win) return;
       const start = this.diagnosticsEnabled ? performance.now() : 0;
       const fresh = this.d.scene().setWindow(feed.events, added, removed, this.win);
-      this.d.fonts.extendUsage(collectUsage(fresh, this.win.styles), removed);
+      const textLines = fresh.filter((l) => l.event.fragments.some((f) => f.drawingScale === 0 && f.text.trim().length > 0));
+      if (textLines.length > 512) {
+        const nowMs = this.d.timeMs();
+        const urgent = textLines.filter((l) => {
+          const s = msOf(l.event.start);
+          const e = msOf(l.event.end);
+          return s <= nowMs + 1000 && e >= nowMs - 500;
+        });
+        const remaining = textLines.filter((l) => !urgent.includes(l));
+        this.d.fonts.extendUsage(collectUsage(urgent, this.win.styles), removed);
+        if (remaining.length > 0) {
+          queueMicrotask(() => {
+            if (this.feed === feed && this.win) {
+              this.d.fonts.extendUsage(collectUsage(remaining, this.win.styles), []);
+            }
+          });
+        }
+      } else {
+        this.d.fonts.extendUsage(collectUsage(textLines, this.win.styles), removed);
+      }
       if (this.diagnosticsEnabled) this.windowPrepareTotalMs += performance.now() - start;
       this.d.changed();
       return;
@@ -159,7 +179,26 @@ export class ScriptHost {
     const start = this.diagnosticsEnabled ? performance.now() : 0;
     this.bind(true);
     const fresh = this.d.scene().prepared;
-    this.d.fonts.extendUsage(collectUsage(fresh, p.win.styles), removed);
+    const textLines = fresh.filter((l) => l.event.fragments.some((f) => f.drawingScale === 0 && f.text.trim().length > 0));
+    if (textLines.length > 512) {
+      const nowMs = tMs;
+      const urgent = textLines.filter((l) => {
+        const s = msOf(l.event.start);
+        const e = msOf(l.event.end);
+        return s <= nowMs + 1000 && e >= nowMs - 500;
+      });
+      const remaining = textLines.filter((l) => !urgent.includes(l));
+      this.d.fonts.extendUsage(collectUsage(urgent, p.win.styles), removed);
+      if (remaining.length > 0) {
+        queueMicrotask(() => {
+          if (this.ready && this.win) {
+            this.d.fonts.extendUsage(collectUsage(remaining, p.win.styles), []);
+          }
+        });
+      }
+    } else {
+      this.d.fonts.extendUsage(collectUsage(textLines, p.win.styles), removed);
+    }
     if (this.diagnosticsEnabled) this.windowPrepareTotalMs += performance.now() - start;
     this.d.changed();
   }

@@ -15,12 +15,29 @@ export class Timeline {
   private lastOut: PreparedLine[] = [];
 
   constructor(lines: readonly PreparedLine[]) {
-    const keyed = lines.map((l) => ({ l, s: msOf(l.event.start), e: msOf(l.event.end) }));
+    const n = lines.length;
+    const keyed = new Array<{ l: PreparedLine; s: number; e: number }>(n);
+    for (let i = 0; i < n; i++) {
+      const l = lines[i];
+      keyed[i] = { l, s: msOf(l.event.start), e: msOf(l.event.end) };
+    }
     keyed.sort((a, b) => a.s - b.s || a.l.event.index - b.l.event.index);
-    this.lines = keyed.map((k) => k.l);
-    this.starts = keyed.map((k) => k.s);
-    this.ends = keyed.map((k) => k.e);
-    this.maxDuration = keyed.reduce((m, k) => Math.max(m, k.e - k.s), 0);
+    const ls = new Array<PreparedLine>(n);
+    const starts = new Array<number>(n);
+    const ends = new Array<number>(n);
+    let maxDuration = 0;
+    for (let i = 0; i < n; i++) {
+      const k = keyed[i];
+      ls[i] = k.l;
+      starts[i] = k.s;
+      ends[i] = k.e;
+      const dur = k.e - k.s;
+      if (dur > maxDuration) maxDuration = dur;
+    }
+    this.lines = ls;
+    this.starts = starts;
+    this.ends = ends;
+    this.maxDuration = maxDuration;
   }
 
   /** All lines, sorted by start. */
