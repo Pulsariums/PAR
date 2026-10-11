@@ -110,6 +110,21 @@ describe('renderer with a windowed source', () => {
     par.destroy();
   });
 
+  it('a seek far ahead or behind resets the window range and never inverts lo and hi', async () => {
+    const m = manual();
+    const par = create({ container: box(), subtitle: m.source, windowSeconds: 12 });
+    par.renderAt(20);
+    await tick();
+    await settle(m.calls);
+    expect(par.getSourceStats()).toMatchObject({ windowRange: [19.9, 25.3], loading: false });
+    // Seek far ahead (80s); evict detects range moved completely beyond [19.9, 25.3]
+    par.renderAt(80);
+    const st = par.getSourceStats();
+    expect(st.windowRange).toBeNull();
+    expect(st.windowEvents).toBe(0);
+    par.destroy();
+  });
+
   it('plays a text source exactly like a text subtitle', async () => {
     const a = create({ container: box(), subtitle: TEXT });
     const b = create({ container: box(), subtitle: fromAssText(TEXT) });

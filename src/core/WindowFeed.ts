@@ -154,10 +154,24 @@ export class WindowFeed {
     const from = tMs - this.back;
     const to = tMs + Math.round(this.ahead * 1.5);
     if (!this.has || (this.lo >= from && this.hi <= to)) return;
+    if (from >= this.hi || to <= this.lo) {
+      const removed = [...this.ev.keys()];
+      this.ev.clear();
+      this.lo = 0;
+      this.hi = 0;
+      this.has = false;
+      if (removed.length) this.hooks.onChange([], removed);
+      return;
+    }
     const removed: number[] = [];
     for (const [i, e] of this.ev) if (msOf(e.end) <= from || msOf(e.start) >= to) { this.ev.delete(i); removed.push(i); }
     this.lo = Math.max(this.lo, from);
     this.hi = Math.min(this.hi, to);
+    if (this.lo >= this.hi) {
+      this.lo = 0;
+      this.hi = 0;
+      this.has = false;
+    }
     if (removed.length) this.hooks.onChange([], removed);
   }
 }

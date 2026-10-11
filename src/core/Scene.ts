@@ -7,36 +7,323 @@ import type { CanvasStats, RenderMode } from '../canvas/types';
 import type { FaceInfo } from '../canvas/workers/pool';
 import { LineView, type LineEnv } from '../render/LineView';
 import type { Overlay } from '../render/Overlay';
-import type { AssEvent, ParsedScript } from '../types/script';
+import type { AssEvent, AssStyle, DrawCommand, ParsedScript } from '../types/script';
 
 import { Lookahead } from './Lookahead';
 import { Timeline } from './Timeline';
 import { RenderLogger, type SceneDiagnosticsSample } from './Diagnostics';
 import type { CanvasMarkerOutcome } from '../canvas/CanvasLayer';
+import { parseDrawing, rectOfDrawing } from '../parser/DrawingParser';
+import { msOf } from './time';
 
 export const MAX_DOM_BUDGET = 256;
 
-const isStripClip = (line: PreparedLine): boolean => {
-  const clip = line.event.lineTags.clip;
-  if (clip?.rect) {
-    const [x1, y1, x2, y2] = clip.rect;
-    if (Math.abs(x2 - x1) <= 1 || Math.abs(y2 - y1) <= 1) return true;
+interface StripClip {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  isVertical: boolean;
+}
+
+const stripClipCache = new WeakMap<PreparedLine, StripClip | null>();
+
+function extractRectFromDrawing(cmds: DrawCommand[]): [number, number, number, number] | null {
+  const r = rectOfDrawing(cmds);
+  if (r) return r;
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i < cmds.length; i++) {
+    const c = cmds[i];
+    if (i === 0 ? c.cmd !== 'm' : c.cmd !== 'l') return null;
+    if (c.pts.length !== 1) return null;
+    pts.push(c.pts[0]);
   }
-  for (const t of line.clipTransitions) {
-    if (t.clip) {
-      const [x1, y1, x2, y2] = t.clip;
-      if (Math.abs(x2 - x1) <= 1 || Math.abs(y2 - y1) <= 1) return true;
+  if (pts.length === 5 && Math.abs(pts[4][0] - pts[0][0]) < 0.05 && Math.abs(pts[4][1] - pts[0][1]) < 0.05) {
+    pts.pop();
+  }
+  if (pts.length !== 4) return null;
+  const isH = (p1: [number, number], p2: [number, number]) => Math.abs(p1[1] - p2[1]) < 0.05;
+  const isV = (p1: [number, number], p2: [number, number]) => Math.abs(p1[0] - p2[0]) < 0.05;
+  const ok = (
+    (isH(pts[0], pts[1]) && isV(pts[1], pts[2]) && isH(pts[2], pts[3]) && isV(pts[3], pts[0])) ||
+    (isV(pts[0], pts[1]) && isH(pts[1], pts[2]) && isV(pts[2], pts[3]) && isH(pts[3], pts[0]))
+  );
+  if (!ok) return null;
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+function extractStripClip(line: PreparedLine): StripClip | null {
+  if (line.clipTransitions.length > 0) return null;
+
+  const clip = line.event.lineTags.clip;
+  if (clip && !clip.inverse && clip.rect) {
+    const [rx1, ry1, rx2, ry2] = clip.rect;
+    const x1 = Math.min(rx1, rx2);
+    const y1 = Math.min(ry1, ry2);
+    const x2 = Math.max(rx1, rx2);
+    const y2 = Math.max(ry1, ry2);
+    const w = x2 - x1;
+    const h = y2 - y1;
+    if (w <= 0 || h <= 0) return null;
+    if (w <= 1.05 || h <= 1.05) {
+      return { x1, y1, x2, y2, isVertical: w <= 1.05 || w <= h };
     }
   }
-  return false;
+
+  const vclip = line.event.lineTags.vclip;
+  if (vclip && !vclip.inverse && vclip.drawing) {
+    const cmds = parseDrawing(vclip.drawing);
+    const r = extractRectFromDrawing(cmds);
+    if (r) {
+      const k = (vclip.scale ?? 1) > 1 ? Math.pow(2, (vclip.scale ?? 1) - 1) : 1;
+      const x1 = Math.min(r[0], r[2]) / k;
+      const y1 = Math.min(r[1], r[3]) / k;
+      const x2 = Math.max(r[0], r[2]) / k;
+      const y2 = Math.max(r[1], r[3]) / k;
+      const w = x2 - x1;
+      const h = y2 - y1;
+      if (w <= 0 || h <= 0) return null;
+      if (w <= 1.05 || h <= 1.05) {
+        return { x1, y1, x2, y2, isVertical: w <= 1.05 || w <= h };
+      }
+    }
+  }
+
+  return null;
+}
+
+function getStripClip(line: PreparedLine): StripClip | null {
+  if (stripClipCache.has(line)) return stripClipCache.get(line)!;
+  const clip = extractStripClip(line);
+  stripClipCache.set(line, clip);
+  return clip;
+}
+
+const visualKeyCache = new WeakMap<PreparedLine, string>();
+
+function getVisualKey(line: PreparedLine, styles: Map<string, AssStyle>): string {
+  let key = visualKeyCache.get(line);
+  if (key !== undefined) return key;
+
+  const lt = line.event.lineTags;
+  const p = lt.pos ? `${Math.round(lt.pos[0] * 10) / 10},${Math.round(lt.pos[1] * 10) / 10}` : '';
+  const org = lt.org ? `${Math.round(lt.org[0] * 10) / 10},${Math.round(lt.org[1] * 10) / 10}` : '';
+  const move = lt.move ? lt.move.join(',') : '';
+  const fad = lt.fad ? lt.fad.join(',') : '';
+  const fade = lt.fade ? lt.fade.join(',') : '';
+
+  const timing = `${msOf(line.event.start)}_${msOf(line.event.end)}`;
+
+  let fragsStr = '';
+  for (let i = 0; i < line.event.fragments.length; i++) {
+    const f = line.event.fragments[i];
+    fragsStr += `${f.drawingScale}|${f.text}|${f.drawing ? f.drawing.length : 0};`;
+  }
+
+  const states = evalStates(line, 0, styles);
+  let statesStr = '';
+  for (let i = 0; i < states.length; i++) {
+    const s = states[i];
+    statesStr += `${s.c1},${s.c2},${s.c3},${s.c4}|${s.a1},${s.a2},${s.a3},${s.a4}|` +
+      `${Math.round(s.frx * 100) / 100},${Math.round(s.fry * 100) / 100},${Math.round(s.frz * 100) / 100}|` +
+      `${Math.round(s.fscx * 100) / 100},${Math.round(s.fscy * 100) / 100}|` +
+      `${Math.round(s.fax * 1000) / 1000},${Math.round(s.fay * 1000) / 1000}|` +
+      `${s.fn},${s.fs},${s.b ? 1 : 0},${s.i ? 1 : 0}|${s.xbord},${s.ybord};`;
+  }
+
+  key = `${line.event.layer}|${line.style.name}|${line.an}|${p}|${org}|${move}|${fad}|${fade}|${timing}|${fragsStr}|${statesStr}`;
+  visualKeyCache.set(line, key);
+  return key;
+}
+
+function flushCluster(
+  cluster: { rect: [number, number, number, number]; lines: PreparedLine[] },
+  out: PreparedLine[],
+): void {
+  if (cluster.lines.length === 1) {
+    out.push(cluster.lines[0]);
+    return;
+  }
+  const base = cluster.lines[0];
+  const last = cluster.lines[cluster.lines.length - 1];
+  const coalescedId = `coalesced:${base.event.id}:${last.event.id}:${cluster.lines.length}`;
+  const coalescedLine: PreparedLine = {
+    ...base,
+    event: {
+      ...base.event,
+      id: coalescedId,
+      lineTags: {
+        ...base.event.lineTags,
+        clip: {
+          inverse: false,
+          rect: [cluster.rect[0], cluster.rect[1], cluster.rect[2], cluster.rect[3]],
+        },
+        vclip: undefined,
+      },
+    },
+    clipTransitions: [],
+  };
+  out.push(coalescedLine);
+}
+
+function coalesceStripLines(lines: readonly PreparedLine[], styles: Map<string, AssStyle>): PreparedLine[] {
+  if (lines.length <= 1) return lines.slice();
+
+  const nonStrip: PreparedLine[] = [];
+  const stripCandidates: Array<{ line: PreparedLine; clip: StripClip }> = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const clip = getStripClip(l);
+    if (clip) {
+      stripCandidates.push({ line: l, clip });
+    } else {
+      nonStrip.push(l);
+    }
+  }
+
+  if (stripCandidates.length <= 1) return lines.slice();
+
+  const groups = new Map<string, Array<{ line: PreparedLine; clip: StripClip }>>();
+  for (let i = 0; i < stripCandidates.length; i++) {
+    const c = stripCandidates[i];
+    const key = getVisualKey(c.line, styles);
+    let g = groups.get(key);
+    if (!g) {
+      g = [];
+      groups.set(key, g);
+    }
+    g.push(c);
+  }
+
+  const coalescedStrips: PreparedLine[] = [];
+
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      coalescedStrips.push(group[0].line);
+      continue;
+    }
+
+    let verticalCount = 0;
+    for (let i = 0; i < group.length; i++) {
+      if (group[i].clip.isVertical) verticalCount++;
+    }
+    const isVertical = verticalCount >= group.length / 2;
+
+    if (isVertical) {
+      const spanGroups = new Map<string, Array<{ line: PreparedLine; clip: StripClip }>>();
+      for (let i = 0; i < group.length; i++) {
+        const item = group[i];
+        const spanKey = `${Math.round(item.clip.y1 * 10) / 10}_${Math.round(item.clip.y2 * 10) / 10}`;
+        let sg = spanGroups.get(spanKey);
+        if (!sg) {
+          sg = [];
+          spanGroups.set(spanKey, sg);
+        }
+        sg.push(item);
+      }
+
+      for (const spanItems of spanGroups.values()) {
+        spanItems.sort((a, b) => a.clip.x1 - b.clip.x1);
+
+        let currentCluster: {
+          rect: [number, number, number, number];
+          lines: PreparedLine[];
+        } | null = null;
+
+        for (let i = 0; i < spanItems.length; i++) {
+          const item = spanItems[i];
+          if (!currentCluster) {
+            currentCluster = {
+              rect: [item.clip.x1, item.clip.y1, item.clip.x2, item.clip.y2],
+              lines: [item.line],
+            };
+            continue;
+          }
+
+          if (item.clip.x1 <= currentCluster.rect[2] + 1.05 && item.clip.x2 >= currentCluster.rect[2] - 0.05) {
+            currentCluster.rect[2] = Math.max(currentCluster.rect[2], item.clip.x2);
+            currentCluster.rect[0] = Math.min(currentCluster.rect[0], item.clip.x1);
+            currentCluster.lines.push(item.line);
+          } else {
+            flushCluster(currentCluster, coalescedStrips);
+            currentCluster = {
+              rect: [item.clip.x1, item.clip.y1, item.clip.x2, item.clip.y2],
+              lines: [item.line],
+            };
+          }
+        }
+        if (currentCluster) {
+          flushCluster(currentCluster, coalescedStrips);
+        }
+      }
+    } else {
+      const spanGroups = new Map<string, Array<{ line: PreparedLine; clip: StripClip }>>();
+      for (let i = 0; i < group.length; i++) {
+        const item = group[i];
+        const spanKey = `${Math.round(item.clip.x1 * 10) / 10}_${Math.round(item.clip.x2 * 10) / 10}`;
+        let sg = spanGroups.get(spanKey);
+        if (!sg) {
+          sg = [];
+          spanGroups.set(spanKey, sg);
+        }
+        sg.push(item);
+      }
+
+      for (const spanItems of spanGroups.values()) {
+        spanItems.sort((a, b) => a.clip.y1 - b.clip.y1);
+
+        let currentCluster: {
+          rect: [number, number, number, number];
+          lines: PreparedLine[];
+        } | null = null;
+
+        for (let i = 0; i < spanItems.length; i++) {
+          const item = spanItems[i];
+          if (!currentCluster) {
+            currentCluster = {
+              rect: [item.clip.x1, item.clip.y1, item.clip.x2, item.clip.y2],
+              lines: [item.line],
+            };
+            continue;
+          }
+
+          if (item.clip.y1 <= currentCluster.rect[3] + 1.05 && item.clip.y2 >= currentCluster.rect[3] - 0.05) {
+            currentCluster.rect[3] = Math.max(currentCluster.rect[3], item.clip.y2);
+            currentCluster.rect[1] = Math.min(currentCluster.rect[1], item.clip.y1);
+            currentCluster.lines.push(item.line);
+          } else {
+            flushCluster(currentCluster, coalescedStrips);
+            currentCluster = {
+              rect: [item.clip.x1, item.clip.y1, item.clip.x2, item.clip.y2],
+              lines: [item.line],
+            };
+          }
+        }
+        if (currentCluster) {
+          flushCluster(currentCluster, coalescedStrips);
+        }
+      }
+    }
+  }
+
+  const combined = [...nonStrip, ...coalescedStrips];
+  combined.sort((a, b) => a.event.layer - b.event.layer || a.event.index - b.event.index);
+  return combined;
+}
+
+export const isStripClip = (line: PreparedLine): boolean => {
+  return getStripClip(line) !== null;
 };
 
-const isVectorDrawing = (line: PreparedLine): boolean => {
+export const isVectorDrawing = (line: PreparedLine): boolean => {
   if (line.event.lineTags.vclip?.drawing) return true;
   return line.event.fragments.some((f) => f.drawingScale > 0 || !!f.drawing);
 };
 
-const hasActualText = (line: PreparedLine): boolean => {
+export const hasActualText = (line: PreparedLine): boolean => {
   return line.event.fragments.some((f) => f.drawingScale === 0 && f.text.trim().length > 0);
 };
 
@@ -211,35 +498,7 @@ export class Scene {
     const visible = this.hold ? all.filter((l) => !this.hold!.has(l.event.index)) : all;
     const route = this.canvas.route(visible, t);
     const domCandidates = visible.filter((_, i) => !route[i]);
-    let domLinesToRender: PreparedLine[];
-    if (domCandidates.length <= this.maxDomBudget) {
-      domLinesToRender = domCandidates;
-    } else {
-      const isHeavy = (l: PreparedLine): boolean => isVectorDrawing(l) || isStripClip(l);
-      const isTrueText = (l: PreparedLine): boolean => hasActualText(l) && !isHeavy(l);
-
-      const textLines: PreparedLine[] = [];
-      const heavyLines: PreparedLine[] = [];
-      for (let i = 0; i < domCandidates.length; i++) {
-        const l = domCandidates[i];
-        if (isTrueText(l)) textLines.push(l);
-        else heavyLines.push(l);
-      }
-
-      // True text / dialogue lines ALWAYS get priority and are rendered first.
-      // For vector drawing lines or 1-pixel strip clips, cap the number of active DOM elements up to the budget.
-      const remainingBudget = Math.max(0, this.maxDomBudget - textLines.length);
-      if (heavyLines.length > remainingBudget) {
-        heavyLines.sort((a, b) => {
-          const aActive = this.views.has(a.event.id) ? 0 : 1;
-          const bActive = this.views.has(b.event.id) ? 0 : 1;
-          if (aActive !== bActive) return aActive - bActive;
-          return (a.event.layer - b.event.layer) || (a.event.index - b.event.index);
-        });
-      }
-      const allowedHeavy = heavyLines.slice(0, remainingBudget);
-      domLinesToRender = [...textLines, ...allowedHeavy];
-    }
+    const domLinesToRender = coalesceStripLines(domCandidates, env.styles);
     const ids = new Set(domLinesToRender.map((l) => l.event.id));
     for (const [id, view] of this.views) {
       if (ids.has(id)) continue;
