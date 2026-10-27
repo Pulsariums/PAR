@@ -53,6 +53,6 @@ export const WATCH_HTML = `
   <div id="wFontPrompt" class="fontprompt"></div>
   <p class="hint" data-i18n="w.privacy"></p>
   <input type="file" id="wFileVideo" accept="video/*,.mkv,.mp4,.webm,.mov,.m4v,.ogv" hidden />
-  <input type="file" id="wFileSub" accept=".ass,.ssa,.xpar,.par,.txt" hidden />
+  <input type="file" id="wFileSub" accept=".ass,.ssa,.srt,.vtt,.xpar,.par,.txt" hidden />
   <input type="file" id="wFileFonts" accept=".ttf,.otf,.ttc,.otc,.woff,.woff2,.zip" multiple hidden />
 </div>`;

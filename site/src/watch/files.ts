@@ -4,15 +4,21 @@ import { t } from '../i18n/i18n';
 import { classifyFiles, watchDrop } from '../player/dnd';
 import { $ } from '../player/dom';
 
+import { isMkv, remuxMkv } from './mkv';
+import { initResume } from './resume';
+import { srtOrVttToAssFile } from './subtitles';
 import type { initFonts } from './fonts';
 import type { WatchStage } from './stage';
 
-const SUB = /\.(ass|ssa|txt|xpar|par)$/i;
+const SUB = /\.(ass|ssa|txt|xpar|par|srt|vtt)$/i;
 
 /** File intake: three pickers (video, subtitle, fonts) plus drop anywhere on the page. Every file is routed by its kind, so one drop of all three works. */
 export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>, root: HTMLElement) => {
   const status = (msg: string, err = false): void => { const s = $('wStatus'); s.textContent = msg; s.classList.toggle('err', err); };
   const names = { video: '', sub: '', fonts: 0 };
+  const resume = initResume(stage.video);
+  /** Each video pick gets a number; a conversion that finishes after a newer pick is dropped. */
+  let videoTok = 0;
   const draw = (): void => {
     $('wVideoName').textContent = stage.blank ? t('w.blank') : names.video || t('w.none');
     $('wSubName').textContent = names.sub || t('w.none');
@@ -22,13 +28,33 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
     $('wEmpty').hidden = stage.ready;
   };
 
-  const addVideo = (file: File): void => {
+  const addVideo = async (file: File): Promise<void> => {
+    const tok = ++videoTok;
     names.video = `${file.name} (${humanBytes(file.size)})`;
-    stage.setVideo(file);
+    resume.track(null);
+    let play = file;
+    let failed = false;
+    if (isMkv(file)) {
+      draw();
+      status(t('w.remuxing', { pct: 0 }));
+      try {
+        const blob = await remuxMkv(file, (p) => { if (tok === videoTok) status(t('w.remuxing', { pct: Math.round(p * 100) })); });
+        play = new File([blob], file.name.replace(/\.mkv$/i, '.mp4'), { type: 'video/mp4' });
+      } catch (e) {
+        failed = true;
+        console.warn('MKV remux failed, trying direct playback', e);
+        if (tok === videoTok) status(t('w.mkvFail', { error: e instanceof Error ? e.message : String(e) }), true);
+      }
+    }
+    if (tok !== videoTok) return;
+    stage.setVideo(play);
+    resume.track(file);
     draw();
-    status(names.sub && stage.session ? '' : t('w.videoOk'));
+    if (!failed) status(names.sub && stage.session ? '' : t('w.videoOk'));
   };
   const addBlank = (): void => {
+    videoTok++;
+    resume.track(null);
     stage.setBlank();
     draw();
     status(stage.session ? t('w.subReady', { n: stage.session.source.eventCount.toLocaleString('en-US') }) : t('w.blankOk'));
@@ -36,10 +62,17 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
   const addSub = async (file: File): Promise<void> => {
     const state = $('wState');
     try {
-      const kind = await sniffBlob(file).catch(() => 'unknown' as const);
-      if (kind === 'unknown') { status(t('w.subBad', { name: file.name }), true); return; }
+      let play = file;
+      if (/\.(srt|vtt)$/i.test(file.name)) {
+        const conv = await srtOrVttToAssFile(file);
+        if (!conv) { status(t('w.subBad', { name: file.name }), true); return; }
+        play = conv;
+      } else {
+        const kind = await sniffBlob(file).catch(() => 'unknown' as const);
+        if (kind === 'unknown') { status(t('w.subBad', { name: file.name }), true); return; }
+      }
       state.hidden = false;
-      const s = await stage.setSubtitle(file, (d, n) => { state.textContent = t('w.reading', { pct: Math.round((d / Math.max(1, n)) * 100) }); });
+      const s = await stage.setSubtitle(play, (d, n) => { state.textContent = t('w.reading', { pct: Math.round((d / Math.max(1, n)) * 100) }); });
       if (!s) return;
       names.sub = `${file.name} (${humanBytes(file.size)})`;
       draw();
@@ -58,7 +91,7 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
     const c = classifyFiles(files, SUB);
     if (c.fonts.length) void addFonts(c.fonts);
     if (c.subs.length) void addSub(c.subs[0]!);
-    if (c.videos.length) addVideo(c.videos[0]!);
+    if (c.videos.length) void addVideo(c.videos[0]!);
     if (!c.fonts.length && !c.subs.length && !c.videos.length && files.length) status(t('w.unknown', { name: files[0]!.name }), true);
   };
   const bind = (inputId: string, buttons: string[]): void => {
@@ -85,7 +118,6 @@ export const initFiles = (stage: WatchStage, fonts: ReturnType<typeof initFonts>
   });
   watchDrop(document.body, route);
   stage.video.addEventListener('error', () => { if (stage.hasVideo && stage.video.error) status(t('w.vErr'), true); });
-  void root;
 
   return { draw, fontCount: (n: number): void => { names.fonts = n; draw(); }, status };
 };

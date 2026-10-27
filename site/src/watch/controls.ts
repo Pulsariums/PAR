@@ -162,14 +162,15 @@ export const initControls = (stage: WatchStage): { update(): void } => {
   $('wFull').addEventListener('click', () => void toggleFullscreen(box));
   onFullscreen(box, (on) => { $('wFull').innerHTML = on ? ICON.exit : ICON.full; });
 
-  box.addEventListener('keydown', (e: KeyboardEvent) => {
+  // On the document, so the keys work after a click on any control (speed, volume, file buttons); typing fields are skipped below.
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Escape' && !panel.hidden) {
       e.preventDefault();
       panel.hidden = true;
       gear.focus();
       return;
     }
-    if (e.ctrlKey || e.metaKey || e.altKey || (e.target instanceof HTMLSelectElement)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || (e.target instanceof HTMLSelectElement) || (e.target instanceof HTMLTextAreaElement)) return;
     const onRange = e.target instanceof HTMLInputElement && e.target.type === 'range';
     const k = e.key.toLowerCase();
     const act: Record<string, () => void> = {
@@ -182,12 +183,6 @@ export const initControls = (stage: WatchStage): { update(): void } => {
     if (!act[k]) return;
     e.preventDefault();
     act[k]();
-  });
-  document.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && !panel.hidden) {
-      panel.hidden = true;
-      gear.focus();
-    }
   });
   applyI18n(box);
   syncInset();
